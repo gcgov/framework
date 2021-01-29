@@ -6,7 +6,7 @@ use gcgov\framework\models\config\environment\mongoDatabase;
 use gcgov\framework\exceptions\modelException;
 
 
-class mdb
+final class mdb
 {
 
     /** @var \MongoDB\Client */
