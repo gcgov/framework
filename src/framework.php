@@ -24,9 +24,9 @@ final class framework {
 
 		//router
 		\app\router::_before();
-		$router = new \app\router();
+		$router = new \gcgov\framework\router();
 		try {
-			$routeHandler = $router->route();
+			$routeHandler  = $router->route();
 		}
 		catch( routeException $e ) {
 			return \app\renderer::processRouteException();
