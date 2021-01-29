@@ -76,4 +76,27 @@ final class mdb
 
 	    throw new modelException('No suitable Mongo Database connector found in environment config', 500);
     }
+
+
+	/**
+	 * @param  \MongoDB\BSON\ObjectId|string  $_id
+	 *
+	 * @return \MongoDB\BSON\ObjectId
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+    public function stringToObjectId( \MongoDB\BSON\ObjectId|string $_id  ) : \MongoDB\BSON\ObjectId {
+
+	    if( is_string( $_id ) ) {
+		    try {
+			    $_id = new \MongoDB\BSON\ObjectId( $_id );
+		    }
+		    catch( \MongoDB\Driver\Exception\InvalidArgumentException $e ) {
+			    throw new \gcgov\framework\exceptions\modelException( 'Invalid _id', 400 );
+		    }
+	    }
+
+	    return $_id;
+
+    }
+
 }
