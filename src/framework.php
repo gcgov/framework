@@ -29,7 +29,7 @@ final class framework {
 			$routeHandler  = $router->route();
 		}
 		catch( routeException $e ) {
-			return \app\renderer::processRouteException();
+			return \app\renderer::processRouteException( $e );
 		}
 		\app\router::_after();
 

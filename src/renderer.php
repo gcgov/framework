@@ -66,7 +66,6 @@ final class renderer {
 				return $controllerResult;
 			}
 			catch( controllerException $e ) {
-				\error_log( $e );
 				return \app\renderer::processControllerException( $e );
 			}
 			catch( \Exception | \Error | \ErrorException $e ) {
@@ -92,6 +91,13 @@ final class renderer {
 	private function processControllerDataResponse( controllerDataResponse $controllerDataResponse ) : string {
 
 		header( 'Content-Type:application/json' );
+
+		if($controllerDataResponse->getHttpStatus()!=200) {
+			http_response_code( $controllerDataResponse->getHttpStatus() );
+			if($controllerDataResponse->getData()===null) {
+				return '';
+			}
+		}
 
 		$encodedResponse = json_encode( $controllerDataResponse->getData() );
 		if( $encodedResponse === false ) {
