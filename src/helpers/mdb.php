@@ -139,11 +139,12 @@ final class mdb {
 	/**
 	 * @param  \MongoDB\BSON\ObjectId|string  $_id
 	 * @param  array                          $typeMap
+	 * @param  string                         $notFoundMessage
 	 *
 	 * @return mixed
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public function getOne( \MongoDB\BSON\ObjectId|string $_id, array $typeMap = [], string $notFoundMessage='' ) {
+	public function getOne( \MongoDB\BSON\ObjectId|string $_id, array $typeMap = [], string $notFoundMessage='' ) : mixed {
 
 		$_id = $this->stringToObjectId( $_id );
 

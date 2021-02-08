@@ -30,7 +30,7 @@ final class config {
 
 	private static function setRootDir() : void {
 		$appDir        = self::getAppDir();
-		self::$rootDir = $appDir . '/..';
+		self::$rootDir = substr($appDir, 0, strrpos($appDir, '/'));
 	}
 
 
@@ -45,7 +45,9 @@ final class config {
 
 	private static function setAppDir() : void {
 		$appClass     = new \ReflectionClass( '\app\app' );
-		self::$appDir = rtrim( dirname( $appClass->getFileName() ), '\/' );
+		$appDir = rtrim( dirname( $appClass->getFileName() ), '/\\' );
+		$nixAppDir = str_replace('\\', '/', $appDir);
+		self::$appDir = $nixAppDir;
 	}
 
 
