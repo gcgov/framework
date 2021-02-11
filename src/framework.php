@@ -29,14 +29,14 @@ final class framework {
 			$routeHandler  = $router->route();
 		}
 		catch( routeException $e ) {
-			return \app\renderer::processRouteException( $e );
+			$routeException = $e;
 		}
 		\app\router::_after();
 
 		//renderer and controller (renderer handles calling controller lifecycle methods)
 		\app\renderer::_before();
 		$renderer = new \gcgov\framework\renderer();
-		$content  = $renderer->render( $routeHandler );
+		$content  = $renderer->render( $routeHandler ?? $routeException );
 		\app\renderer::_after();
 
 		//appConfig

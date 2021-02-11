@@ -1,6 +1,5 @@
 <?php
 
-
 namespace gcgov\framework\helpers;
 
 
@@ -15,7 +14,6 @@ final class mdbTools {
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function jsonToObject( string|\stdClass $json, $modelExceptionMessage = 'Malformed JSON', $modelExceptionCode = 400 ) : \stdClass {
-
 		if( is_string( $json ) ) {
 			try {
 				$json = json_decode( $json, false, 512, JSON_THROW_ON_ERROR );
@@ -26,7 +24,6 @@ final class mdbTools {
 		}
 
 		return $json;
-
 	}
 
 
@@ -39,14 +36,12 @@ final class mdbTools {
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function stringToObjectId( string $_id, string $modelExceptionMessage = 'Invalid _id', int $modelExceptionCode = 400 ) : \MongoDB\BSON\ObjectId {
-
 		try {
 			return !empty( $_id ) ? new \MongoDB\BSON\ObjectId( $_id ) : new \MongoDB\BSON\ObjectId();
 		}
 		catch( \MongoDB\Driver\Exception\InvalidArgumentException $e ) {
 			throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, $modelExceptionCode );
 		}
-
 	}
 
 
@@ -59,24 +54,21 @@ final class mdbTools {
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function stringToObjectIdOrNull( string $_id, string $modelExceptionMessage = 'Invalid _id', int $modelExceptionCode = 400 ) : ?\MongoDB\BSON\ObjectId {
-
 		try {
 			return !empty( $_id ) ? new \MongoDB\BSON\ObjectId( $_id ) : null;
 		}
 		catch( \MongoDB\Driver\Exception\InvalidArgumentException $e ) {
 			throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, $modelExceptionCode );
 		}
-
 	}
 
 
 	/**
 	 * @param  \MongoDB\BSON\UTCDateTime|null  $utcDateTime
 	 *
-	 * @return \DateTimeImmutable|null
+	 * @return \DateTimeImmutable
 	 */
-	public static function bsonUTCDatetimeToDateTimeImmutable( ?\MongoDB\BSON\UTCDateTime $utcDateTime = null ) : ?\DateTimeImmutable {
-
+	public static function bsonUTCDatetimeToDateTimeImmutable( ?\MongoDB\BSON\UTCDateTime $utcDateTime = null ) : \DateTimeImmutable {
 		if( $utcDateTime instanceof \MongoDB\BSON\UTCDateTime ) {
 			$dt = $utcDateTime->toDateTime();
 
@@ -86,13 +78,13 @@ final class mdbTools {
 		return new \DateTimeImmutable();
 	}
 
+
 	/**
 	 * @param  \MongoDB\BSON\UTCDateTime|null  $utcDateTime
 	 *
 	 * @return \DateTimeImmutable|null
 	 */
 	public static function bsonUTCDatetimeToDateTimeImmutableOrNull( ?\MongoDB\BSON\UTCDateTime $utcDateTime = null ) : ?\DateTimeImmutable {
-
 		if( $utcDateTime instanceof \MongoDB\BSON\UTCDateTime ) {
 			$dt = $utcDateTime->toDateTime();
 
@@ -100,6 +92,50 @@ final class mdbTools {
 		}
 
 		return null;
+	}
+
+
+	/**
+	 * @param  string|null  $dateString
+	 * @param  string       $modelExceptionMessage
+	 * @param  int          $modelExceptionCode
+	 *
+	 * @return \DateTimeImmutable
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function stringToDateTimeImmutable( ?string $dateString, string $modelExceptionMessage = 'Invalid date', int $modelExceptionCode = 400 ) : \DateTimeImmutable {
+		if( !isset( $dateString ) || empty( trim( $dateString ) ) ) {
+			return new \DateTimeImmutable();
+		}
+
+		try {
+			return new \DateTimeImmutable( $dateString );
+		}
+		catch( \Exception $e ) {
+			throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, $modelExceptionCode );
+		}
+	}
+
+
+	/**
+	 * @param  string|null  $dateString
+	 * @param  string       $modelExceptionMessage
+	 * @param  int          $modelExceptionCode
+	 *
+	 * @return \DateTimeImmutable|null
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function stringToDateTimeImmutableOrNull( ?string $dateString, string $modelExceptionMessage = 'Invalid date', int $modelExceptionCode = 400 ) : ?\DateTimeImmutable {
+		try {
+			if( isset( $dateString ) && !empty( trim( $dateString ) ) ) {
+				return new \DateTimeImmutable( $dateString );
+			}
+
+			return null;
+		}
+		catch( \Exception $e ) {
+			throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, $modelExceptionCode );
+		}
 	}
 
 }

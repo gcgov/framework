@@ -52,7 +52,7 @@ final class mdb {
 			$this->collection = $this->db->{$collection};
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			error_log( $e );
+			\gcgov\framework\services\log::error( $e->getMessage(), $e );
 			throw new modelException( 'Database connection issue: ' . $e->getMessage(), 503, $e );
 		}
 
@@ -130,6 +130,7 @@ final class mdb {
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
 			error_log( $e );
+			\gcgov\framework\services\log::error( $e->getMessage(), $e );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
 		}
 
@@ -201,6 +202,7 @@ final class mdb {
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
 			error_log($e);
+			\gcgov\framework\services\log::error( $e->getMessage(), $e );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e);
 		}
 
@@ -230,6 +232,7 @@ final class mdb {
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
 			error_log($e);
+			\gcgov\framework\services\log::error( $e->getMessage(), $e );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e);
 		}
 

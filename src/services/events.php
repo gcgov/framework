@@ -24,7 +24,20 @@ final class events {
 	 * @return array
 	 * @throws \gcgov\framework\exceptions\eventException
 	 */
-	public static function trigger( string $eventInterfaceFqn, string $eventMethodName, array $eventMethodArguments = [] ) : array {
+	public static function dispatch( string $eventInterfaceFqn, string $eventMethodName, array $eventMethodArguments = [] ) : array {
+		\gcgov\framework\services\log::debug( 'Event dispatch for ' . $eventInterfaceFqn . '\\' . $eventMethodName . '()' );
+
+		//verify that this method exists on this interface
+		try {
+			$eventInterface = new \ReflectionClass( $eventInterfaceFqn );
+			if( !$eventInterface->isInterface() || !$eventInterface->implementsInterface( 'gcgov\framework\interfaces\event\definitions' ) ) {
+				throw new \gcgov\framework\exceptions\eventException( $eventInterfaceFqn . ' either is not an interface or does not implement gcgov\framework\interfaces\event\definitions', 500 );
+			}
+			$method = $eventInterface->getMethod( $eventMethodName );
+		}
+		catch( \ReflectionException $e ) {
+			throw new \gcgov\framework\exceptions\eventException( 'Method ' . $eventMethodName . ' does not exist on ' . $eventInterfaceFqn, 500, $e );
+		}
 
 		//get all available event interfaces and listeners as array of classInformation
 		$appClassesInformation = self::getAppClassesInformation();
@@ -38,22 +51,19 @@ final class events {
 
 		//find classes that implement this event interface
 		foreach( $appClassesInformation as $appReflection ) {
-
 			//this class implements this event interface
 			if( in_array( $eventInterfaceFqn, $appReflection->getInterfaceNames() ) ) {
 				try {
+					\gcgov\framework\services\log::debug( 'Call: ' . $appReflection->getClass()->getName() . '\\' . $eventMethodName . '()' );
 					$results[] = $appReflection->callMethod( $eventMethodName, $eventMethodArguments );
 				}
 				catch( \ReflectionException $e ) {
 					throw new eventException( 'Method ' . $eventMethodName . ' could not be called with the provided parameters', 500, $e );
 				}
-
 			}
-
 		}
 
 		return $results;
-
 	}
 
 
@@ -61,7 +71,6 @@ final class events {
 	 * @return \gcgov\framework\services\events\classInformation[]
 	 */
 	private static function getAppClassesInformation() : array {
-
 		if( count( self::$appClassesInformation ) == 0 ) {
 			self::setAppClassesInformation();
 		}
@@ -74,7 +83,6 @@ final class events {
 	 * @return \gcgov\framework\services\events\classInformation[]
 	 */
 	private static function setAppClassesInformation() : array {
-
 		$fileList = self::getAppFileList();
 
 		/** @var \SplFileInfo $file */
@@ -86,11 +94,9 @@ final class events {
 			if( in_array( 'gcgov\framework\interfaces\event\definitions', $classInformation->getInterfaceNames() ) || in_array( 'gcgov\framework\interfaces\event\listeners', $classInformation->getInterfaceNames() ) ) {
 				self::$appClassesInformation[ $fqn ] = $classInformation;
 			}
-
 		}
 
 		return self::$appClassesInformation;
-
 	}
 
 
@@ -98,7 +104,6 @@ final class events {
 	 * @return \RecursiveIteratorIterator
 	 */
 	private static function getAppFileList() : \RecursiveIteratorIterator {
-
 		if( !isset( self::$appFileList ) || !( self::$appFileList instanceof \RecursiveIteratorIterator ) ) {
 			self::setAppFileList();
 		}
@@ -111,12 +116,10 @@ final class events {
 	 * @return \RecursiveIteratorIterator
 	 */
 	private static function setAppFileList() : \RecursiveIteratorIterator {
-
 		$appDir = config::getAppDir();
 
 		$dir    = new \RecursiveDirectoryIterator( $appDir, \RecursiveDirectoryIterator::SKIP_DOTS );
 		$filter = new \RecursiveCallbackFilterIterator( $dir, function( $current, $key, $iterator ) {
-
 			if( $iterator->hasChildren() ) {
 				return true;
 			}
@@ -134,12 +137,10 @@ final class events {
 
 
 	private static function convertFileToClassFqn( \SplFileInfo $file ) : string {
-
 		$namespace = trim( substr( $file->getPath(), strlen( config::getRootDir() ) ), '/\\' );
 		$className = $file->getBasename( '.' . $file->getExtension() );
 
 		return $namespace . '\\' . $className;
 	}
-
 
 }
