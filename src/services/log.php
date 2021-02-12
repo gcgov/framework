@@ -14,19 +14,6 @@ final class log {
 	}
 
 
-	private static function getLogger() : Logger {
-		$channel = \gcgov\framework\config::getAppConfig()?->app?->title ?? 'app';
-
-		// Create the logger
-		$logger = new Logger( $channel );
-
-		// Now add some handlers
-		$logger->pushHandler( new StreamHandler( \gcgov\framework\config::getRootDir() . '/logs/' . $channel . '.log', Logger::DEBUG ) );
-
-		return $logger;
-	}
-
-
 	public static function info( $message, $context = null ) {
 		$logger = self::getLogger();
 		$logger->info( $message, (array) $context );
@@ -66,6 +53,21 @@ final class log {
 	public static function emergency( $message, $context = null ) {
 		$logger = self::getLogger();
 		$logger->emergency( $message, (array) $context );
+	}
+
+
+	private static function getLogger( string $channel = '' ) : Logger {
+		if( empty( $channel ) ) {
+			$channel = \gcgov\framework\config::getAppConfig()?->app?->title ?? 'app';
+		}
+
+		// Create the logger
+		$logger = new Logger( $channel );
+
+		// Now add some handlers
+		$logger->pushHandler( new StreamHandler( \gcgov\framework\config::getRootDir() . '/logs/' . $channel . '.log', Logger::DEBUG ) );
+
+		return $logger;
 	}
 
 }

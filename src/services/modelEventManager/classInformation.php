@@ -1,7 +1,6 @@
 <?php
 
-
-namespace gcgov\framework\services\events;
+namespace gcgov\framework\services\modelEventManager;
 
 
 use gcgov\framework\exceptions\eventException;
@@ -29,7 +28,6 @@ class classInformation {
 	 * @throws \gcgov\framework\exceptions\eventException
 	 */
 	public function __construct( string $classFqn ) {
-
 		try {
 			$this->class = new \ReflectionClass( $classFqn );
 		}
@@ -43,7 +41,6 @@ class classInformation {
 		catch( \ReflectionException $e ) {
 			throw new \gcgov\framework\exceptions\eventException( 'Getting interface names from ' . $classFqn . ' failed.', 500, $e );
 		}
-
 	}
 
 
@@ -51,7 +48,6 @@ class classInformation {
 	 * @return string[]
 	 */
 	public function getInterfaceNames() : array {
-
 		return $this->interfaceNames;
 	}
 
@@ -64,7 +60,6 @@ class classInformation {
 	 * @throws \ReflectionException
 	 */
 	public function callMethod( string $methodName, array $methodParams ) : mixed {
-
 		if( !isset( $this->methods[ $methodName ] ) ) {
 			try {
 				$this->methods[ $methodName ] = $this->getClass()->getMethod( $methodName );
@@ -77,7 +72,6 @@ class classInformation {
 		$instance = $this->createInstance( $this->methods[ $methodName ]->isStatic() );
 
 		return $this->methods[ $methodName ]->invokeArgs( $instance, $methodParams );
-
 	}
 
 
@@ -85,7 +79,6 @@ class classInformation {
 	 * @return \ReflectionClass
 	 */
 	public function getClass() : \ReflectionClass {
-
 		return $this->class;
 	}
 
