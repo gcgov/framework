@@ -124,7 +124,7 @@ class modelEventManager {
 
 
 	/**
-	 * @return \gcgov\framework\services\events\classInformation[]
+	 * @return \gcgov\framework\services\modelEventManager\classInformation[]
 	 */
 	private function setAppClassesInformation() : array {
 		$appDir = config::getAppDir();
@@ -148,7 +148,7 @@ class modelEventManager {
 			$fqn = $this->convertFileToClassFqn( $file );
 
 			//create event reflection
-			$classInformation = new events\classInformation( $fqn );
+			$classInformation = new \gcgov\framework\services\modelEventManager\classInformation( $fqn );
 			if( in_array( 'gcgov\framework\interfaces\event\definitions', $classInformation->getInterfaceNames() ) || in_array( 'gcgov\framework\interfaces\event\listeners', $classInformation->getInterfaceNames() ) ) {
 				$this->appClassesInformation[ $fqn ] = $classInformation;
 			}
