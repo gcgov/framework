@@ -15,7 +15,6 @@ use gcgov\framework\exceptions\routeException;
 final class renderer {
 
 	public function __construct() {
-
 	}
 
 
@@ -25,8 +24,7 @@ final class renderer {
 	 * @return string
 	 */
 	public function render( routeHandler|routeException $routeHandlerOrException ) : string {
-
-		if($routeHandlerOrException instanceof routeHandler ) {
+		if( $routeHandlerOrException instanceof routeHandler ) {
 			$controllerResponse = $this->getContentFromController( $routeHandlerOrException );
 		}
 		else {
@@ -70,14 +68,12 @@ final class renderer {
 				return $controllerResult;
 			}
 			catch( modelException $e ) {
-				\error_log( $e );
-				\gcgov\framework\services\log::error( $e->getMessage(), $e );
+				\gcgov\framework\services\log::debug( $e->getMessage(), $e->getTrace() );
 
 				return \app\renderer::processModelException( $e );
 			}
 			catch( controllerException $e ) {
-				\error_log( $e );
-				\gcgov\framework\services\log::error( $e->getMessage(), $e );
+				\gcgov\framework\services\log::debug( $e->getMessage(), $e->getTrace() );
 
 				return \app\renderer::processControllerException( $e );
 			}
