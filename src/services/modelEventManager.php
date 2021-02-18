@@ -5,12 +5,13 @@ namespace gcgov\framework\services;
 
 use gcgov\framework\exceptions\eventException;
 use gcgov\framework\config;
-use JetBrains\PhpStorm\Pure;
 
 
 class modelEventManager {
 
-	private int $chain = 0;
+	private bool $executing = false;
+
+	private int  $chain     = 0;
 
 	/** @var \gcgov\framework\services\modelEventManager\event[] */
 	private array $eventQueue = [];
@@ -23,15 +24,22 @@ class modelEventManager {
 
 
 	public function __construct() {
-		\gcgov\framework\services\log::debug( 'Create event queue');
+		\gcgov\framework\services\log::debug( 'Create event queue' );
 		$this->setAppClassesInformation();
 	}
 
 
 	/**
-	 * @param  \gcgov\framework\services\modelEventManager\event  $event
+	 * @param  string  $eventInterfaceFqn
+	 * @param  string  $eventMethodName
+	 * @param  array   $eventMethodArguments
+	 *
+	 * @return \gcgov\framework\services\modelEventManager
+	 * @throws \gcgov\framework\exceptions\eventException
 	 */
-	public function queue( \gcgov\framework\services\modelEventManager\event $event ) : void {
+	public function queue( string $eventInterfaceFqn, string $eventMethodName, array $eventMethodArguments = [] ) : modelEventManager {
+		$event = new \gcgov\framework\services\modelEventManager\event( $eventInterfaceFqn, $eventMethodName, $eventMethodArguments );
+
 		//LOGIC ERROR CAPTURE AT RUNTIME -- sucks
 		//verify that this method exists on this interface
 		try {
@@ -50,26 +58,40 @@ class modelEventManager {
 			throw new \gcgov\framework\exceptions\eventException( $event->interfaceFqn . ' either does not implement interface \gcgov\framework\services\events\events or it is outside of the app directory scope', 500 );
 		}
 
-		\gcgov\framework\services\log::debug( $this->chain.' Add event to queue: ' . $event->interfaceFqn . '\\' . $event->methodName . '()' );
+		$prepend = '';
+		if( count( $this->eventQueue ) > 0 ) {
+			$prepend = '----';
+		}
+		\gcgov\framework\services\log::debug( $this->chain . ' ' . $prepend . 'Add event to queue: ' . $event->interfaceFqn . '\\' . $event->methodName . '()' );
 
 		$this->eventQueue[ $event->_id ] = $event;
+
+		return $this;
 	}
 
 
 	/**
-	 * @return \MongoDB\UpdateResult[]
+	 * @return array Numeric array of \MongoDB\UpdateResult and  \MongoDB\DeleteResult
+	 * @throws \gcgov\framework\exceptions\eventException
 	 */
 	public function execute() : array {
-		foreach( $this->eventQueue as $eventId => $event ) {
-			$this->dispatch( $event );
-			unset($this->eventQueue[ $event->_id ]);
+		if( $this->executing ) {
+			throw new \gcgov\framework\exceptions\eventException( 'Cannot run execute simultaneously multiple times on the same event manager while it is already running.', 500 );
 		}
 
-		if(count($this->eventQueue)>0) {
+		$this->executing = true;
+		foreach( $this->eventQueue as $eventId => $event ) {
+			$this->dispatch( $event );
+			unset( $this->eventQueue[ $event->_id ] );
+		}
+
+		if( count( $this->eventQueue ) > 0 ) {
 			$this->chain++;
-			\gcgov\framework\services\log::debug( $this->chain.' Execute chained events');
+			\gcgov\framework\services\log::debug( 'Execute chained events: ' . $this->chain );
 			$this->execute();
 		}
+
+		$this->executing = false;
 
 		return $this->responses;
 	}
@@ -78,18 +100,18 @@ class modelEventManager {
 	/**
 	 * @param  \gcgov\framework\services\modelEventManager\event  $event
 	 */
-	private function dispatch( \gcgov\framework\services\modelEventManager\event $event ) : void  {
-		\gcgov\framework\services\log::debug( $this->chain.' Dispatch event: ' . $event->interfaceFqn . '\\' . $event->methodName . '()' );
+	private function dispatch( \gcgov\framework\services\modelEventManager\event $event ) : void {
+		\gcgov\framework\services\log::debug( $this->chain . ' Dispatch event: ' . $event->interfaceFqn . '\\' . $event->methodName . '()' );
 
 		//find classes that implement this event interface
 		foreach( $this->appClassesInformation as $appReflection ) {
 			//this class implements this event interface
 			if( in_array( $event->interfaceFqn, $appReflection->getInterfaceNames() ) ) {
 				try {
-					\gcgov\framework\services\log::debug( $this->chain.' Call event listener: ' . $appReflection->getClass()
-					                                                               ->getName() . '\\' . $event->methodName . '()' );
+					\gcgov\framework\services\log::debug( $this->chain . ' --Call event listener: ' . $appReflection->getClass()
+					                                                                                                ->getName() . '\\' . $event->methodName . '()' );
 					$arguments = [ $this ];
-					foreach($event->methodArguments as $argument) {
+					foreach( $event->methodArguments as $argument ) {
 						$arguments[] = $argument;
 					}
 					$eventResponse = $appReflection->callMethod( $event->methodName, $arguments );
@@ -100,21 +122,20 @@ class modelEventManager {
 				}
 			}
 		}
-
 	}
 
 
 	/**
-	 * @param  \MongoDB\UpdateResult|\MongoDB\UpdateResult[]  $eventResponse
+	 * @param  \MongoDB\UpdateResult|\MongoDB\UpdateResult[]|\MongoDB\DeleteResult|\MongoDB\DeleteResult[]  $eventResponse
 	 *
-	 * @return \MongoDB\UpdateResult[] All manager responses included the newly added
+	 * @return array Numeric array of \MongoDB\UpdateResult and  \MongoDB\DeleteResult
 	 */
-	private function addResponse( \MongoDB\UpdateResult|array $eventResponse ) : array {
-		if(  $eventResponse instanceof \MongoDB\UpdateResult ) {
+	private function addResponse( \MongoDB\UpdateResult|\MongoDB\DeleteResult|array $eventResponse ) : array {
+		if( $eventResponse instanceof \MongoDB\UpdateResult || $eventResponse instanceof \MongoDB\DeleteResult ) {
 			$this->responses [] = $eventResponse;
 		}
 		else {
-			foreach($eventResponse as $response) {
+			foreach( $eventResponse as $response ) {
 				$this->responses[] = $response;
 			}
 		}
