@@ -5,8 +5,11 @@ namespace gcgov\framework\services;
 
 use gcgov\framework\exceptions\eventException;
 use gcgov\framework\config;
+use JetBrains\PhpStorm\Deprecated;
 
 
+/** @deprecated */
+#[Deprecated]
 class modelEventManager {
 
 	private bool $executing = false;

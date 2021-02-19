@@ -4,8 +4,11 @@ namespace gcgov\framework\services\modelEventManager;
 
 
 use gcgov\framework\exceptions\eventException;
+use JetBrains\PhpStorm\Deprecated;
 
 
+/** @deprecated */
+#[Deprecated]
 class classInformation {
 
 	private \ReflectionClass $class;

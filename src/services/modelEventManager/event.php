@@ -3,6 +3,11 @@
 namespace gcgov\framework\services\modelEventManager;
 
 
+use JetBrains\PhpStorm\Deprecated;
+
+
+/** @deprecated */
+#[Deprecated]
 class event {
 
 	public string $_id;
