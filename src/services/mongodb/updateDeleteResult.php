@@ -55,8 +55,8 @@ class updateDeleteResult {
 
 		//if embedded results are provided, add them to the object and sum their counts
 		if( count( $embeddedResults ) > 0 ) {
-			$this->embeddedResults = self::generateFromResults( $embeddedResults );
-			foreach( $this->embeddedResults as $result ) {
+			$embeddedResultObjects = self::generateFromResults( $embeddedResults );
+			foreach( $embeddedResultObjects as $result ) {
 				$this->embeddedMatchedCount  += $result->getMatchedCount();
 				$this->embeddedModifiedCount += $result->getModifiedCount();
 				$this->embeddedDeletedCount  += $result->getDeletedCount();

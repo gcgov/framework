@@ -14,6 +14,11 @@ final class mdbTools {
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function jsonToObject( string|\stdClass $json, $modelExceptionMessage = 'Malformed JSON', $modelExceptionCode = 400 ) : \stdClass {
+
+		if($json===null) {
+			throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, $modelExceptionCode, $e );
+		}
+
 		if( is_string( $json ) ) {
 			try {
 				$json = json_decode( $json, false, 512, JSON_THROW_ON_ERROR );

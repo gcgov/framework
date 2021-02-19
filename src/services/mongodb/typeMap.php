@@ -9,7 +9,7 @@ use JetBrains\PhpStorm\ArrayShape;
 /**
  * Class typeMap
  * @see     https://www.php.net/manual/en/mongodb.persistence.deserialization.php
- * @package gcgov\framework\models
+ * @package gcgov\framework\services\mongodb
  */
 class typeMap {
 

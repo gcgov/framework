@@ -1,11 +1,15 @@
 <?php
-namespace gcgov\framework\services\mongodb;
+namespace gcgov\framework\services\mongodb\exceptions;
 
 
 use JetBrains\PhpStorm\Pure;
 
 
-class mongodbException extends \LogicException {
+/**
+ * Class mongodbException
+ * @package gcgov\framework\services\mongodb\exceptions
+ */
+class databaseException extends \LogicException {
 
 	#[Pure]
 	public function __construct( $message, $code = 0, \Exception $previous = null ) {
