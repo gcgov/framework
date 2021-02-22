@@ -54,10 +54,10 @@ abstract class factory
 	/**
 	 * @param  \MongoDB\BSON\ObjectId|string  $_id
 	 *
-	 * @return mixed
+	 * @return object
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getOne( \MongoDB\BSON\ObjectId|string $_id ) : mixed {
+	public static function getOne( \MongoDB\BSON\ObjectId|string $_id ) : object {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
@@ -123,7 +123,7 @@ abstract class factory
 
 		//update _meta property of object to show results
 		if(property_exists($object, '_meta')) {
-			$object->_meta->db->set( $combinedResult );
+			$object->_meta->setDb( $combinedResult );
 		}
 
 		return $combinedResult;

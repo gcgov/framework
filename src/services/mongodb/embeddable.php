@@ -333,10 +333,11 @@ abstract class embeddable
 			throw new databaseException( 'Failed to unserialize bson data for ' . $calledClassFqn, 500, $e );
 		}
 
-		//get properties of the class and add them to the export
+		//get properties of the class and set their values to the data provided from the database
 		$rProperties = $rClass->getProperties();
 		foreach( $rProperties as $rProperty ) {
-			$propertyName        = $rProperty->getName();
+			$propertyName = $rProperty->getName();
+			//set the class property = the parsed value from the database
 			$this->$propertyName = $this->bsonUnserializeDataItem( $rProperty, $data );
 		}
 	}
@@ -396,7 +397,7 @@ abstract class embeddable
 					$rPropertyClass       = new \ReflectionClass( $propertyTypeName );
 					$instantiateArguments = [];
 					if( substr( $propertyTypeName, -5 ) == '_meta' ) {
-						$instantiateArguments = [ get_called_class() ];
+						$instantiateArguments[] = get_called_class();
 					}
 
 					return $rPropertyClass->newInstance( ...$instantiateArguments );

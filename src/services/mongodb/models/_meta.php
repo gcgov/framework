@@ -5,22 +5,45 @@ namespace gcgov\framework\services\mongodb\models;
 use gcgov\framework\services\mongodb\attributes\label;
 
 
-class _meta {
+class _meta
+	implements
+	\JsonSerializable {
 
 	/** @OA\Property() */
 	public ui $ui;
 
 	/** @OA\Property() */
-	public db $db;
+	public ?db $db = null;
 
 	/** @OA\Property() */
 	public array $labels;
 
+	private bool $exportDb = false;
+
 
 	public function __construct( string $className ) {
 		$this->ui     = new ui();
-		$this->db     = new db();
 		$this->labels = $this->generateLabels( $className );
+	}
+
+
+	public function setDb( \gcgov\framework\services\mongodb\updateDeleteResult $updateDeleteResult ) {
+		$this->exportDb = true;
+		$this->db = new db( $updateDeleteResult );
+	}
+
+
+	public function jsonSerialize() : array {
+		$export = [
+			'ui'     => $this->ui,
+			'labels' => $this->labels
+		];
+
+		if( $this->exportDb ) {
+			$export[ 'db' ] = $this->db;
+		}
+
+		return $export;
 	}
 
 
