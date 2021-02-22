@@ -17,12 +17,7 @@ abstract class model
 	extends
 	\gcgov\framework\services\mongodb\factory {
 
-	public _meta $_meta;
 
-
-	public function __construct() {
-		$this->_meta = new _meta( get_called_class() );
-	}
 
 
 	public function __clone() {

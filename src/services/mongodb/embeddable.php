@@ -5,6 +5,7 @@ namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\exceptions\databaseException;
+use gcgov\framework\services\mongodb\models\_meta;
 
 
 abstract class embeddable
@@ -12,6 +13,14 @@ abstract class embeddable
 	\MongoDB\BSON\Persistable,
 	\JsonSerializable,
 	\gcgov\framework\interfaces\jsonDeserialize {
+
+	public _meta $_meta;
+
+
+	public function __construct() {
+		$this->_meta = new _meta( get_called_class() );
+	}
+
 
 	/**
 	 * @return \gcgov\framework\services\mongodb\typeMap
@@ -297,6 +306,7 @@ abstract class embeddable
 		$rProperties = $rClass->getProperties();
 		foreach( $rProperties as $rProperty ) {
 			$propertyName = $rProperty->getName();
+			//ignore properties that start with _
 			if( substr( $propertyName, 0, 1 ) === '_' && $propertyName !== '_id' ) {
 				continue;
 			}

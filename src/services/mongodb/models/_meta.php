@@ -5,8 +5,7 @@ namespace gcgov\framework\services\mongodb\models;
 use gcgov\framework\services\mongodb\attributes\label;
 
 
-class _meta implements
-	\JsonSerializable {
+class _meta {
 
 	/** @OA\Property() */
 	public ui $ui;
@@ -45,11 +44,6 @@ class _meta implements
 		}
 
 		return $labels;
-	}
-
-
-	public function jsonSerialize() {
-		return (array) $this;
 	}
 
 }
