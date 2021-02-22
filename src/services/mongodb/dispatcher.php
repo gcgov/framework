@@ -99,9 +99,9 @@ abstract class dispatcher
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	private static function _doDelete( string $collectionName, string $pathToUpdate, \MongoDB\BSON\ObjectId $_id ) : \MongoDB\UpdateResult {
-		$mdb = new \gcgov\framework\helpers\mdb( collection: $collectionName );
+		$mdb = new tools\mdb( collection: $collectionName );
 
-		$_id = $mdb->stringToObjectId( $_id );
+		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
 
 		$filter = [];
 
@@ -163,7 +163,7 @@ abstract class dispatcher
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	private static function _doUpdate( string $collectionName, string $pathToUpdate, object $updateObject ) : \MongoDB\UpdateResult {
-		$mdb = new \gcgov\framework\helpers\mdb( collection: $collectionName );
+		$mdb = new tools\mdb( collection: $collectionName );
 
 		$filter = [];
 

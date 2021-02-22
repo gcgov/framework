@@ -1,10 +1,10 @@
 <?php
-namespace gcgov\framework\helpers;
+namespace gcgov\framework\services\mongodb\tools;
 
 
 use gcgov\framework\config;
-use gcgov\framework\models\config\environment\mongoDatabase;
 use gcgov\framework\exceptions\modelException;
+use gcgov\framework\models\config\environment\mongoDatabase;
 
 
 final class mdb {
@@ -29,7 +29,6 @@ final class mdb {
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public function __construct( string $collection, string $database = '' ) {
-
 		$connector = $this->getConnector( $database );
 
 		$mongoParams = [];
@@ -55,7 +54,6 @@ final class mdb {
 			\gcgov\framework\services\log::error( $e->getMessage(), $e );
 			throw new modelException( 'Database connection issue: ' . $e->getMessage(), 503, $e );
 		}
-
 	}
 
 
@@ -66,11 +64,9 @@ final class mdb {
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	private function getConnector( string $database = '' ) : mongoDatabase {
-
 		$environmentConfig = config::getEnvironmentConfig();
 
 		foreach( $environmentConfig->mongoDatabases as $mongoDatabase ) {
-
 			if( $mongoDatabase->default && $database === '' ) {
 				return $mongoDatabase;
 			}
@@ -81,60 +77,5 @@ final class mdb {
 
 		throw new modelException( 'No suitable Mongo Database connector found in environment config', 500 );
 	}
-
-
-	/**
-	 * @param  \MongoDB\BSON\ObjectId|string  $_id
-	 *
-	 * @return \MongoDB\BSON\ObjectId
-	 * @throws \gcgov\framework\exceptions\modelException
-	 */
-	public function stringToObjectId( \MongoDB\BSON\ObjectId|string $_id, string $modelExceptionMessage='Invalid _id' ) : \MongoDB\BSON\ObjectId {
-
-		if( is_string( $_id ) ) {
-			try {
-				$_id = new \MongoDB\BSON\ObjectId( $_id );
-			}
-			catch( \MongoDB\Driver\Exception\InvalidArgumentException $e ) {
-				throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, 400 );
-			}
-		}
-
-		return $_id;
-
-	}
-
-
-	/**
-	 * @param  array  $filter   Optional
-	 * @param  array  $sort     Optional
-	 * @param  array  $typeMap  Optional for typecasting
-	 *
-	 * @return array
-	 * @throws \gcgov\framework\exceptions\modelException
-	 */
-	public function getAll( array $filter = [], array $sort = [], array $typeMap = [] ) : array {
-
-		$options = [];
-		if(count($sort)>0) {
-			$options['sort'] = $sort;
-		}
-		if(count($typeMap)>0) {
-			$options['typeMap'] = $typeMap;
-		}
-
-		try {
-			$cursor = $this->collection->find( $filter, $options );
-
-			return $cursor->toArray();
-		}
-		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			error_log( $e );
-			\gcgov\framework\services\log::error( $e->getMessage(), $e );
-			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
-		}
-
-	}
-
 
 }

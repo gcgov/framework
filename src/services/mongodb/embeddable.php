@@ -93,7 +93,7 @@ abstract class embeddable
 		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
 
 		//parse the json
-		$json = \gcgov\framework\helpers\mdbTools::jsonToObject( $json, 'Malformed ' . $calledClassFqn . ' JSON', 400 );
+		$json = tools\helpers::jsonToObject( $json, 'Malformed ' . $calledClassFqn . ' JSON', 400 );
 
 		//load new instance of this class
 		try {
@@ -378,13 +378,18 @@ abstract class embeddable
 		$propertyType     = $rProperty->getType();
 		$propertyTypeName = $propertyType->getName();
 
+		//$data[$propertyName] was not in the database result
 		if( !array_key_exists( $propertyName, $data ) || $data[ $propertyName ] === null ) {
 			if( !$propertyType->allowsNull() ) {
 				//attempt to instantiate special types
 				try {
-					$rPropertyClass = new \ReflectionClass( $propertyTypeName );
+					$rPropertyClass       = new \ReflectionClass( $propertyTypeName );
+					$instantiateArguments = [];
+					if( substr( $propertyTypeName, -5 ) == '_meta' ) {
+						$instantiateArguments = [ get_called_class() ];
+					}
 
-					return $rPropertyClass->newInstance();
+					return $rPropertyClass->newInstance( ...$instantiateArguments );
 				}
 					//regular non class types
 				catch( \ReflectionException $e ) {

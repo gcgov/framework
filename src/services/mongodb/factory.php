@@ -31,7 +31,7 @@ abstract class factory
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function getAll( array $filter = [], array $sort = [] ) : array {
-		$mdb = new \gcgov\framework\helpers\mdb( collection: static::_getCollectionName() );
+		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$options = [
 			'typeMap' => static::_getTypeMap()
@@ -58,9 +58,9 @@ abstract class factory
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function getOne( \MongoDB\BSON\ObjectId|string $_id ) : mixed {
-		$mdb = new \gcgov\framework\helpers\mdb( collection: static::_getCollectionName() );
+		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
-		$_id = $mdb->stringToObjectId( $_id );
+		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
 
 		$filter = [
 			'_id' => $_id
@@ -93,7 +93,7 @@ abstract class factory
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function save( $object, bool $upsert = true ) : updateDeleteResult {
-		$mdb = new \gcgov\framework\helpers\mdb( collection: static::_getCollectionName() );
+		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$filter = [
 			'_id' => $object->_id
@@ -119,7 +119,14 @@ abstract class factory
 		//dispatch updates for all embedded versions
 		$embeddedUpdates = self::_updateEmbedded( $object );
 
-		return new updateDeleteResult( $updateResult, $embeddedUpdates );
+		$combinedResult = new updateDeleteResult( $updateResult, $embeddedUpdates );
+
+		//update _meta property of object to show results
+		if(property_exists($object, '_meta')) {
+			$object->_meta->db->set( $combinedResult );
+		}
+
+		return $combinedResult;
 	}
 
 
@@ -130,9 +137,9 @@ abstract class factory
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function delete( \MongoDB\BSON\ObjectId|string $_id ) : updateDeleteResult {
-		$mdb = new \gcgov\framework\helpers\mdb( collection: static::_getCollectionName() );
+		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
-		$_id = $mdb->stringToObjectId( $_id );
+		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
 
 		$filter = [
 			'_id' => $_id
@@ -153,13 +160,14 @@ abstract class factory
 		//dispatch delete for all embedded versions
 		$embeddedDeletes = self::_deleteEmbedded( static::_typeMap()->root, $_id );
 
-		$updateDeleteResult = new updateDeleteResult( $deleteResult, $embeddedDeletes );
+		//combine primary delete with embedded
+		$combinedResult = new updateDeleteResult( $deleteResult, $embeddedDeletes );
 
-		if($updateDeleteResult->getEmbeddedDeletedCount()+$updateDeleteResult->getDeletedCount()+$updateDeleteResult->getModifiedCount()+$updateDeleteResult->getEmbeddedModifiedCount()==0) {
+		if($combinedResult->getEmbeddedDeletedCount()+$combinedResult->getDeletedCount()+$combinedResult->getModifiedCount()+$combinedResult->getEmbeddedModifiedCount()==0) {
 			throw new modelException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found', 404 );
 		}
 
-		return $updateDeleteResult;
+		return $combinedResult;
 	}
 
 }

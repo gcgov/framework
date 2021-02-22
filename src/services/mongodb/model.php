@@ -4,6 +4,7 @@ namespace gcgov\framework\services\mongodb;
 
 
 use gcgov\framework\services\mongodb\exceptions\databaseException;
+use gcgov\framework\services\mongodb\models\_meta;
 use JetBrains\PhpStorm\ArrayShape;
 use JetBrains\PhpStorm\Pure;
 
@@ -15,6 +16,14 @@ use JetBrains\PhpStorm\Pure;
 abstract class model
 	extends
 	\gcgov\framework\services\mongodb\factory {
+
+	public _meta $_meta;
+
+
+	public function __construct() {
+		$this->_meta = new _meta( get_called_class() );
+	}
+
 
 	public function __clone() {
 		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );

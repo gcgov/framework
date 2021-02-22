@@ -25,6 +25,9 @@ class updateDeleteResult {
 
 	private int                     $embeddedUpsertedCount = 0;
 
+	/** @var  \MongoDB\BSON\ObjectId[] */
+	private array $embeddedUpsertedIds = [];
+
 
 	/**
 	 * updateDeleteResult constructor.
@@ -50,6 +53,9 @@ class updateDeleteResult {
 				$this->matchedCount  = $result->getMatchedCount();
 				$this->upsertedId    = $result->getUpsertedId();
 				$this->upsertedCount = $result->getUpsertedCount();
+				if( $result->getUpsertedCount() > 0 ) {
+					$this->upsertedId = $result->getUpsertedId();
+				}
 			}
 		}
 
@@ -57,10 +63,17 @@ class updateDeleteResult {
 		if( count( $embeddedResults ) > 0 ) {
 			$embeddedResultObjects = self::generateFromResults( $embeddedResults );
 			foreach( $embeddedResultObjects as $result ) {
-				$this->embeddedMatchedCount  += $result->getMatchedCount();
-				$this->embeddedModifiedCount += $result->getModifiedCount();
-				$this->embeddedDeletedCount  += $result->getDeletedCount();
-				$this->embeddedUpsertedCount += $result->getUpsertedCount();
+				if( $result instanceof \MongoDB\DeleteResult ) {
+					$this->embeddedDeletedCount += $result->getDeletedCount();
+				}
+				elseif( $result instanceof \MongoDB\UpdateResult ) {
+					$this->embeddedMatchedCount  += $result->getMatchedCount();
+					$this->embeddedModifiedCount += $result->getModifiedCount();
+					$this->embeddedUpsertedCount += $result->getUpsertedCount();
+					if( $result->getUpsertedCount() > 0 ) {
+						$this->embeddedUpsertedIds[] = $result->getUpsertedId();
+					}
+				}
 			}
 		}
 	}
@@ -128,6 +141,12 @@ class updateDeleteResult {
 
 	public function getEmbeddedUpsertedCount() : int {
 		return $this->embeddedUpsertedCount;
+	}
+
+
+	/** @return \MongoDB\BSON\ObjectId[] */
+	public function getEmbeddedUpsertedIds() : array {
+		return $this->embeddedUpsertedIds;
 	}
 
 }
