@@ -61,8 +61,8 @@ class updateDeleteResult {
 
 		//if embedded results are provided, add them to the object and sum their counts
 		if( count( $embeddedResults ) > 0 ) {
-			$embeddedResultObjects = self::generateFromResults( $embeddedResults );
-			foreach( $embeddedResultObjects as $result ) {
+			//$embeddedResultObjects = self::generateFromResults( $embeddedResults );
+			foreach( $embeddedResults as $result ) {
 				if( $result instanceof \MongoDB\DeleteResult ) {
 					$this->embeddedDeletedCount += $result->getDeletedCount();
 				}

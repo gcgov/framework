@@ -27,7 +27,7 @@ final class router {
 		switch( $routeInfo[ 0 ] ) {
 			case \FastRoute\Dispatcher::NOT_FOUND:
 				// ... 404 Not Found
-				throw new \gcgov\framework\exceptions\routeException ( 'Not Found', 404 );
+				throw new \gcgov\framework\exceptions\routeException ( 'URL Not Found', 404 );
 				break;
 			case \FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
 				$allowedMethods = $routeInfo[ 1 ];
@@ -68,7 +68,7 @@ final class router {
 		return \FastRoute\simpleDispatcher( function( \FastRoute\RouteCollector $r ) use ( $routes ) {
 
 			foreach( $routes as $route ) {
-				$r->addRoute( $route->httpMethod, $route->route, new \gcgov\framework\models\routeHandler( $route->class, $route->method, $route->authentication ) );
+				$r->addRoute( $route->httpMethod, $route->route, new \gcgov\framework\models\routeHandler( $route->class, $route->method, $route->authentication, $route->requiredRoles ) );
 			}
 		} );
 	}

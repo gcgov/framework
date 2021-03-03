@@ -136,9 +136,11 @@ abstract class dispatcher
 
 			$filter[ $filterPath . '._id' ] = $_id;
 
+			$updatePath = str_replace( '.$', '.$[]', $pathToUpdate );
+
 			$update = [
 				'$set' => [
-					$pathToUpdate => null
+					$updatePath => null
 				]
 			];
 		}

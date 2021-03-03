@@ -120,6 +120,10 @@ abstract class embeddable
 		foreach( $rProperties as $rProperty ) {
 			$propertyName = $rProperty->getName();
 
+			if( $propertyName === '_meta' ) {
+				continue;
+			}
+
 			//if there is not a matching json property, ignore it
 			if( !property_exists( $json, $propertyName ) ) {
 				continue;
@@ -179,7 +183,7 @@ abstract class embeddable
 		}
 			//regular non class types
 		catch( \ReflectionException $e ) {
-			if( !empty( $jsonValue ) ) {
+			if( $jsonValue!==null ) {
 				if( $propertyTypeName == 'array' ) {
 					return (array) $jsonValue;
 				}
