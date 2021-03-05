@@ -4,6 +4,7 @@ namespace gcgov\framework\services\mongodb;
 
 
 use gcgov\framework\exceptions\modelException;
+use gcgov\framework\services\mongodb\attributes\autoIncrement;
 
 
 /**
@@ -112,8 +113,13 @@ abstract class factory
 			$updateResult = $mdb->collection->updateOne( $filter, $update, $options );
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			error_log($e);
+			error_log( $e );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
+		}
+
+		//auto increment fields on insert
+		if( $updateResult->getUpsertedCount() > 0 ) {
+			$autoIncrementUpdateResult = self::autoIncrementProperties( $object );
 		}
 
 		//dispatch updates for all embedded versions
@@ -122,7 +128,7 @@ abstract class factory
 		$combinedResult = new updateDeleteResult( $updateResult, $embeddedUpdates );
 
 		//update _meta property of object to show results
-		if(property_exists($object, '_meta')) {
+		if( property_exists( $object, '_meta' ) ) {
 			$object->_meta->setDb( $combinedResult );
 		}
 
@@ -153,7 +159,7 @@ abstract class factory
 			$deleteResult = $mdb->collection->deleteOne( $filter, $options );
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			error_log($e);
+			error_log( $e );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
 		}
 
@@ -163,11 +169,102 @@ abstract class factory
 		//combine primary delete with embedded
 		$combinedResult = new updateDeleteResult( $deleteResult, $embeddedDeletes );
 
-		if($combinedResult->getEmbeddedDeletedCount()+$combinedResult->getDeletedCount()+$combinedResult->getModifiedCount()+$combinedResult->getEmbeddedModifiedCount()==0) {
+		if( $combinedResult->getEmbeddedDeletedCount() + $combinedResult->getDeletedCount() + $combinedResult->getModifiedCount() + $combinedResult->getEmbeddedModifiedCount() == 0 ) {
 			throw new modelException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found', 404 );
 		}
 
 		return $combinedResult;
+	}
+
+
+	/**
+	 * @param  \gcgov\framework\services\mongodb\model  $object
+	 *
+	 * @return \gcgov\framework\services\mongodb\updateDeleteResult
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function autoIncrementProperties( model $object ) : updateDeleteResult {
+		$propertyNames = [];
+
+		//find fields marked with autoIncrement attribute on $object (must be of type _model)
+		try {
+			$reflectionClass = new \ReflectionClass( $object );
+
+			foreach( $reflectionClass->getProperties() as $property ) {
+				$attributes = $property->getAttributes( autoIncrement::class );
+
+				//this is an auto increment field
+				if( count( $attributes ) > 0 ) {
+					$propertyNames[] = $property->getName();
+				}
+			}
+		}
+		catch( \ReflectionException $e ) {
+			error_log($e);
+			return new updateDeleteResult();
+		}
+
+		//if no properties are auto increments, do nothing
+		if( count( $propertyNames ) === 0 ) {
+			return new updateDeleteResult();
+		}
+
+		//do the auto incrementing
+		error_log('Auto increment');
+
+		$mdb = new tools\mdb( collection: static::_getCollectionName() );
+
+		$session = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
+
+		$updateResult = null;
+		$session->startTransaction( [ 'maxCommitTimeMS' => 2000 ] );
+		try {
+			$mongodbSet = [];
+
+			foreach( $propertyNames as $propertyName ) {
+				$key = static::_getCollectionName() . '.' . $propertyName;
+				error_log($key);
+
+				//get and increment internalCounter
+				$internalCounter = \gcgov\framework\services\mongodb\models\internalCounter::getAndIncrement( $key, $session );
+
+				//set the new count on the object (by ref)
+				$object->{$propertyName} = $internalCounter->currentCount;
+
+				//set the new count on the mongo db set operator
+				$mongodbSet[ $propertyName ] = $internalCounter->currentCount;
+			}
+
+			//update the transaction batch
+			$filter = [
+				'_id' => $object->_id
+			];
+
+			$update = [
+				'$set' => $mongodbSet
+			];
+
+			$options      = [
+				'upsert'  => true,
+				'session' => $session
+			];
+			$updateResult = $mdb->collection->updateOne( $filter, $update, $options );
+
+			$session->commitTransaction();
+		}
+		catch( \MongoDB\Driver\Exception\RuntimeException | \MongoDB\Driver\Exception\CommandException $e ) {
+			$session->abortTransaction();
+			throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
+		}
+
+		//close the session
+		$session->endSession();
+
+		error_log('Matched: '.$updateResult->getMatchedCount());
+		error_log('Modified: '.$updateResult->getModifiedCount());
+		error_log('Upserted: '.$updateResult->getUpsertedCount());
+
+		return new updateDeleteResult( $updateResult );
 	}
 
 }
