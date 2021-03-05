@@ -167,6 +167,7 @@ abstract class dispatcher
 	private static function _doUpdate( string $collectionName, string $pathToUpdate, object $updateObject ) : \MongoDB\UpdateResult {
 		$mdb = new tools\mdb( collection: $collectionName );
 
+		//TODO: filter here? I'm matching on all documents so in the function response, it shows more matched than modified
 		$filter = [];
 
 		$options = [
