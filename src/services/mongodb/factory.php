@@ -184,7 +184,9 @@ abstract class factory
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function autoIncrementProperties( model $object ) : updateDeleteResult {
-		$propertyNames = [];
+
+		/** @var attributes\autoIncrement[] $autoIncrementAttributes */
+		$autoIncrementAttributes = [];
 
 		//find fields marked with autoIncrement attribute on $object (must be of type _model)
 		try {
@@ -195,7 +197,8 @@ abstract class factory
 
 				//this is an auto increment field
 				if( count( $attributes ) > 0 ) {
-					$propertyNames[] = $property->getName();
+					/** @var attributes\autoIncrement $autoIncrement */
+					$autoIncrementAttributes[ $property->getName() ] =  $attributes[0]->newInstance();
 				}
 			}
 		}
@@ -205,7 +208,7 @@ abstract class factory
 		}
 
 		//if no properties are auto increments, do nothing
-		if( count( $propertyNames ) === 0 ) {
+		if( count( $autoIncrementAttributes ) === 0 ) {
 			return new updateDeleteResult();
 		}
 
@@ -221,18 +224,32 @@ abstract class factory
 		try {
 			$mongodbSet = [];
 
-			foreach( $propertyNames as $propertyName ) {
+			foreach( $autoIncrementAttributes as $propertyName=>$autoIncrement ) {
+
+				//create key for auto increment group
 				$key = static::_getCollectionName() . '.' . $propertyName;
+				if($autoIncrement->groupByPropertyName!=='') {
+					$key .= '.'. $object->{$autoIncrement->groupByPropertyName};
+				}
+				if($autoIncrement->groupByMethodName!=='') {
+					$key .= '.'. $object->{$autoIncrement->groupByMethodName}();
+				}
 				error_log($key);
 
 				//get and increment internalCounter
 				$internalCounter = \gcgov\framework\services\mongodb\models\internalCounter::getAndIncrement( $key, $session );
 
 				//set the new count on the object (by ref)
-				$object->{$propertyName} = $internalCounter->currentCount;
+				//if the value is supposed to be formatted
+				if($autoIncrement->countFormatMethod!=='') {
+					$object->{$propertyName} = $object->{$autoIncrement->countFormatMethod}( $internalCounter->currentCount );
+				}
+				else {
+					$object->{$propertyName} = $internalCounter->currentCount;
+				}
 
 				//set the new count on the mongo db set operator
-				$mongodbSet[ $propertyName ] = $internalCounter->currentCount;
+				$mongodbSet[ $propertyName ] = $object->{$propertyName};
 			}
 
 			//update the transaction batch
