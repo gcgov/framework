@@ -344,6 +344,11 @@ abstract class embeddable
 			//set the class property = the parsed value from the database
 			$this->$propertyName = $this->bsonUnserializeDataItem( $rProperty, $data );
 		}
+
+		//if this is a text search that has provided the score of the result via the _score field
+		if(isset($data['_score'])) {
+			$this->_meta->score = round($data['_score'],2);
+		}
 	}
 
 

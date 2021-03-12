@@ -20,7 +20,7 @@ abstract class dispatcher
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function _updateEmbedded( $object ) : array {
-		error_log( 'Dispatch _updateEmbedded' );
+		error_log( 'Dispatch _updateEmbedded for '.$object::class );
 		$embeddedUpdates = [];
 
 		//the type of object we are updating
@@ -39,7 +39,7 @@ abstract class dispatcher
 			//check if updateType is embedded in this typeMap
 			foreach( $typeMap->fieldPaths as $fieldKey => $fieldPath ) {
 				if( $updateType == $fieldPath ) {
-					error_log( 'update collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $updateType );
+					error_log( '--update collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $updateType );
 					$embeddedUpdates[] = self::_doUpdate( $collectionName, $fieldKey, $object );
 				}
 			}
@@ -80,7 +80,7 @@ abstract class dispatcher
 			//check if updateType is embedded in this typeMap
 			foreach( $typeMap->fieldPaths as $fieldKey => $fieldPath ) {
 				if( $deleteType == $fieldPath ) {
-					error_log( 'delete item on collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $deleteType );
+					error_log( '-- delete item on collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $deleteType );
 					$embeddedDeletes[] = self::_doDelete( $collectionName, $fieldKey, $_id );
 				}
 			}
@@ -209,8 +209,8 @@ abstract class dispatcher
 
 		try {
 			$updateResponse = $mdb->collection->updateMany( $filter, $update, $options );
-			error_log( 'Matched: ' . $updateResponse->getMatchedCount() );
-			error_log( 'Mod: ' . $updateResponse->getModifiedCount() );
+			error_log( '----Matched: ' . $updateResponse->getMatchedCount() );
+			error_log( '----Mod: ' . $updateResponse->getModifiedCount() );
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
 			error_log( $e );

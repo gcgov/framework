@@ -16,6 +16,9 @@ class _meta
 	public ?db $db = null;
 
 	/** @OA\Property() */
+	public float $score = 0;
+
+	/** @OA\Property() */
 	public array $labels;
 
 	private bool $exportDb = false;
@@ -29,7 +32,7 @@ class _meta
 
 	public function setDb( \gcgov\framework\services\mongodb\updateDeleteResult $updateDeleteResult ) {
 		$this->exportDb = true;
-		$this->db = new db( $updateDeleteResult );
+		$this->db       = new db( $updateDeleteResult );
 	}
 
 
@@ -38,6 +41,11 @@ class _meta
 			'ui'     => $this->ui,
 			'labels' => $this->labels
 		];
+
+		if($this->score!=0) {
+			$export['score'] = $this->score;
+		}
+
 
 		if( $this->exportDb ) {
 			$export[ 'db' ] = $this->db;
