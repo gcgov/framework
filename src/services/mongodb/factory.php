@@ -112,7 +112,10 @@ abstract class factory
 
 		try {
 			$updateResult = $mdb->collection->updateOne( $filter, $update, $options );
-			error_log("Save ".$object::class."\nMatched: ".$updateResult->getMatchedCount()."\nModified: ".$updateResult->getModifiedCount()."\nUpserted:".$updateResult->getUpsertedCount());
+			error_log("Save ".$object::class);
+			error_log('--Matched:  '.$updateResult->getMatchedCount());
+			error_log('--Modified: '.$updateResult->getModifiedCount());
+			error_log('--Upserted: '.$updateResult->getUpsertedCount());
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
 			error_log( $e );
@@ -127,20 +130,7 @@ abstract class factory
 		//dispatch updates for all embedded versions
 		$embeddedUpdates = static::_updateEmbedded( $object );
 
-		//save changes to children where attributed to make updates
-		$childrenUpdates = static::saveChildren( $object );
-		//since the child may be nested in other properties on the object, we have to refresh the object itself after making the children updates
-		if(count($childrenUpdates)>0) {
-			foreach($childrenUpdates as $childUpdate) {
-				if($childUpdate->getModifiedCount()>0 || $childUpdate->getUpsertedCount()>0 || $childUpdate->getDeletedCount()>0 || $childUpdate->getEmbeddedModifiedCount()>0 || $childUpdate->getEmbeddedUpsertedCount()>0 || $childUpdate->getEmbeddedDeletedCount()>0) {
-					$object = self::getOne( $object->_id );
-					break;
-				}
-			}
-		}
-
-
-		$combinedResult = new updateDeleteResult( $updateResult, $embeddedUpdates, $childrenUpdates );
+		$combinedResult = new updateDeleteResult( $updateResult, $embeddedUpdates );
 
 		//update _meta property of object to show results
 		if( property_exists( $object, '_meta' ) ) {
@@ -189,72 +179,6 @@ abstract class factory
 		}
 
 		return $combinedResult;
-	}
-
-
-	/**
-	 * @param $object
-	 *
-	 * @return \gcgov\framework\services\mongodb\updateDeleteResult[]
-	 */
-	private static function saveChildren( &$object ) : array {
-		error_log('Save children for '.$object::class);
-
-		$updateResults = [];
-
-		//find fields marked with autoIncrement attribute on $object (must be of type _model)
-		try {
-			$reflectionClass = new \ReflectionClass( $object );
-
-			foreach( $reflectionClass->getProperties() as $property ) {
-				$attributes = $property->getAttributes( saveChildOnSave::class );
-
-				//this is an save child field
-				if( count( $attributes ) > 0 ) {
-					/** @var attributes\saveChildOnSave $saveChildOnSaveAttributes */
-					$attribute = $attributes[0]->newInstance();
-
-					//get property type
-					$rPropertyType = $property->getType();
-					$typeName      = $rPropertyType->getName();
-					$typeIsArray   = false;
-
-					//handle typed arrays
-					if( $typeName == 'array' ) {
-						//get type  from @var doc block
-						$typeName    = typeHelpers::getVarTypeFromDocComment( $property->getDocComment() );
-						$typeIsArray = true;
-					}
-
-					//make sure it has save
-					if(!$typeIsArray) {
-						$items = [ &$object->{$property->getName()} ];
-					}
-					else {
-						$items = &$object->{$property->getName()};
-					}
-
-					error_log('---- '.$object::class.'->'.$property->getName());
-
-					foreach($items as $i=>$item) {
-						$rPropertyClass = new \ReflectionClass( $typeName );
-						if( $rPropertyClass->isSubclassOf( model::class ) ) {
-							$updateResults[] = $rPropertyClass->getMethod( 'save')->invokeArgs( $items[$i], array( &$items[$i] ) );
-						}
-						elseif( $rPropertyClass->isSubclassOf( embeddable::class ) ) {
-							$updateResults = array_merge( $updateResults, self::saveChildren( $items[$i] ) );
-						}
-					}
-
-				}
-			}
-		}
-		catch( \ReflectionException $e ) {
-			error_log($e);
-		}
-
-		return $updateResults;
-
 	}
 
 
