@@ -1,6 +1,7 @@
 {
   "name": "gcgov/framework",
   "description": "Open source framework for PHP applications. Includes MongoDB modelling system.",
+  "license": "MIT",
   "autoload": {
 	"psr-4": {
 	  "gcgov\\framework\\": "src/"
