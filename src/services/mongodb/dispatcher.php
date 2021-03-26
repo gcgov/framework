@@ -40,6 +40,7 @@ abstract class dispatcher
 			foreach( $typeMap->fieldPaths as $fieldKey => $fieldPath ) {
 				if( $updateType == $fieldPath ) {
 					error_log( '--update collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $updateType );
+					//TODO: change this to a bulk write
 					$embeddedUpdates[] = self::_doUpdate( $collectionName, $fieldKey, $object );
 				}
 			}
