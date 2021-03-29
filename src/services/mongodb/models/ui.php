@@ -6,18 +6,42 @@ namespace gcgov\framework\services\mongodb\models;
 class ui {
 
 	/** @OA\Property() */
-	public bool $editing = false;
+	public bool $loading = false;
+
+	/** @OA\Property() */
+	public bool $loadingDialog = false;
+
+	/** @OA\Property() */
+	public bool $adding = false;
+
+	/** @OA\Property() */
+	public bool $addingDialog = false;
 
 	/** @OA\Property() */
 	public bool $saving = false;
 
 	/** @OA\Property() */
-	public bool $deleting = false;
+	public bool $savingDialog = false;
 
 	/** @OA\Property() */
-	public bool $expanded = false;
+	public bool $editing = false;
 
 	/** @OA\Property() */
-	public string $message = '';
+	public bool $editingDialog = false;
+
+	/** @OA\Property() */
+	public bool $removing = false;
+
+	/** @OA\Property() */
+	public bool $removingDialog = false;
+
+	/** @OA\Property() */
+	public bool $error = false;
+
+	/** @OA\Property() */
+	public string $errorCode = '';
+
+	/** @OA\Property() */
+	public string $errorMessage = '';
 
 }

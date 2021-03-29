@@ -5,7 +5,6 @@ namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\attributes\autoIncrement;
-use gcgov\framework\services\mongodb\attributes\saveChildOnSave;
 
 
 /**
