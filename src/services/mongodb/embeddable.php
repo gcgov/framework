@@ -4,6 +4,8 @@ namespace gcgov\framework\services\mongodb;
 
 
 use gcgov\framework\exceptions\modelException;
+use gcgov\framework\services\mongodb\attributes\excludeDeserialize;
+use gcgov\framework\services\mongodb\attributes\excludeSerialize;
 use gcgov\framework\services\mongodb\exceptions\databaseException;
 use gcgov\framework\services\mongodb\models\_meta;
 
@@ -171,6 +173,12 @@ abstract class embeddable
 		$rPropertyType    = $rProperty->getType();
 		$propertyTypeName = $rPropertyType->getName();
 
+		//exclude if attritube says to
+		$attributes = $rProperty->getAttributes(excludeDeserialize::class );
+		if(count($attributes)>0) {
+			return null;
+		}
+
 		//get type of array if specified
 		if( $propertyTypeName == 'array' ) {
 			//get type  from @var doc block
@@ -283,7 +291,10 @@ abstract class embeddable
 		$rProperties = $rClass->getProperties();
 		foreach( $rProperties as $rProperty ) {
 			$propertyName            = $rProperty->getName();
-			$export[ $propertyName ] = $this->jsonSerializeDataItem( $rProperty );
+			$attributes = $rProperty->getAttributes(excludeSerialize::class );
+			if(count($attributes)===0) {
+				$export[ $propertyName ] = $this->jsonSerializeDataItem( $rProperty );
+			}
 		}
 
 		return $export;
