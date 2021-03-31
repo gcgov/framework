@@ -173,7 +173,7 @@ abstract class embeddable
 		$rPropertyType    = $rProperty->getType();
 		$propertyTypeName = $rPropertyType->getName();
 
-		//exclude if attritube says to
+		//exclude if attribute says to
 		$attributes = $rProperty->getAttributes(excludeDeserialize::class );
 		if(count($attributes)>0) {
 			return null;
@@ -291,6 +291,7 @@ abstract class embeddable
 		$rProperties = $rClass->getProperties();
 		foreach( $rProperties as $rProperty ) {
 			$propertyName            = $rProperty->getName();
+			//if property is not meant to be serialized, exclude it
 			$attributes = $rProperty->getAttributes(excludeSerialize::class );
 			if(count($attributes)===0) {
 				$export[ $propertyName ] = $this->jsonSerializeDataItem( $rProperty );

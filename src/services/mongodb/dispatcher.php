@@ -4,6 +4,8 @@ namespace gcgov\framework\services\mongodb;
 
 
 use gcgov\framework\config;
+use gcgov\framework\exceptions\modelException;
+use gcgov\framework\services\mongodb\attributes\deleteCascade;
 
 
 abstract class dispatcher
@@ -40,7 +42,10 @@ abstract class dispatcher
 			foreach( $typeMap->fieldPaths as $fieldKey => $fieldPath ) {
 				if( $updateType == $fieldPath ) {
 					error_log( '--update collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $updateType );
-					//TODO: change this to a bulk write
+					//TODO: change this to a transaction bulk write
+
+					//
+
 					$embeddedUpdates[] = self::_doUpdate( $collectionName, $fieldKey, $object );
 				}
 			}
@@ -82,12 +87,87 @@ abstract class dispatcher
 			foreach( $typeMap->fieldPaths as $fieldKey => $fieldPath ) {
 				if( $deleteType == $fieldPath ) {
 					error_log( '-- delete item on collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $deleteType );
+					//TODO: change this to a transaction bulk write
 					$embeddedDeletes[] = self::_doDelete( $collectionName, $fieldKey, $_id );
 				}
 			}
 		}
 
 		return $embeddedDeletes;
+	}
+
+
+	/**
+	 * If this model contains a delete cascade property, run the cascade
+	 *
+	 * @param  string                  $deleteType  Class FQN to remove - must be a class that extends
+	 *                                              \gcgov\framework\services\mongodb\model
+	 * @param  \MongoDB\BSON\ObjectId  $_id
+	 *
+	 * @return \MongoDB\UpdateResult[]
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function _deleteCascade( string $deleteType, \MongoDB\BSON\ObjectId $_id ) : array {
+
+		error_log('check for cascade deletes for '.$deleteType);
+
+		/** @var attributes\deleteCascade[] $deleteCascadeAttributes */
+		$deleteCascadeAttributes = [];
+
+		$deleteResponses = [];
+
+		//find fields marked with deleteCascade attribute on $object (must be of type _model)
+		try {
+			$reflectionClass = new \ReflectionClass( $deleteType );
+
+			foreach( $reflectionClass->getProperties() as $property ) {
+				$attributes = $property->getAttributes( deleteCascade::class );
+
+				//this is a delete cascade field
+				if( count( $attributes ) > 0 ) {
+					/** @var attributes\autoIncrement $autoIncrement */
+					$deleteCascadeAttributes[ $property->getName() ] =  $attributes[0]->newInstance();
+				}
+			}
+
+			if(count($deleteCascadeAttributes)>0) {
+				//get the full object so we have the data to be able to run the delete cascade
+				$object = $reflectionClass->getMethod( 'getOne' )->invokeArgs( null, [$_id] );
+			}
+			else {
+				error_log('-- no cascade delete properties');
+			}
+
+		}
+		catch( \ReflectionException $e ) {
+			error_log($e);
+			throw new modelException('Reflection failed on class ' . $deleteType, 500, $e );
+		}
+
+		foreach($deleteCascadeAttributes as $propertyName=>$deleteCascadeAttribute) {
+			if(gettype($object->$propertyName)==='array') {
+				error_log('-- '.count($object->$propertyName).' objects to cascade');
+				foreach($object->$propertyName as $objectToDelete) {
+					//do delete on object
+					$objectTypeToDelete = get_class($objectToDelete);
+					error_log('-- do cascade delete of '.$objectTypeToDelete.' '.$objectToDelete->_id);
+					//TODO: change this to a transaction bulk write
+					$deleteResponses[] = $objectTypeToDelete::delete( $objectToDelete->_id );
+				}
+			}
+			else {
+				//do delete on property
+				$objectTypeToDelete = get_class($object->$propertyName);
+				error_log('-- do cascade delete of '.$objectTypeToDelete.' '.$object->$propertyName->_id);
+				//TODO: change this to a transaction bulk write
+				$deleteResponses[] = $objectTypeToDelete::delete( $object->$propertyName->_id );
+			}
+
+		}
+
+		error_log('finish cascade deletes for '.$deleteType);
+		return $deleteResponses;
+
 	}
 
 
@@ -210,6 +290,8 @@ abstract class dispatcher
 
 		try {
 			$updateResponse = $mdb->collection->updateMany( $filter, $update, $options );
+			error_log(json_encode($filter));
+			error_log(json_encode($update));
 			error_log( '----Matched: ' . $updateResponse->getMatchedCount() );
 			error_log( '----Mod: ' . $updateResponse->getModifiedCount() );
 		}

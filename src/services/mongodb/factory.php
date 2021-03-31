@@ -151,6 +151,11 @@ abstract class factory
 
 		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
 
+		error_log("Delete ".static::_getCollectionName());
+
+		$deleteCascadeResults = self::_deleteCascade( static::_typeMap()->root, $_id  );
+		error_log(json_encode($deleteCascadeResults));
+
 		$filter = [
 			'_id' => $_id
 		];
