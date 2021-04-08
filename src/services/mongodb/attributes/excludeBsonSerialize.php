@@ -7,7 +7,7 @@ use Attribute;
 
 
 #[Attribute( Attribute::TARGET_PROPERTY )]
-class excludeSerialize {
+class excludeBsonSerialize {
 
 	public function __construct() {
 	}

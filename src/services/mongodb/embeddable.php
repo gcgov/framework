@@ -4,7 +4,11 @@ namespace gcgov\framework\services\mongodb;
 
 
 use gcgov\framework\exceptions\modelException;
+use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
+use gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize;
 use gcgov\framework\services\mongodb\attributes\excludeDeserialize;
+use gcgov\framework\services\mongodb\attributes\excludeJsonDeserialize;
+use gcgov\framework\services\mongodb\attributes\excludeJsonSerialize;
 use gcgov\framework\services\mongodb\attributes\excludeSerialize;
 use gcgov\framework\services\mongodb\exceptions\databaseException;
 use gcgov\framework\services\mongodb\models\_meta;
@@ -25,11 +29,13 @@ abstract class embeddable
 
 
 	/**
+	 *
 	 * @return \gcgov\framework\services\mongodb\typeMap
-	 * @throws \gcgov\framework\services\mongodb\exceptions\databaseException
 	 */
-	public static function _typeMap() : typeMap {
+	public static function _typeMap( $chainClass=[] ) : typeMap {
+
 		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
+		$chainClass[] = $calledClassFqn;
 
 		try {
 			$rClass = new \ReflectionClass( $calledClassFqn );
@@ -46,6 +52,8 @@ abstract class embeddable
 			if( !$rProperty->hasType() || substr( $rProperty->getName(), 0, 1 ) === '_' ) {
 				continue;
 			}
+
+			//TODO: make type mapping possible on double nested objects
 
 			//get property type
 			$rPropertyType = $rProperty->getType();
@@ -75,7 +83,7 @@ abstract class embeddable
 					$rPropertyClass = new \ReflectionClass( $typeName );
 					if( $rPropertyClass->isSubclassOf( embeddable::class ) ) {
 						$instance        = $rPropertyClass->newInstanceWithoutConstructor();
-						$propertyTypeMap = $rPropertyClass->getMethod( '_typeMap' )->invoke( $instance );
+						$propertyTypeMap = $rPropertyClass->getMethod( '_typeMap' )->invoke( $instance, $chainClass );
 						foreach( $propertyTypeMap->fieldPaths as $subFieldPathKey => $class ) {
 							$typeMap->fieldPaths[ $baseFieldPathKey . '.' . $subFieldPathKey ] = typeHelpers::classNameToFqn( $class );
 						}
@@ -122,6 +130,12 @@ abstract class embeddable
 		foreach( $rProperties as $rProperty ) {
 			$propertyName = $rProperty->getName();
 
+			//exclude if attribute says to
+			$attributes = $rProperty->getAttributes( excludeJsonDeserialize::class );
+			if( count( $attributes ) > 0 ) {
+				continue;
+			}
+
 			if( $propertyName === '_meta' ) {
 				continue;
 			}
@@ -145,6 +159,7 @@ abstract class embeddable
 
 			//load the data from json into the instance of our class
 			if( $propertyIsTypedArray ) {
+				$instance->$propertyName = [];
 				foreach( $json->$propertyName as $key => $jsonItem ) {
 					$instance->$propertyName[ $key ] = self::jsonDeserializeDataItem( $instance, $rProperty, $jsonItem, false );
 				}
@@ -173,12 +188,6 @@ abstract class embeddable
 		$rPropertyType    = $rProperty->getType();
 		$propertyTypeName = $rPropertyType->getName();
 
-		//exclude if attribute says to
-		$attributes = $rProperty->getAttributes(excludeDeserialize::class );
-		if(count($attributes)>0) {
-			return null;
-		}
-
 		//get type of array if specified
 		if( $propertyTypeName == 'array' ) {
 			//get type  from @var doc block
@@ -191,7 +200,7 @@ abstract class embeddable
 		}
 			//regular non class types
 		catch( \ReflectionException $e ) {
-			if( $jsonValue!==null ) {
+			if( $jsonValue !== null ) {
 				if( $propertyTypeName == 'array' ) {
 					return (array) $jsonValue;
 				}
@@ -290,11 +299,35 @@ abstract class embeddable
 		//get properties of the class and add them to the export
 		$rProperties = $rClass->getProperties();
 		foreach( $rProperties as $rProperty ) {
-			$propertyName            = $rProperty->getName();
+			$propertyName = $rProperty->getName();
+
 			//if property is not meant to be serialized, exclude it
-			$attributes = $rProperty->getAttributes(excludeSerialize::class );
-			if(count($attributes)===0) {
-				$export[ $propertyName ] = $this->jsonSerializeDataItem( $rProperty );
+			$attributes = $rProperty->getAttributes( excludeJsonSerialize::class );
+			if( count( $attributes ) === 0 ) {
+
+				$rPropertyType = $rProperty->getType();
+
+				//if the property is an array, check if the doc comment defines the type
+				$propertyIsTypedArray = false;
+				if( $rPropertyType->getName() == 'array' ) {
+					$arrayType = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
+					if( $arrayType != 'array' ) {
+						$propertyIsTypedArray = true;
+					}
+				}
+
+				//load the data from json into the instance of our class
+				if( $propertyIsTypedArray ) {
+					$export[ $propertyName ] = [];
+					$values                  = $rProperty->getValue( $this );
+					foreach( $values as $key => $value ) {
+						$export[ $propertyName ][ $key ] = $this->jsonSerializeDataItem( $rProperty, $value );
+					}
+				}
+				else {
+					$value                   = $rProperty->getValue( $this );
+					$export[ $propertyName ] = $this->jsonSerializeDataItem( $rProperty, $value );
+				}
 			}
 		}
 
@@ -322,11 +355,42 @@ abstract class embeddable
 		$rProperties = $rClass->getProperties();
 		foreach( $rProperties as $rProperty ) {
 			$propertyName = $rProperty->getName();
+
+			//if property is not meant to be serialized, exclude it
+			$attributes = $rProperty->getAttributes( excludeBsonSerialize::class );
+			if( count( $attributes ) > 0 ) {
+				continue;
+			}
+
 			//ignore properties that start with _
 			if( substr( $propertyName, 0, 1 ) === '_' && $propertyName !== '_id' ) {
 				continue;
 			}
-			$save[ $propertyName ] = $this->bsonSerializeDataItem( $rProperty );
+
+			$rPropertyType = $rProperty->getType();
+
+			//if the property is an array, check if the doc comment defines the type
+			$propertyIsTypedArray = false;
+			if( $rPropertyType->getName() == 'array' ) {
+				$arrayType = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
+				if( $arrayType != 'array' ) {
+					$propertyIsTypedArray = true;
+				}
+			}
+
+			//load the data from json into the instance of our class
+			if( $propertyIsTypedArray ) {
+				if( !isset( $save[ $propertyName ] ) ) {
+					$save[ $propertyName ] = $rProperty->getDefaultValue();
+				}
+				foreach( $rProperty->getValue( $this ) as $key => $value ) {
+					$save[ $propertyName ][ $key ] = $this->bsonSerializeDataItem( $rProperty, $value );
+				}
+			}
+			else {
+				$value                 = $rProperty->getValue( $this );
+				$save[ $propertyName ] = $this->bsonSerializeDataItem( $rProperty, $value );
+			}
 		}
 
 		return $save;
@@ -353,13 +417,49 @@ abstract class embeddable
 		$rProperties = $rClass->getProperties();
 		foreach( $rProperties as $rProperty ) {
 			$propertyName = $rProperty->getName();
-			//set the class property = the parsed value from the database
-			$this->$propertyName = $this->bsonUnserializeDataItem( $rProperty, $data );
+
+			//if property is not meant to be serialized, exclude it
+			$attributes = $rProperty->getAttributes( excludeBsonUnserialize::class );
+			if( count( $attributes ) > 0 ) {
+				continue;
+			}
+
+			$propertyType     = $rProperty->getType();
+			$propertyTypeName = $propertyType->getName();
+
+			//if the property is an array, check if the doc comment defines the type
+			$propertyIsTypedArray = false;
+			if( $propertyTypeName == 'array' ) {
+				$arrayType = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
+				if( $arrayType != 'array' && $arrayType != 'string' && $arrayType != 'float' && $arrayType != 'int' ) {
+					$propertyIsTypedArray = true;
+				}
+			}
+
+			if( $propertyIsTypedArray ) {
+				if( !isset( $data[ $propertyName ] ) ) {
+					$data[ $propertyName ] = $rProperty->getDefaultValue();
+				}
+				foreach( $data[ $propertyName ] as $key => $value ) {
+					$this->$propertyName[ $key ] = $this->bsonUnserializeDataItem( $rProperty, $propertyType, $arrayType, $value );
+				}
+			}
+			else {
+				if( !array_key_exists( $propertyName, $data ) ) {
+					$value = null;
+				}
+				else {
+					$value = $data[ $propertyName ];
+				}
+
+				//set the class property = the parsed value from the database
+				$this->$propertyName = $this->bsonUnserializeDataItem( $rProperty, $propertyType, $propertyTypeName, $value );
+			}
 		}
 
 		//if this is a text search that has provided the score of the result via the _score field
-		if(isset($data['_score'])) {
-			$this->_meta->score = round($data['_score'],2);
+		if( isset( $data[ '_score' ] ) ) {
+			$this->_meta->score = round( $data[ '_score' ], 2 );
 		}
 	}
 
@@ -369,9 +469,7 @@ abstract class embeddable
 	 *
 	 * @return mixed
 	 */
-	private function jsonSerializeDataItem( \ReflectionProperty $rProperty ) : mixed {
-		$value = $rProperty->getValue( $this );
-
+	private function jsonSerializeDataItem( \ReflectionProperty $rProperty, mixed $value ) : mixed {
 		if( $value instanceof \MongoDB\BSON\ObjectId ) {
 			return (string) $value;
 		}
@@ -385,12 +483,11 @@ abstract class embeddable
 
 	/**
 	 * @param  \ReflectionProperty  $rProperty
+	 * @param  mixed                $value
 	 *
 	 * @return mixed
 	 */
-	private function bsonSerializeDataItem( \ReflectionProperty $rProperty ) : mixed {
-		$value = $rProperty->getValue( $this );
-
+	private function bsonSerializeDataItem( \ReflectionProperty $rProperty, mixed $value ) : mixed {
 		if( $value instanceof \DateTimeInterface ) {
 			return new \MongoDB\BSON\UTCDateTime( $value );
 		}
@@ -401,17 +498,13 @@ abstract class embeddable
 
 	/**
 	 * @param  \ReflectionProperty  $rProperty
-	 * @param  array                $data
+	 * @param  mixed                $value
 	 *
 	 * @return mixed
 	 */
-	private function bsonUnserializeDataItem( \ReflectionProperty $rProperty, array $data ) : mixed {
-		$propertyName     = $rProperty->getName();
-		$propertyType     = $rProperty->getType();
-		$propertyTypeName = $propertyType->getName();
-
+	private function bsonUnserializeDataItem( \ReflectionProperty $rProperty, $propertyType, $propertyTypeName, mixed $value ) : mixed {
 		//$data[$propertyName] was not in the database result
-		if( !array_key_exists( $propertyName, $data ) || $data[ $propertyName ] === null ) {
+		if( $value === null ) {
 			if( !$propertyType->allowsNull() ) {
 				//attempt to instantiate special types
 				try {
@@ -438,13 +531,13 @@ abstract class embeddable
 				$rPropertyClass = new \ReflectionClass( $propertyTypeName );
 
 				if( $rPropertyClass->implementsInterface( \DateTimeInterface::class ) ) {
-					if( $data[ $propertyName ] instanceof \MongoDB\BSON\UTCDateTime ) {
-						return \DateTimeImmutable::createFromMutable( $data[ $propertyName ]->toDateTime() )
+					if( $value instanceof \MongoDB\BSON\UTCDateTime ) {
+						return \DateTimeImmutable::createFromMutable( $value->toDateTime() )
 						                         ->setTimezone( new \DateTimeZone( "America/New_York" ) );
 					}
-					elseif( is_string( $data[ $propertyName ] ) ) {
+					elseif( is_string( $value ) ) {
 						try {
-							return new \DateTimeImmutable( $data[ $propertyName ] );
+							return new \DateTimeImmutable( $value );
 						}
 						catch( \Exception $e ) {
 							error_log( 'Invalid date is stored in database' );
@@ -458,7 +551,7 @@ abstract class embeddable
 			catch( \ReflectionException $e ) {
 			}
 
-			return $data[ $propertyName ];
+			return $value;
 		}
 	}
 

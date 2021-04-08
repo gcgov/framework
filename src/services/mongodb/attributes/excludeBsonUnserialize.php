@@ -7,7 +7,7 @@ use Attribute;
 
 
 #[Attribute( Attribute::TARGET_PROPERTY )]
-class excludeDeserialize {
+class excludeBsonUnserialize {
 
 	public function __construct() {
 	}
