@@ -209,14 +209,13 @@ abstract class dispatcher
 					}
 
 					//build primary key filter to filter the parent collection to objects that match the foreign key of the object we are inserting
-					$primaryFilterKey = '_id';
-					//object is nested inside something else
-					if( substr_count( $fieldKey, '.' ) > 1 ) {
-						$last             = strrpos( $fieldKey, '.' );
-						$nextToLast       = strrpos( $fieldKey, '.', $last - strlen( $fieldKey ) - 1 );
-						$primaryFilterKey = substr( $fieldKey, 0, $nextToLast ) . '._id';
-						$primaryFilterKey = str_replace( '.$', '', $primaryFilterKey );
+					$primaryFilterKey = self::getFieldPathToFirstParentModel( $fieldKey, $typeMap );
+
+					if(strlen($primaryFilterKey)>0) {
+						$primaryFilterKey .= '.';
 					}
+					$primaryFilterKey .= '_id';
+					$primaryFilterKey = str_replace( '.$', '', $primaryFilterKey);
 
 					$objectArrayFilterKey = str_replace( '.$', '', $fieldKey );
 
@@ -521,4 +520,26 @@ abstract class dispatcher
 		return str_replace( '.$', '', $fieldPath );
 	}
 
+
+	private static function getFieldPathToFirstParentModel( string $startingFieldPath, typeMap $typeMap ) : string {
+
+		if( substr_count( $startingFieldPath, '.' ) > 1 ) {
+			$last             = strrpos( $startingFieldPath, '.' );
+			$nextToLast       = strrpos( $startingFieldPath, '.', $last - strlen( $startingFieldPath ) - 1 );
+			$parentObjectPath = substr( $startingFieldPath, 0, $nextToLast );
+
+			//check if the parent object containing the array is a model or just embeddable
+			$parentObjectType = $typeMap->fieldPaths[ $parentObjectPath ];
+			$parentObjectReflection = new \ReflectionClass( $parentObjectType );
+			if( $parentObjectReflection->isSubclassOf(\gcgov\framework\services\mongodb\model::class ) ) {
+				return $parentObjectPath;
+			}
+			else {
+				return self::getFieldPathToFirstParentModel( $parentObjectType, $typeMap );
+			}
+		}
+		else {
+			return '';
+		}
+	}
 }
