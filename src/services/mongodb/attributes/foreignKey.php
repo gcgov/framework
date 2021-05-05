@@ -9,16 +9,11 @@ use Attribute;
 #[Attribute( Attribute::TARGET_PROPERTY )]
 class foreignKey {
 
-	public array $collections = [];
+	public string $type = '';
+	public string $propertyName = '';
 
-	public function __construct( string|array $referenceCollections ) {
-
-		if(is_string($referenceCollections)) {
-			$this->collections = [$referenceCollections];
-		}
-		else {
-			$this->collections = $referenceCollections;
-		}
+	public function __construct( string $propertyName ) {
+		$this->propertyName = $propertyName;
 	}
 
 }

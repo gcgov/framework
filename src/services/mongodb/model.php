@@ -63,7 +63,6 @@ abstract class model
 					}
 				}
 				else {
-					error_log( $propertyTypeName );
 					$this->$propertyName = clone $this->$propertyName;
 				}
 			}

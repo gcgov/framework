@@ -4,6 +4,7 @@ namespace gcgov\framework\services\mongodb;
 
 
 use gcgov\framework\exceptions\modelException;
+use gcgov\framework\services\log;
 use gcgov\framework\services\mongodb\attributes\autoIncrement;
 
 
@@ -111,14 +112,13 @@ abstract class factory
 
 		try {
 			$updateResult = $mdb->collection->updateOne( $filter, $update, $options );
-			error_log("Save ".$object::class);
-			error_log('--Matched:  '.$updateResult->getMatchedCount());
-			error_log('--Modified: '.$updateResult->getModifiedCount());
-			error_log('--Upserted: '.$updateResult->getUpsertedCount());
+			log::info( 'MongoService', 'Save '.$object::class );
+			log::info( 'MongoService', '--Matched:  '.$updateResult->getMatchedCount() );
+			log::info( 'MongoService', '--Modified: '.$updateResult->getModifiedCount() );
+			log::info( 'MongoService', '--Upserted: '.$updateResult->getUpsertedCount() );
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			error_log( $e );
-			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
+			throw new \gcgov\framework\exceptions\modelException( 'Database error. '.$e->getMessage(), 500, $e );
 		}
 
 		//auto increment fields on insert
@@ -128,6 +128,9 @@ abstract class factory
 
 		//dispatch updates for all embedded versions
 		$embeddedUpdates = static::_updateEmbedded( $object );
+
+		//dispatch inserts for all embedded versions
+		$embeddedInserts = static::_insertEmbedded( $object );
 
 		$combinedResult = new updateDeleteResult( $updateResult, $embeddedUpdates );
 
@@ -151,10 +154,9 @@ abstract class factory
 
 		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
 
-		error_log("Delete ".static::_getCollectionName());
+		log::info( 'MongoService', 'Delete '.static::_getCollectionName());
 
 		$deleteCascadeResults = self::_deleteCascade( static::_typeMap()->root, $_id  );
-		error_log(json_encode($deleteCascadeResults));
 
 		$filter = [
 			'_id' => $_id
@@ -168,7 +170,6 @@ abstract class factory
 			$deleteResult = $mdb->collection->deleteOne( $filter, $options );
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			error_log( $e );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
 		}
 
@@ -194,6 +195,8 @@ abstract class factory
 	 */
 	private static function autoIncrementProperties( model $object ) : updateDeleteResult {
 
+		log::info( 'MongoServiceAutoIncrement', 'Start auto increment '.$object::class);
+
 		/** @var attributes\autoIncrement[] $autoIncrementAttributes */
 		$autoIncrementAttributes = [];
 
@@ -212,6 +215,7 @@ abstract class factory
 			}
 		}
 		catch( \ReflectionException $e ) {
+			log::error( 'MongoServiceAutoIncrement', 'Auto increment reflection error '.$object::class);
 			error_log($e);
 			return new updateDeleteResult();
 		}
@@ -222,7 +226,6 @@ abstract class factory
 		}
 
 		//do the auto incrementing
-		error_log('Auto increment');
 
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
@@ -243,7 +246,7 @@ abstract class factory
 				if($autoIncrement->groupByMethodName!=='') {
 					$key .= '.'. $object->{$autoIncrement->groupByMethodName}();
 				}
-				error_log($key);
+				log::info( 'MongoServiceAutoIncrement', '--'.$key);
 
 				//get and increment internalCounter
 				$internalCounter = \gcgov\framework\services\mongodb\models\internalCounter::getAndIncrement( $key, $session );
@@ -280,15 +283,16 @@ abstract class factory
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException | \MongoDB\Driver\Exception\CommandException $e ) {
 			$session->abortTransaction();
+			log::error( 'MongoServiceAutoIncrement', '--'.$e->getMessage(), $e->getTrace());
 			throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
 		}
 
 		//close the session
 		$session->endSession();
 
-		error_log('Matched: '.$updateResult->getMatchedCount());
-		error_log('Modified: '.$updateResult->getModifiedCount());
-		error_log('Upserted: '.$updateResult->getUpsertedCount());
+		log::info( 'MongoServiceAutoIncrement', '--Matched: '.$updateResult->getMatchedCount());
+		log::info( 'MongoServiceAutoIncrement', '--Modified: '.$updateResult->getModifiedCount());
+		log::info( 'MongoServiceAutoIncrement', '--Upserted: '.$updateResult->getUpsertedCount());
 
 		return new updateDeleteResult( $updateResult );
 	}

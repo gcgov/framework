@@ -68,25 +68,27 @@ final class renderer {
 				return $controllerResult;
 			}
 			catch( modelException $e ) {
-				\gcgov\framework\services\log::debug( $e->getMessage(), $e->getTrace() );
+				\error_log( $e );
+				\gcgov\framework\services\log::debug( 'Renderer', $e->getMessage(), $e->getTrace() );
 
 				return \app\renderer::processModelException( $e );
 			}
 			catch( controllerException $e ) {
-				\gcgov\framework\services\log::debug( $e->getMessage(), $e->getTrace() );
+				\error_log( $e );
+				\gcgov\framework\services\log::debug( 'Renderer', $e->getMessage(), $e->getTrace() );
 
 				return \app\renderer::processControllerException( $e );
 			}
 			catch( \Exception | \Error | \ErrorException $e ) {
 				\error_log( $e );
-				\gcgov\framework\services\log::error( $e->getMessage(), $e );
+				\gcgov\framework\services\log::error( 'Renderer', $e->getMessage(), [$e] );
 
 				return \app\renderer::processSystemErrorException( $e );
 			}
 		}
 		catch( \ReflectionException $e ) {
 			error_log( $e );
-			\gcgov\framework\services\log::error( $e->getMessage(), $e );
+			\gcgov\framework\services\log::error( 'Renderer', $e->getMessage(), [$e] );
 
 			return \app\renderer::processSystemErrorException( $e );
 		}

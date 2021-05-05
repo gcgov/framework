@@ -2,6 +2,7 @@
 namespace gcgov\framework\services\mongodb\models;
 
 
+use gcgov\framework\services\log;
 use gcgov\framework\services\mongodb\attributes\label;
 
 
@@ -71,6 +72,7 @@ class _meta
 			}
 		}
 		catch( \ReflectionException $e ) {
+			log::error( 'MongoService', 'Generate labels failed: '.$e->getMessage(), $e->getTrace() );
 			error_log( $e );
 		}
 

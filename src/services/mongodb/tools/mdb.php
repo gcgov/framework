@@ -51,7 +51,6 @@ final class mdb {
 			$this->collection = $this->db->{$collection};
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			\gcgov\framework\services\log::error( $e->getMessage(), $e );
 			throw new modelException( 'Database connection issue: ' . $e->getMessage(), 503, $e );
 		}
 	}

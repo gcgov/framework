@@ -20,6 +20,11 @@ class typeMap {
 	 */
 	public array $fieldPaths = [];
 
+	/**
+	 * @var string[]
+	 */
+	public array $foreignKeyMap = [];
+
 
 	public function __construct( string $root, array $fieldPaths = [] ) {
 		$this->root       = $root;
@@ -38,21 +43,5 @@ class typeMap {
 		];
 	}
 
-
-	/**
-	 * @param  string  $fieldPathKey
-	 * @param  array   $fieldPathTypeMap
-	 *
-	 * @return void
-	 */
-	public function addEmbeddedType( string $fieldPathKey, array $fieldPathTypeMap ) : void {
-		$this->fieldPaths[ $fieldPathKey ] = $fieldPathTypeMap[ 'root' ];
-
-		if( isset( $fieldPathTypeMap[ 'fieldPaths' ] ) && count( $fieldPathTypeMap[ 'fieldPaths' ] ) > 0 ) {
-			foreach( $fieldPathTypeMap[ 'fieldPaths' ] as $key => $classFqn ) {
-				$this->fieldPaths[ $fieldPathKey . '.' . $key ] = $classFqn;
-			}
-		}
-	}
 
 }

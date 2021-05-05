@@ -4,12 +4,12 @@ namespace gcgov\framework\services\mongodb;
 
 
 use gcgov\framework\exceptions\modelException;
+use gcgov\framework\services\log;
 use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
 use gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize;
-use gcgov\framework\services\mongodb\attributes\excludeDeserialize;
 use gcgov\framework\services\mongodb\attributes\excludeJsonDeserialize;
 use gcgov\framework\services\mongodb\attributes\excludeJsonSerialize;
-use gcgov\framework\services\mongodb\attributes\excludeSerialize;
+use gcgov\framework\services\mongodb\attributes\foreignKey;
 use gcgov\framework\services\mongodb\exceptions\databaseException;
 use gcgov\framework\services\mongodb\models\_meta;
 
@@ -29,6 +29,7 @@ abstract class embeddable
 
 
 	/**
+	 * @param  string[]  $chainClass
 	 *
 	 * @return \gcgov\framework\services\mongodb\typeMap
 	 */
@@ -48,12 +49,14 @@ abstract class embeddable
 
 		$rProperties = $rClass->getProperties();
 		foreach( $rProperties as $rProperty ) {
-			//skip properties that are not typed or that start with _
-			if( !$rProperty->hasType() || substr( $rProperty->getName(), 0, 1 ) === '_' ) {
+			//skip type mapping this if property is
+			//  - excluded from serialization
+			//  - not typed
+			//  - starts with _
+			$excludeBsonSerializeAttributes = $rProperty->getAttributes( excludeBsonSerialize::class );
+			if( count( $excludeBsonSerializeAttributes ) > 0 || !$rProperty->hasType() || substr( $rProperty->getName(), 0, 1 ) === '_' ) {
 				continue;
 			}
-
-			//TODO: make type mapping possible on double nested objects
 
 			//get property type
 			$rPropertyType = $rProperty->getType();
@@ -75,6 +78,17 @@ abstract class embeddable
 					$baseFieldPathKey .= '.$';
 				}
 
+				//add foreign field mapping for upserting embedded objects
+				$foreignKeyAttributes = $rProperty->getAttributes( foreignKey::class );
+				if($foreignKeyAttributes>0) {
+					foreach($foreignKeyAttributes as $foreignKeyAttribute) {
+						/** @var \gcgov\framework\services\mongodb\attributes\foreignKey $fkAttribute */
+						$fkAttribute = $foreignKeyAttribute->newInstance();
+						$typeMap->foreignKeyMap[ $baseFieldPathKey ] = $fkAttribute->propertyName;
+					}
+
+				}
+
 				//add the primary property type
 				$typeMap->fieldPaths[ $baseFieldPathKey ] = typeHelpers::classNameToFqn( $typeName );
 
@@ -83,9 +97,13 @@ abstract class embeddable
 					$rPropertyClass = new \ReflectionClass( $typeName );
 					if( $rPropertyClass->isSubclassOf( embeddable::class ) ) {
 						$instance        = $rPropertyClass->newInstanceWithoutConstructor();
+						/** @var \gcgov\framework\services\mongodb\typeMap $propertyTypeMap */
 						$propertyTypeMap = $rPropertyClass->getMethod( '_typeMap' )->invoke( $instance, $chainClass );
 						foreach( $propertyTypeMap->fieldPaths as $subFieldPathKey => $class ) {
 							$typeMap->fieldPaths[ $baseFieldPathKey . '.' . $subFieldPathKey ] = typeHelpers::classNameToFqn( $class );
+						}
+						foreach( $propertyTypeMap->foreignKeyMap as $subFieldPathKey => $fkPropertyName ) {
+							$typeMap->foreignKeyMap[ $baseFieldPathKey . '.' . $subFieldPathKey ] = $fkPropertyName;
 						}
 					}
 				}
@@ -418,7 +436,7 @@ abstract class embeddable
 		foreach( $rProperties as $rProperty ) {
 			$propertyName = $rProperty->getName();
 
-			//if property is not meant to be serialized, exclude it
+			//if property is not meant to be unserialized, exclude it
 			$attributes = $rProperty->getAttributes( excludeBsonUnserialize::class );
 			if( count( $attributes ) > 0 ) {
 				continue;
@@ -540,8 +558,7 @@ abstract class embeddable
 							return new \DateTimeImmutable( $value );
 						}
 						catch( \Exception $e ) {
-							error_log( 'Invalid date is stored in database' );
-
+							log::warning( 'MongoService', 'Invalid date is stored in database. '.$e->getMessage(), $e->getTrace() );
 							return new \DateTimeImmutable();
 						}
 					}

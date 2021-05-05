@@ -8,51 +8,51 @@ use Monolog\Handler\StreamHandler;
 
 final class log {
 
-	public static function debug( $message, $context = [] ) {
-		$logger = self::getLogger();
+	public static function debug( string $channel, string $message, array $context = [] ) {
+		$logger = self::getLogger( $channel );
 		$logger->debug( $message, $context );
 	}
 
 
-	public static function info( $message, $context = null ) {
-		$logger = self::getLogger();
-		$logger->info( $message, (array) $context );
+	public static function info( string $channel, string $message, array $context = [] ) {
+		$logger = self::getLogger( $channel );
+		$logger->info( $message, $context );
 	}
 
 
-	public static function notice( $message, $context = null ) {
-		$logger = self::getLogger();
-		$logger->notice( $message, (array) $context );
+	public static function notice( string $channel, string $message, array $context = [] ) {
+		$logger = self::getLogger( $channel );
+		$logger->notice( $message, $context );
 	}
 
 
-	public static function warning( $message, $context = null ) {
-		$logger = self::getLogger();
-		$logger->warning( $message, (array) $context );
+	public static function warning( string $channel, string $message, array $context = [] ) {
+		$logger = self::getLogger( $channel );
+		$logger->warning( $message, $context );
 	}
 
 
-	public static function error( $message, $context = null ) {
-		$logger = self::getLogger();
-		$logger->error( $message, (array) $context );
+	public static function error( string $channel, string $message, array $context = [] ) {
+		$logger = self::getLogger( $channel );
+		$logger->error( $message, $context );
 	}
 
 
-	public static function critical( $message, $context = null ) {
-		$logger = self::getLogger();
-		$logger->critical( $message, (array) $context );
+	public static function critical( string $channel, string $message, array $context = [] ) {
+		$logger = self::getLogger( $channel );
+		$logger->critical( $message, $context );
 	}
 
 
-	public static function alert( $message, $context = null ) {
-		$logger = self::getLogger();
-		$logger->alert( $message, (array) $context );
+	public static function alert( string $channel, string $message, array $context = [] ) {
+		$logger = self::getLogger( $channel );
+		$logger->alert( $message, $context );
 	}
 
 
-	public static function emergency( $message, $context = null ) {
-		$logger = self::getLogger();
-		$logger->emergency( $message, (array) $context );
+	public static function emergency( string $channel, string $message, array $context = [] ) {
+		$logger = self::getLogger( $channel );
+		$logger->emergency( $message, $context );
 	}
 
 

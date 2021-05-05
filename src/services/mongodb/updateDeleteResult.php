@@ -5,25 +5,28 @@ namespace gcgov\framework\services\mongodb;
 
 class updateDeleteResult {
 
-	private bool                    $acknowledged          = false;
+	private bool                    $acknowledged  = false;
 
-	private int                     $deletedCount          = 0;
+	private int                     $deletedCount  = 0;
 
-	private int                     $modifiedCount         = 0;
+	private int                     $modifiedCount = 0;
 
-	private int                     $matchedCount          = 0;
+	private int                     $matchedCount  = 0;
 
-	private ?\MongoDB\BSON\ObjectId $upsertedId            = null;
+	private ?\MongoDB\BSON\ObjectId $upsertedId    = null;
 
-	private int                     $upsertedCount         = 0;
+	/** @var  \MongoDB\BSON\ObjectId[] */
+	private array $upsertedIds           = [];
 
-	private int                     $embeddedDeletedCount  = 0;
+	private int   $upsertedCount         = 0;
 
-	private int                     $embeddedModifiedCount = 0;
+	private int   $embeddedDeletedCount  = 0;
 
-	private int                     $embeddedMatchedCount  = 0;
+	private int   $embeddedModifiedCount = 0;
 
-	private int                     $embeddedUpsertedCount = 0;
+	private int   $embeddedMatchedCount  = 0;
+
+	private int   $embeddedUpsertedCount = 0;
 
 	/** @var  \MongoDB\BSON\ObjectId[] */
 	private array $embeddedUpsertedIds = [];
@@ -32,10 +35,10 @@ class updateDeleteResult {
 	/**
 	 * updateDeleteResult constructor.
 	 *
-	 * @param  \MongoDB\UpdateResult|\MongoDB\DeleteResult|null                      $result
-	 * @param  \MongoDB\UpdateResult[]|\MongoDB\DeleteResult[]|updateDeleteResult[]  $embeddedResults
+	 * @param  \MongoDB\UpdateResult|\MongoDB\DeleteResult|\MongoDB\BulkWriteResult|null                      $result
+	 * @param  \MongoDB\UpdateResult[]|\MongoDB\DeleteResult[]|updateDeleteResult[]|\MongoDB\BulkWriteResult  $embeddedResults
 	 */
-	public function __construct( \MongoDB\UpdateResult|\MongoDB\DeleteResult|null $result = null, array $embeddedResults = [] ) {
+	public function __construct( \MongoDB\UpdateResult|\MongoDB\DeleteResult|\MongoDB\BulkWriteResult|null $result = null, array $embeddedResults = [] ) {
 		//don't do anything if a result is not provided
 		if( $result === null ) {
 			return;
@@ -51,10 +54,17 @@ class updateDeleteResult {
 			elseif( $result instanceof \MongoDB\UpdateResult ) {
 				$this->modifiedCount = $result->getModifiedCount() ?? 0;
 				$this->matchedCount  = $result->getMatchedCount();
-				$this->upsertedId    = $result->getUpsertedId();
 				$this->upsertedCount = $result->getUpsertedCount();
 				if( $result->getUpsertedCount() > 0 ) {
 					$this->upsertedId = $result->getUpsertedId();
+				}
+			}
+			elseif( $result instanceof \MongoDB\BulkWriteResult ) {
+				$this->modifiedCount = $result->getModifiedCount() ?? 0;
+				$this->matchedCount  = $result->getMatchedCount();
+				$this->upsertedCount = $result->getUpsertedCount();
+				if( $result->getUpsertedCount() > 0 ) {
+					$this->upsertedIds = $result->getUpsertedIds();
 				}
 			}
 		}
@@ -72,6 +82,14 @@ class updateDeleteResult {
 					$this->embeddedUpsertedCount += $result->getUpsertedCount();
 					if( $result->getUpsertedCount() > 0 ) {
 						$this->embeddedUpsertedIds[] = $result->getUpsertedId();
+					}
+				}
+				if( $result instanceof \MongoDB\BulkWriteResult ) {
+					$this->embeddedMatchedCount  += $result->getMatchedCount();
+					$this->embeddedModifiedCount += $result->getModifiedCount();
+					$this->embeddedUpsertedCount += $result->getUpsertedCount();
+					if( $result->getUpsertedCount() > 0 ) {
+						$this->embeddedUpsertedIds = array_merge( $this->embeddedUpsertedIds, $result->getUpsertedIds() );
 					}
 				}
 			}
