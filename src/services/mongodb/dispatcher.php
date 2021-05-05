@@ -131,8 +131,14 @@ abstract class dispatcher
 			}
 
 			if( count( $deleteCascadeAttributes ) > 0 ) {
-				//get the full object so we have the data to be able to run the delete cascade
-				$object = $reflectionClass->getMethod( 'getOne' )->invokeArgs( null, [ $_id ] );
+				try {
+					//get the full object so we have the data to be able to run the delete cascade
+					$object = $reflectionClass->getMethod( 'getOne' )->invokeArgs( null, [ $_id ] );
+				}
+				catch(modelException $e) {
+					log::warning('Dispatch_deleteCascade', $e->getMessage().'. Skipping cascade deletes!', $e->getTrace());
+					return [];
+				}
 			}
 			else {
 				log::info( 'Dispatch_deleteCascade',  '-- no cascade delete properties' );
