@@ -30,10 +30,10 @@ class helpers {
 	 * @param  string            $modelExceptionMessage
 	 * @param  int               $modelExceptionCode
 	 *
-	 * @return \stdClass
+	 * @return \stdClass|stdClass[]
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function jsonToObject( string|\stdClass $json, $modelExceptionMessage = 'Malformed JSON', $modelExceptionCode = 400 ) : \stdClass {
+	public static function jsonToObject( string|\stdClass $json, $modelExceptionMessage = 'Malformed JSON', $modelExceptionCode = 400 ) : \stdClass|array {
 		if( $json === null ) {
 			throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, $modelExceptionCode, $e );
 		}

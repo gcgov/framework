@@ -132,6 +132,21 @@ abstract class embeddable
 		//parse the json
 		$json = tools\helpers::jsonToObject( $json, 'Malformed ' . $calledClassFqn . ' JSON', 400 );
 
+		if(is_array($json)) {
+			$objects = [];
+			foreach($json as $stdObject) {
+				$objects[] = self::jsonDeserializeObject( $calledClassFqn, $stdObject );
+			}
+			return $objects;
+		}
+		else {
+			return self::jsonDeserializeObject( $calledClassFqn, $json );
+		}
+
+
+	}
+
+	private static function jsonDeserializeObject( string $calledClassFqn, \stdClass $json ) {
 		//load new instance of this class
 		try {
 			$rClass   = new \ReflectionClass( $calledClassFqn );
