@@ -156,7 +156,8 @@ abstract class factory
 
 		log::info( 'MongoService', 'Delete '.static::_getCollectionName());
 
-		$deleteCascadeResults = self::_deleteCascade( static::_typeMap()->root, $_id  );
+		$objectToDelete = static::getOne( $_id );
+		$deleteCascadeResults = self::_deleteCascade( $objectToDelete  );
 
 		$filter = [
 			'_id' => $_id

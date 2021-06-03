@@ -42,7 +42,7 @@ abstract class dispatcher
 			//check if updateType is embedded in this typeMap
 			foreach( $typeMap->fieldPaths as $fieldKey => $fieldPath ) {
 				if( $updateType == $fieldPath ) {
-					log::info( 'Dispatch_updateEmbedded',  '--update collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $updateType );
+					log::info( 'Dispatch_updateEmbedded', '--update collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $updateType );
 					//TODO: change this to a transaction bulk write
 
 					//
@@ -68,7 +68,7 @@ abstract class dispatcher
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function _deleteEmbedded( string $deleteType, \MongoDB\BSON\ObjectId $_id ) : array {
-		log::info( 'Dispatch_deleteEmbedded',  'Start _deleteEmbedded for ' . $deleteType  );
+		log::info( 'Dispatch_deleteEmbedded', 'Start _deleteEmbedded for ' . $deleteType );
 		$embeddedDeletes = [];
 
 		//the type of object we are updating
@@ -87,7 +87,7 @@ abstract class dispatcher
 			//check if updateType is embedded in this typeMap
 			foreach( $typeMap->fieldPaths as $fieldKey => $fieldPath ) {
 				if( $deleteType == $fieldPath ) {
-					log::info( 'Dispatch_deleteEmbedded',  '-- delete item on collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $deleteType );
+					log::info( 'Dispatch_deleteEmbedded', '-- delete item on collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $deleteType );
 					//TODO: change this to a transaction bulk write
 					$embeddedDeletes[] = self::_doDelete( $collectionName, $fieldKey, $_id );
 				}
@@ -101,15 +101,15 @@ abstract class dispatcher
 	/**
 	 * If this model contains a delete cascade property, run the cascade
 	 *
-	 * @param  string                  $deleteType  Class FQN to remove - must be a class that extends
-	 *                                              \gcgov\framework\services\mongodb\model
-	 * @param  \MongoDB\BSON\ObjectId  $_id
+	 * @param  string  $objectToDelete
 	 *
 	 * @return \MongoDB\UpdateResult[]
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function _deleteCascade( string $deleteType, \MongoDB\BSON\ObjectId $_id ) : array {
-		log::info( 'Dispatch_deleteCascade',  'Start cascade deletes for ' . $deleteType );
+	public static function _deleteCascade( mixed $object ) : array {
+		$deleteType = get_class($object);
+
+		log::info( 'Dispatch_deleteCascade', 'Start cascade deletes for ' . $deleteType );
 
 		/** @var attributes\deleteCascade[] $deleteCascadeAttributes */
 		$deleteCascadeAttributes = [];
@@ -129,47 +129,49 @@ abstract class dispatcher
 					$deleteCascadeAttributes[ $property->getName() ] = $attributes[ 0 ]->newInstance();
 				}
 			}
-
-			if( count( $deleteCascadeAttributes ) > 0 ) {
-				try {
-					//get the full object so we have the data to be able to run the delete cascade
-					$object = $reflectionClass->getMethod( 'getOne' )->invokeArgs( null, [ $_id ] );
-				}
-				catch(modelException $e) {
-					log::warning('Dispatch_deleteCascade', $e->getMessage().'. Skipping cascade deletes!', $e->getTrace());
-					return [];
-				}
-			}
-			else {
-				log::info( 'Dispatch_deleteCascade',  '-- no cascade delete properties' );
-			}
 		}
 		catch( \ReflectionException $e ) {
-			log::error( 'Dispatch_deleteCascade',  $e->getMessage(), $e->getTrace() );
+			log::error( 'Dispatch_deleteCascade', $e->getMessage(), $e->getTrace() );
 			throw new modelException( 'Reflection failed on class ' . $deleteType, 500, $e );
 		}
 
 		foreach( $deleteCascadeAttributes as $propertyName => $deleteCascadeAttribute ) {
+
 			if( gettype( $object->$propertyName ) === 'array' ) {
-				log::info( 'Dispatch_deleteCascade',  '-- ' . count( $object->$propertyName ) . ' objects to cascade' );
+				log::info( 'Dispatch_deleteCascade', '-- ' . count( $object->$propertyName ) . ' objects to cascade' );
 				foreach( $object->$propertyName as $objectToDelete ) {
-					//do delete on object
-					$objectTypeToDelete = get_class( $objectToDelete );
-					log::info( 'Dispatch_deleteCascade',  '-- do cascade delete of ' . $objectTypeToDelete . ' ' . $objectToDelete->_id );
-					//TODO: change this to a transaction bulk write
-					$deleteResponses[] = $objectTypeToDelete::delete( $objectToDelete->_id );
+					self::_doCascadeDeleteItem( $objectToDelete );
 				}
 			}
 			else {
-				//do delete on property
-				$objectTypeToDelete = get_class( $object->$propertyName );
-				log::info( 'Dispatch_deleteCascade',  '-- do cascade delete of ' . $objectTypeToDelete . ' ' . $object->$propertyName->_id );
-				//TODO: change this to a transaction bulk write
-				$deleteResponses[] = $objectTypeToDelete::delete( $object->$propertyName->_id );
+				self::_doCascadeDeleteItem( $object->$propertyName );
 			}
 		}
 
-		log::info( 'Dispatch_deleteCascade',  'Finish cascade deletes for ' . $deleteType );
+		log::info( 'Dispatch_deleteCascade', 'Finish cascade deletes for ' . $deleteType );
+
+		return $deleteResponses;
+	}
+
+	private static function _doCascadeDeleteItem( $item ) {
+		$deleteResponses = [];
+
+		if(!($item instanceof factory)) {
+			log::info('Dispatch_deleteCascade', '-- do manual cascade of '. get_class($item) );
+			$deleteResponses = self::_deleteCascade( $item );
+		}
+		else {
+			//do delete on property
+			$objectTypeToDelete = get_class( $item );
+			log::info( 'Dispatch_deleteCascade', '-- do cascade delete of ' . $objectTypeToDelete . ' ' . $item->_id );
+			//TODO: change this to a transaction bulk write
+			try {
+				$deleteResponses = $objectTypeToDelete::delete( $item->_id );
+			}
+			catch( modelException $e ) {
+				log::info('Dispatch_deleteCascade', '--- error deleting item: '.$e->getMessage());
+			}
+		}
 
 		return $deleteResponses;
 	}
@@ -184,7 +186,7 @@ abstract class dispatcher
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function _insertEmbedded( $objectToInsert ) : array {
-		log::info( 'Dispatch_insertEmbedded',  'Start _insertEmbedded for ' . $objectToInsert::class );
+		log::info( 'Dispatch_insertEmbedded', 'Start _insertEmbedded for ' . $objectToInsert::class );
 
 		//the type of object we are updating
 		$updateType = '\\' . trim( get_class( $objectToInsert ), '/\\' );
@@ -210,18 +212,18 @@ abstract class dispatcher
 					//TODO: enable inserting when not in array?
 					//if not nested in array, we skip it for now
 					if( substr( $fieldKey, -1, 1 ) != '$' ) {
-						log::info( 'Dispatch_insertEmbedded',  '--Not doing anything with this because object is not in an array: ' . $collectionName . ' ' . $fieldKey . ' => ' . $typeMap->foreignKeyMap[ $fieldKey ] );
+						log::info( 'Dispatch_insertEmbedded', '--Not doing anything with this because object is not in an array: ' . $collectionName . ' ' . $fieldKey . ' => ' . $typeMap->foreignKeyMap[ $fieldKey ] );
 						continue;
 					}
 
 					//build primary key filter to filter the parent collection to objects that match the foreign key of the object we are inserting
 					$primaryFilterKey = self::getFieldPathToFirstParentModel( $fieldKey, $typeMap );
 
-					if(strlen($primaryFilterKey)>0) {
+					if( strlen( $primaryFilterKey ) > 0 ) {
 						$primaryFilterKey .= '.';
 					}
 					$primaryFilterKey .= '_id';
-					$primaryFilterKey = str_replace( '.$', '', $primaryFilterKey);
+					$primaryFilterKey = str_replace( '.$', '', $primaryFilterKey );
 
 					$objectArrayFilterKey = str_replace( '.$', '', $fieldKey );
 
@@ -280,7 +282,7 @@ abstract class dispatcher
 
 		try {
 			foreach( $mongoActions as $collectionName => $queries ) {
-				log::info( 'Dispatch_insertEmbedded',  '--insert into ' . $collectionName . ' ' . json_encode( $queries ) );
+				log::info( 'Dispatch_insertEmbedded', '--insert into ' . $collectionName . ' ' . json_encode( $queries ) );
 
 				//bulk actions for this collection
 				if( count( $queries ) > 1 ) {
@@ -299,8 +301,8 @@ abstract class dispatcher
 					continue;
 				}
 
-				log::info( 'Dispatch_insertEmbedded',  '----Matched: ' . $result->getMatchedCount() );
-				log::info( 'Dispatch_insertEmbedded',  '----Mod: ' . $result->getModifiedCount() );
+				log::info( 'Dispatch_insertEmbedded', '----Matched: ' . $result->getMatchedCount() );
+				log::info( 'Dispatch_insertEmbedded', '----Mod: ' . $result->getModifiedCount() );
 
 				$insertResults[] = new updateDeleteResult( $result );
 			}
@@ -308,7 +310,7 @@ abstract class dispatcher
 			$session->commitTransaction();
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			log::error( 'Dispatch_insertEmbedded',  $e->getMessage(), $e->getTrace() );
+			log::error( 'Dispatch_insertEmbedded', $e->getMessage(), $e->getTrace() );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
 		}
 
@@ -450,7 +452,7 @@ abstract class dispatcher
 			return $mdb->collection->updateMany( $filter, $update, $options );
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			log::error( 'Dispatch_deleteEmbedded',  $e->getMessage(), $e->getTrace() );
+			log::error( 'Dispatch_deleteEmbedded', $e->getMessage(), $e->getTrace() );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
 		}
 	}
@@ -508,13 +510,13 @@ abstract class dispatcher
 
 		try {
 			$updateResponse = $mdb->collection->updateMany( $filter, $update, $options );
-			log::info( 'Dispatch_updateEmbedded',  json_encode( $filter ) );
-			log::info( 'Dispatch_updateEmbedded',  json_encode( $update ) );
-			log::info( 'Dispatch_updateEmbedded',  '----Matched: ' . $updateResponse->getMatchedCount() );
-			log::info( 'Dispatch_updateEmbedded',  '----Mod: ' . $updateResponse->getModifiedCount() );
+			log::info( 'Dispatch_updateEmbedded', json_encode( $filter ) );
+			log::info( 'Dispatch_updateEmbedded', json_encode( $update ) );
+			log::info( 'Dispatch_updateEmbedded', '----Matched: ' . $updateResponse->getMatchedCount() );
+			log::info( 'Dispatch_updateEmbedded', '----Mod: ' . $updateResponse->getModifiedCount() );
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			log::error( 'Dispatch_updateEmbedded',  $e->getMessage(), $e->getTrace() );
+			log::error( 'Dispatch_updateEmbedded', $e->getMessage(), $e->getTrace() );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error while updating ' . $pathToUpdate, 500, $e );
 		}
 
@@ -528,16 +530,15 @@ abstract class dispatcher
 
 
 	private static function getFieldPathToFirstParentModel( string $startingFieldPath, typeMap $typeMap ) : string {
-
 		if( substr_count( $startingFieldPath, '.' ) > 1 ) {
 			$last             = strrpos( $startingFieldPath, '.' );
 			$nextToLast       = strrpos( $startingFieldPath, '.', $last - strlen( $startingFieldPath ) - 1 );
 			$parentObjectPath = substr( $startingFieldPath, 0, $nextToLast );
 
 			//check if the parent object containing the array is a model or just embeddable
-			$parentObjectType = $typeMap->fieldPaths[ $parentObjectPath ];
+			$parentObjectType       = $typeMap->fieldPaths[ $parentObjectPath ];
 			$parentObjectReflection = new \ReflectionClass( $parentObjectType );
-			if( $parentObjectReflection->isSubclassOf(\gcgov\framework\services\mongodb\model::class ) ) {
+			if( $parentObjectReflection->isSubclassOf( \gcgov\framework\services\mongodb\model::class ) ) {
 				return $parentObjectPath;
 			}
 			else {
@@ -548,4 +549,5 @@ abstract class dispatcher
 			return '';
 		}
 	}
+
 }
