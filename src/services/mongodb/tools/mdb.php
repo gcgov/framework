@@ -44,7 +44,7 @@ final class mdb {
 		}
 
 		try {
-			$this->client = new \MongoDB\Client( 'mongodb://' . $connector->server, $mongoParams );
+			$this->client = new \MongoDB\Client( $connector->uri, $mongoParams );
 
 			$this->db = $this->client->{$connector->database};
 
