@@ -17,6 +17,9 @@ class mongoDatabase
 
 	public string $database = '';
 
+	/** @var array Associative array to pass to the mongo client  */
+	public array $clientParams = [];
+
 
 	public function __construct() {
 	}
@@ -42,6 +45,7 @@ class mongoDatabase
 		$mongoDatabase->default  = $json->default ?? false;
 		$mongoDatabase->uri      = $json->uri ?? '';
 		$mongoDatabase->database = $json->database ?? '';
+		$mongoDatabase->clientParams = isset($json->clientParams) ? (array) $json->clientParams : [];
 
 		return $mongoDatabase;
 	}

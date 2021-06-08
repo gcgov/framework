@@ -31,20 +31,8 @@ final class mdb {
 	public function __construct( string $collection, string $database = '' ) {
 		$connector = $this->getConnector( $database );
 
-		$mongoParams = [];
-
-		if( !empty( $connector->username ) ) {
-			$mongoParams[ 'username' ] = $connector->username;
-		}
-		if( !empty( $connector->password ) ) {
-			$mongoParams[ 'password' ] = $connector->password;
-		}
-		if( !empty( $connector->authSource ) ) {
-			$mongoParams[ 'authSource' ] = $connector->authSource;
-		}
-
 		try {
-			$this->client = new \MongoDB\Client( $connector->uri, $mongoParams );
+			$this->client = new \MongoDB\Client( $connector->uri, $connector->clientParams );
 
 			$this->db = $this->client->{$connector->database};
 
