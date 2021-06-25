@@ -7,6 +7,7 @@ use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\log;
 use gcgov\framework\services\mongodb\attributes\deleteCascade;
+use JetBrains\PhpStorm\ArrayShape;
 
 
 abstract class dispatcher
@@ -153,7 +154,11 @@ abstract class dispatcher
 		return $deleteResponses;
 	}
 
-	private static function _doCascadeDeleteItem( $item ) {
+
+	/**
+	 * @return \MongoDB\UpdateResult[]
+	 */
+	private static function _doCascadeDeleteItem( $item ) : array {
 		$deleteResponses = [];
 
 		if(!($item instanceof factory)) {
@@ -469,8 +474,12 @@ abstract class dispatcher
 	private static function _doUpdate( string $collectionName, string $pathToUpdate, object $updateObject ) : \MongoDB\UpdateResult {
 		$mdb = new tools\mdb( collection: $collectionName );
 
-		//TODO: filter here? I'm matching on all documents so in the function response, it shows more matched than modified
-		$filter = [];
+		//drop all dollar signs from the filter path (for some reason Mongo demands none in the filter)
+		$filterPath = self::convertFieldPathToFilterPath( $pathToUpdate );
+
+		$filter = [
+			$filterPath . '._id' =>  $updateObject->_id
+		];
 
 		$options = [
 			'upsert'       => false,
@@ -479,28 +488,19 @@ abstract class dispatcher
 
 		//determine update type (is this object inside more than one array?
 		if( substr_count( $pathToUpdate, '$' ) > 1 ) {
-			$arrayFilterKey = 'arrayFilter';
-			$complexPath    = self::convertFieldPathToComplexUpdate( $pathToUpdate, true, 'arrayFilter' );
+			$complex = self::buildUpdateKeyArrayFilters( $pathToUpdate, true, $updateObject->_id );
 
 			//complex update
 			$update = [
 				'$set' => [
-					$complexPath => $updateObject
+					$complex['complexPath'] => $updateObject
 				]
 			];
 
-			$options[ 'arrayFilters' ] = [
-				[ $arrayFilterKey . '._id' => $updateObject->_id ]
-			];
+			$options[ 'arrayFilters' ] = $complex['arrayFilters'];
 		}
 		else {
 			//simple update
-
-			//drop all dollar signs from the filter path (for some reason Mongo demands none in the filter)
-			$filterPath = self::convertFieldPathToFilterPath( $pathToUpdate );
-
-			$filter[ $filterPath . '._id' ] = $updateObject->_id;
-
 			$update = [
 				'$set' => [
 					$pathToUpdate => $updateObject
@@ -510,8 +510,8 @@ abstract class dispatcher
 
 		try {
 			$updateResponse = $mdb->collection->updateMany( $filter, $update, $options );
-			log::info( 'Dispatch_updateEmbedded', json_encode( $filter ) );
-			log::info( 'Dispatch_updateEmbedded', json_encode( $update ) );
+			log::info( 'Dispatch_updateEmbedded', '----'.json_encode( $filter ) );
+			log::info( 'Dispatch_updateEmbedded', '----'.json_encode( $update ) );
 			log::info( 'Dispatch_updateEmbedded', '----Matched: ' . $updateResponse->getMatchedCount() );
 			log::info( 'Dispatch_updateEmbedded', '----Mod: ' . $updateResponse->getModifiedCount() );
 		}
@@ -528,6 +528,60 @@ abstract class dispatcher
 		return str_replace( '.$', '', $fieldPath );
 	}
 
+
+	#[ArrayShape( [ 'complexPath'  => "string",
+	                'arrayFilters' => "array"
+	] )]
+	private static function buildUpdateKeyArrayFilters( string $fieldPath, bool $arrayFilter = true, mixed $arrayFilterValue=null ) : array {
+		//convert $fieldPath  `
+		// from     `inspections.$.scheduleRequests.$.comments.$`
+		// to       `inspections.$[arrayFilter2].scheduleRequests.$[arrayFilter1].comments.$[arrayFilter0]`
+		$pathParts          = explode( '.', $fieldPath );
+		$reversedPathParts  = array_reverse( $pathParts );
+
+		$arrayFilterIndex = 0;
+		$arrayFilters = [];
+
+		$previousParts = [];
+
+		$foundPrimaryTarget = false;
+		foreach( $reversedPathParts as $i => $part ) {
+			$arrayFilterIndex = count($arrayFilters);
+			//on the first dollar sign, convert `$`=>`$[arrayFilter]`
+			if( !$foundPrimaryTarget && $part === '$' ) {
+				$foundPrimaryTarget = true;
+				if( $arrayFilter ) {
+					$reversedPathParts[ $i ] = '$[arrayFilter'.$arrayFilterIndex.']';
+					$arrayFilters[ $arrayFilterIndex ] = $previousParts;
+				}
+				else {
+					unset( $reversedPathParts[ $i ] );
+				}
+			}
+			elseif( $foundPrimaryTarget && $part === '$' ) {
+				$reversedPathParts[ $i ] = '$[arrayFilter'.$arrayFilterIndex.']';
+				$arrayFilters[ $arrayFilterIndex ] = $previousParts;
+			}
+			else {
+				$previousParts[] = $part;
+			}
+
+		}
+		$complexPathParts = array_reverse( $reversedPathParts );
+
+		foreach($arrayFilters as $i=>$arrayFilter) {
+			$arrayFilter[] = 'arrayFilter'.$i;
+			$arrayFilters[$i] = [
+				implode( '.', array_reverse($arrayFilter) ).'._id' => $arrayFilterValue
+			];
+		}
+
+		return [
+			'complexPath' => implode( '.', $complexPathParts ),
+			'arrayFilters'=> array_reverse( $arrayFilters )
+		];
+
+	}
 
 	private static function getFieldPathToFirstParentModel( string $startingFieldPath, typeMap $typeMap ) : string {
 		if( substr_count( $startingFieldPath, '.' ) > 1 ) {
