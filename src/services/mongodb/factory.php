@@ -32,12 +32,12 @@ abstract class factory
 	 * @return array
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getAll( array $filter = [], array $sort = [] ) : array {
+	public static function getAll( array $filter = [], array $sort = [], array $options=[] ) : array {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
-		$options = [
+		$options = array_merge($options, [
 			'typeMap' => static::_getTypeMap()
-		];
+		]);
 		if( count( $sort ) > 0 ) {
 			$options[ 'sort' ] = $sort;
 		}
