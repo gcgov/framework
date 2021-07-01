@@ -171,7 +171,7 @@ abstract class dispatcher
 			log::info( 'Dispatch_deleteCascade', '-- do cascade delete of ' . $objectTypeToDelete . ' ' . $item->_id );
 			//TODO: change this to a transaction bulk write
 			try {
-				$deleteResponses = $objectTypeToDelete::delete( $item->_id );
+				$deleteResponses[] = $objectTypeToDelete::delete( $item->_id );
 			}
 			catch( modelException $e ) {
 				log::info('Dispatch_deleteCascade', '--- error deleting item: '.$e->getMessage());
