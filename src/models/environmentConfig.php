@@ -50,11 +50,11 @@ class environmentConfig {
 		}
 
 		$environmentConfig             = new environmentConfig();
-		$environmentConfig->type       = isset( $json->type ) ? $json->type : '';
-		$environmentConfig->serverName = isset( $json->serverName ) ? $json->serverName : '';
-		$environmentConfig->baseUrl    = isset( $json->baseUrl ) ? $json->baseUrl : '';
-		$environmentConfig->cookieUrl  = isset( $json->cookieUrl ) ? $json->cookieUrl : '';
-		$environmentConfig->phpPath    = isset( $json->phpPath ) ? $json->phpPath : '';
+		$environmentConfig->type       = $json->type ?? '';
+		$environmentConfig->serverName = $json->serverName ?? '';
+		$environmentConfig->baseUrl    = $json->baseUrl ?? '';
+		$environmentConfig->cookieUrl  = $json->cookieUrl ?? '';
+		$environmentConfig->phpPath    = $json->phpPath ?? '';
 		if( isset( $json->mongoDatabases ) ) {
 			foreach( $json->mongoDatabases as $mongoDatabase ) {
 				$environmentConfig->mongoDatabases[] = mongoDatabase::jsonDeserialize( $mongoDatabase );

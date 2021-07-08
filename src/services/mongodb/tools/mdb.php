@@ -18,6 +18,9 @@ final class mdb {
 	/** @var \MongoDB\Collection */
 	public \MongoDB\Collection $collection;
 
+	/** @var bool */
+	public bool $audit = false;
+
 
 	/**
 	 * mdb constructor.
@@ -37,6 +40,8 @@ final class mdb {
 			$this->db = $this->client->{$connector->database};
 
 			$this->collection = $this->db->{$collection};
+
+			$this->audit = $connector->audit;
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
 			throw new modelException( 'Database connection issue: ' . $e->getMessage(), 503, $e );

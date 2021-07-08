@@ -32,12 +32,12 @@ abstract class factory
 	 * @return array
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getAll( array $filter = [], array $sort = [], array $options=[] ) : array {
+	public static function getAll( array $filter = [], array $sort = [], array $options = [] ) : array {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
-		$options = array_merge($options, [
+		$options = array_merge( $options, [
 			'typeMap' => static::_getTypeMap()
-		]);
+		] );
 		if( count( $sort ) > 0 ) {
 			$options[ 'sort' ] = $sort;
 		}
@@ -112,13 +112,13 @@ abstract class factory
 
 		try {
 			$updateResult = $mdb->collection->updateOne( $filter, $update, $options );
-			log::info( 'MongoService', 'Save '.$object::class );
-			log::info( 'MongoService', '--Matched:  '.$updateResult->getMatchedCount() );
-			log::info( 'MongoService', '--Modified: '.$updateResult->getModifiedCount() );
-			log::info( 'MongoService', '--Upserted: '.$updateResult->getUpsertedCount() );
+			log::info( 'MongoService', 'Save ' . $object::class );
+			log::info( 'MongoService', '--Matched:  ' . $updateResult->getMatchedCount() );
+			log::info( 'MongoService', '--Modified: ' . $updateResult->getModifiedCount() );
+			log::info( 'MongoService', '--Upserted: ' . $updateResult->getUpsertedCount() );
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			throw new \gcgov\framework\exceptions\modelException( 'Database error. '.$e->getMessage(), 500, $e );
+			throw new \gcgov\framework\exceptions\modelException( 'Database error. ' . $e->getMessage(), 500, $e );
 		}
 
 		//auto increment fields on insert
@@ -132,11 +132,17 @@ abstract class factory
 		//dispatch inserts for all embedded versions
 		$embeddedInserts = static::_insertEmbedded( $object );
 
-		$combinedResult = new updateDeleteResult( $updateResult, $embeddedUpdates );
+		$combinedResult = new updateDeleteResult( $updateResult, array_merge( $embeddedUpdates, $embeddedInserts ) );
 
 		//update _meta property of object to show results
 		if( property_exists( $object, '_meta' ) ) {
 			$object->_meta->setDb( $combinedResult );
+		}
+
+		//audit
+		if( $mdb->audit && static::_getCollectionName() != 'audit' ) {
+			$auditAction   = $updateResult->getUpsertedCount() > 0 ? 'CREATE' : 'UPDATE';
+			\gcgov\framework\services\mongodb\models\audit::createFromModel( $object, $auditAction, $combinedResult );
 		}
 
 		return $combinedResult;
@@ -154,10 +160,10 @@ abstract class factory
 
 		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
 
-		log::info( 'MongoService', 'Delete '.static::_getCollectionName());
+		log::info( 'MongoService', 'Delete ' . static::_getCollectionName() );
 
-		$objectToDelete = static::getOne( $_id );
-		$deleteCascadeResults = self::_deleteCascade( $objectToDelete  );
+		$objectToDelete       = static::getOne( $_id );
+		$deleteCascadeResults = self::_deleteCascade( $objectToDelete );
 
 		$filter = [
 			'_id' => $_id
@@ -184,6 +190,12 @@ abstract class factory
 			throw new modelException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found', 404 );
 		}
 
+		//audit
+		if( $mdb->audit && static::_getCollectionName() != 'audit' ) {
+			$auditAction   = 'DELETE';
+			\gcgov\framework\services\mongodb\models\audit::create( static::_getCollectionName(), $_id, $auditAction, $combinedResult );
+		}
+
 		return $combinedResult;
 	}
 
@@ -195,8 +207,7 @@ abstract class factory
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	private static function autoIncrementProperties( model $object ) : updateDeleteResult {
-
-		log::info( 'MongoServiceAutoIncrement', 'Start auto increment '.$object::class);
+		log::info( 'MongoServiceAutoIncrement', 'Start auto increment ' . $object::class );
 
 		/** @var attributes\autoIncrement[] $autoIncrementAttributes */
 		$autoIncrementAttributes = [];
@@ -211,13 +222,14 @@ abstract class factory
 				//this is an auto increment field
 				if( count( $attributes ) > 0 ) {
 					/** @var attributes\autoIncrement $autoIncrement */
-					$autoIncrementAttributes[ $property->getName() ] =  $attributes[0]->newInstance();
+					$autoIncrementAttributes[ $property->getName() ] = $attributes[ 0 ]->newInstance();
 				}
 			}
 		}
 		catch( \ReflectionException $e ) {
-			log::error( 'MongoServiceAutoIncrement', 'Auto increment reflection error '.$object::class);
-			error_log($e);
+			log::error( 'MongoServiceAutoIncrement', 'Auto increment reflection error ' . $object::class );
+			error_log( $e );
+
 			return new updateDeleteResult();
 		}
 
@@ -237,24 +249,23 @@ abstract class factory
 		try {
 			$mongodbSet = [];
 
-			foreach( $autoIncrementAttributes as $propertyName=>$autoIncrement ) {
-
+			foreach( $autoIncrementAttributes as $propertyName => $autoIncrement ) {
 				//create key for auto increment group
 				$key = static::_getCollectionName() . '.' . $propertyName;
-				if($autoIncrement->groupByPropertyName!=='') {
-					$key .= '.'. $object->{$autoIncrement->groupByPropertyName};
+				if( $autoIncrement->groupByPropertyName !== '' ) {
+					$key .= '.' . $object->{$autoIncrement->groupByPropertyName};
 				}
-				if($autoIncrement->groupByMethodName!=='') {
-					$key .= '.'. $object->{$autoIncrement->groupByMethodName}();
+				if( $autoIncrement->groupByMethodName !== '' ) {
+					$key .= '.' . $object->{$autoIncrement->groupByMethodName}();
 				}
-				log::info( 'MongoServiceAutoIncrement', '--'.$key);
+				log::info( 'MongoServiceAutoIncrement', '--' . $key );
 
 				//get and increment internalCounter
 				$internalCounter = \gcgov\framework\services\mongodb\models\internalCounter::getAndIncrement( $key, $session );
 
 				//set the new count on the object (by ref)
 				//if the value is supposed to be formatted
-				if($autoIncrement->countFormatMethod!=='') {
+				if( $autoIncrement->countFormatMethod !== '' ) {
 					$object->{$propertyName} = $object->{$autoIncrement->countFormatMethod}( $internalCounter->currentCount );
 				}
 				else {
@@ -284,16 +295,16 @@ abstract class factory
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException | \MongoDB\Driver\Exception\CommandException $e ) {
 			$session->abortTransaction();
-			log::error( 'MongoServiceAutoIncrement', '--'.$e->getMessage(), $e->getTrace());
+			log::error( 'MongoServiceAutoIncrement', '--' . $e->getMessage(), $e->getTrace() );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
 		}
 
 		//close the session
 		$session->endSession();
 
-		log::info( 'MongoServiceAutoIncrement', '--Matched: '.$updateResult->getMatchedCount());
-		log::info( 'MongoServiceAutoIncrement', '--Modified: '.$updateResult->getModifiedCount());
-		log::info( 'MongoServiceAutoIncrement', '--Upserted: '.$updateResult->getUpsertedCount());
+		log::info( 'MongoServiceAutoIncrement', '--Matched: ' . $updateResult->getMatchedCount() );
+		log::info( 'MongoServiceAutoIncrement', '--Modified: ' . $updateResult->getModifiedCount() );
+		log::info( 'MongoServiceAutoIncrement', '--Upserted: ' . $updateResult->getUpsertedCount() );
 
 		return new updateDeleteResult( $updateResult );
 	}
