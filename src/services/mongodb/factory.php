@@ -6,6 +6,7 @@ namespace gcgov\framework\services\mongodb;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\log;
 use gcgov\framework\services\mongodb\attributes\autoIncrement;
+use gcgov\framework\services\mongodb\models\audit;
 
 
 /**
@@ -97,6 +98,13 @@ abstract class factory
 	public static function save( &$object, bool $upsert = true ) : updateDeleteResult {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
+		//AUDIT CHANGE STREAM
+		if( $mdb->audit && static::_getCollectionName() != 'audit' ) {
+			$auditChangeStream = new audit();
+			$auditChangeStream->startChangeStreamWatch( $mdb->collection );
+		}
+
+		//ACTUAL UPDATE
 		$filter = [
 			'_id' => $object->_id
 		];
@@ -121,6 +129,7 @@ abstract class factory
 			throw new \gcgov\framework\exceptions\modelException( 'Database error. ' . $e->getMessage(), 500, $e );
 		}
 
+
 		//auto increment fields on insert
 		if( $updateResult->getUpsertedCount() > 0 ) {
 			$autoIncrementUpdateResult = static::autoIncrementProperties( $object );
@@ -139,10 +148,10 @@ abstract class factory
 			$object->_meta->setDb( $combinedResult );
 		}
 
-		//audit
-		if( $mdb->audit && static::_getCollectionName() != 'audit' ) {
-			$auditAction   = $updateResult->getUpsertedCount() > 0 ? 'CREATE' : 'UPDATE';
-			\gcgov\framework\services\mongodb\models\audit::createFromModel( $object, $auditAction, $combinedResult );
+		//AUDIT CHANGE STREAM
+		if( $mdb->audit && static::_getCollectionName() != 'audit' && ($combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0)) {
+			$auditChangeStream->processChangeStream( $combinedResult );
+			audit::save( $auditChangeStream );
 		}
 
 		return $combinedResult;
@@ -157,6 +166,12 @@ abstract class factory
 	 */
 	public static function delete( \MongoDB\BSON\ObjectId|string $_id ) : updateDeleteResult {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
+
+		//AUDIT CHANGE STREAM
+		if( $mdb->audit && static::_getCollectionName() != 'audit' ) {
+			$auditChangeStream = new audit();
+			$auditChangeStream->startChangeStreamWatch( $mdb->collection );
+		}
 
 		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
 
@@ -190,10 +205,10 @@ abstract class factory
 			throw new modelException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found', 404 );
 		}
 
-		//audit
-		if( $mdb->audit && static::_getCollectionName() != 'audit' ) {
-			$auditAction   = 'DELETE';
-			\gcgov\framework\services\mongodb\models\audit::create( static::_getCollectionName(), $_id, $auditAction, $combinedResult );
+		//AUDIT CHANGE STREAM
+		if( $mdb->audit && static::_getCollectionName() != 'audit' && $combinedResult->getDeletedCount()>0) {
+			$auditChangeStream->processChangeStream( $combinedResult );
+			audit::save( $auditChangeStream );
 		}
 
 		return $combinedResult;

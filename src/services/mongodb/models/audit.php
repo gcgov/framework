@@ -2,6 +2,11 @@
 namespace gcgov\framework\services\mongodb\models;
 
 
+use gcgov\framework\services\log;
+use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
+use gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize;
+use gcgov\framework\services\mongodb\attributes\excludeJsonDeserialize;
+use gcgov\framework\services\mongodb\attributes\excludeJsonSerialize;
 use gcgov\framework\services\mongodb\attributes\label;
 use gcgov\framework\services\mongodb\updateDeleteResult;
 use MongoDB\BSON\ObjectId;
@@ -93,6 +98,11 @@ final class audit
 	/** @OA\Property() */
 	public \DateTimeImmutable      $dateTimeStamp;
 
+	#[excludeBsonSerialize]
+	#[excludeBsonUnserialize]
+	#[excludeJsonSerialize]
+	#[excludeJsonDeserialize]
+	private \MongoDB\ChangeStream $changeStream;
 
 	public function __construct() {
 		parent::__construct();
@@ -155,4 +165,63 @@ final class audit
 		return $audit;
 	}
 
+
+
+	/** @var \MongoDB\Collection */
+	public function startChangeStreamWatch( \MongoDB\Collection $collection ) {
+		$this->collection = $collection->getCollectionName();
+		$this->changeStream = $collection->watch([],  ['typeMap'=>[ 'array'=>'array' ]]);
+	}
+
+	public function processChangeStream( ?updateDeleteResult $updateDeleteResult=null ) {
+		for ($this->changeStream->rewind(); true; $this->changeStream->next()) {
+			if ( ! $this->changeStream->valid()) {
+				continue;
+			}
+
+			$event = $this->changeStream->current();
+
+			$ns = sprintf('%s.%s', $event->ns->db, $event->ns->coll);
+			$id = json_encode($event->documentKey->_id);
+
+			$data = null;
+
+			switch ($event->operationType) {
+				case 'delete':
+					log::info( 'MongoService', "Deleted document in ".$ns." with id: ".$id );
+					break;
+
+				case 'insert':
+					$data = $event->fullDocument;
+					log::info( 'MongoService', "Inserted new document in ".$ns, [$event->fullDocument]);
+					break;
+
+				case 'replace':
+					$data = $event->fullDocument;
+					log::info( 'MongoService', "Replaced new document in ".$ns." with _id: ".$id, [$event->fullDocument]);
+					break;
+
+				case 'update':
+					$data = $event->updateDescription;
+					log::info( 'MongoService',"Updated document in ".$ns." with _id: ". $id, [$event->updateDescription]);
+					break;
+			}
+
+			$this->recordId   = $event->documentKey->_id;
+			$this->action     = $event->operationType;
+			if( $updateDeleteResult != null ) {
+				$this->matched          = $updateDeleteResult->getMatchedCount();
+				$this->modified         = $updateDeleteResult->getModifiedCount();
+				$this->upserted         = $updateDeleteResult->getUpsertedCount();
+				$this->deleted          = $updateDeleteResult->getDeletedCount();
+				$this->embeddedMatched  = $updateDeleteResult->getEmbeddedMatchedCount();
+				$this->embeddedModified = $updateDeleteResult->getEmbeddedModifiedCount();
+				$this->embeddedUpserted = $updateDeleteResult->getEmbeddedUpsertedCount();
+				$this->embeddedDeleted  = $updateDeleteResult->getEmbeddedDeletedCount();
+			}
+			$this->data = $data;
+
+			break;
+		}
+	}
 }
