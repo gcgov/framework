@@ -33,6 +33,8 @@ abstract class dispatcher
 		//get all model typemaps
 		$allTypeMaps = self::getAllTypeMaps();
 
+		$mongoActions = [];
+
 		//find all places this type is embedded and update the instance
 		foreach( $allTypeMaps as $collectionName => $typeMap ) {
 			//don't check if there are no embedded objects OR the type that we're sending an update for
@@ -43,13 +45,37 @@ abstract class dispatcher
 			//check if updateType is embedded in this typeMap
 			foreach( $typeMap->fieldPaths as $fieldKey => $fieldPath ) {
 				if( $updateType == $fieldPath ) {
+					if(!isset($mongoActions[$collectionName])) {
+						$mongoActions[$collectionName] = [];
+					}
+
 					log::info( 'Dispatch_updateEmbedded', '--update collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $updateType );
-					//TODO: change this to a transaction bulk write
-
-					//
-
-					$embeddedUpdates[] = self::_doUpdate( $collectionName, $fieldKey, $object );
+					$mongoActions[$collectionName][] = self::_generateUpdateAction( $collectionName, $fieldKey, $object );
 				}
+			}
+		}
+
+		//run bulk write for all updates
+		$embeddedUpdates = [];
+		if(count($mongoActions)>0) {
+			try {
+				$mdb     = new \gcgov\framework\services\mongodb\tools\mdb( collection: static::_getCollectionName() );
+				$session = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
+				$session->startTransaction( [ 'maxCommitTimeMS' => 2000 ] );
+				foreach( $mongoActions as $collectionName => $queries ) {
+					$result = $mdb->db->$collectionName->bulkWrite( $queries, [ 'session' => $session ] );
+					log::info( 'Dispatch_updateEmbedded', '---update collection ' . $collectionName );
+					log::info( 'Dispatch_updateEmbedded', '----Matched: ' . $result->getMatchedCount() );
+					log::info( 'Dispatch_updateEmbedded', '----Mod: ' . $result->getModifiedCount() );
+
+					$embeddedUpdates[] = new updateDeleteResult( $result );
+				}
+
+				$session->commitTransaction();
+			}
+			catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+				log::error( 'Dispatch_updateEmbedded', $e->getMessage(), $e->getTrace() );
+				throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
 			}
 		}
 
@@ -468,10 +494,11 @@ abstract class dispatcher
 	 * @param  string  $pathToUpdate
 	 * @param  object  $updateObject
 	 *
-	 * @return \MongoDB\UpdateResult
+	 * @return array
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	private static function _doUpdate( string $collectionName, string $pathToUpdate, object $updateObject ) : \MongoDB\UpdateResult {
+	#[ArrayShape( [ 'updateMany' => "array" ] )]
+	private static function _generateUpdateAction( string $collectionName, string $pathToUpdate, object $updateObject ) : array {
 		$mdb = new tools\mdb( collection: $collectionName );
 
 		//drop all dollar signs from the filter path (for some reason Mongo demands none in the filter)
@@ -486,41 +513,19 @@ abstract class dispatcher
 			'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' )
 		];
 
-		//determine update type (is this object inside more than one array?
-		//if( substr_count( $pathToUpdate, '$' ) > 1 ) {
-			$complex = self::buildUpdateKeyArrayFilters( $pathToUpdate, true, $updateObject->_id );
+		$complex = self::buildUpdateKeyArrayFilters( $pathToUpdate, true, $updateObject->_id );
 
-			//complex update
-			$update = [
-				'$set' => [
-					$complex['complexPath'] => $updateObject
-				]
-			];
+		//complex update
+		$update = [
+			'$set' => [
+				$complex['complexPath'] => $updateObject
+			]
+		];
 
-			$options[ 'arrayFilters' ] = $complex['arrayFilters'];
-//		}
-//		else {
-//			//simple update
-//			$update = [
-//				'$set' => [
-//					$pathToUpdate => $updateObject
-//				]
-//			];
-//		}
+		$options[ 'arrayFilters' ] = $complex['arrayFilters'];
 
-		try {
-			$updateResponse = $mdb->collection->updateMany( $filter, $update, $options );
-			log::info( 'Dispatch_updateEmbedded', '----'.json_encode( $filter ) );
-			log::info( 'Dispatch_updateEmbedded', '----'.json_encode( $update ) );
-			log::info( 'Dispatch_updateEmbedded', '----Matched: ' . $updateResponse->getMatchedCount() );
-			log::info( 'Dispatch_updateEmbedded', '----Mod: ' . $updateResponse->getModifiedCount() );
-		}
-		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			log::error( 'Dispatch_updateEmbedded', $e->getMessage(), $e->getTrace() );
-			throw new \gcgov\framework\exceptions\modelException( 'Database error while updating ' . $pathToUpdate, 500, $e );
-		}
+		return [ 'updateMany' => [ $filter, $update, $options ] ];
 
-		return $updateResponse;
 	}
 
 
