@@ -133,15 +133,15 @@ abstract class factory
 		//auto increment fields on insert
 		if( $updateResult->getUpsertedCount() > 0 ) {
 			$autoIncrementUpdateResult = static::autoIncrementProperties( $object );
+
+			//dispatch inserts for all embedded versions
+			$embeddedInserts = static::_insertEmbedded( $object );
 		}
 
 		//dispatch updates for all embedded versions
 		$embeddedUpdates = static::_updateEmbedded( $object );
 
-		//dispatch inserts for all embedded versions
-		$embeddedInserts = static::_insertEmbedded( $object );
-
-		$combinedResult = new updateDeleteResult( $updateResult, array_merge( $embeddedUpdates, $embeddedInserts ) );
+		$combinedResult = new updateDeleteResult( $updateResult, array_merge( $embeddedUpdates, $embeddedInserts ?? [] ) );
 
 		//update _meta property of object to show results
 		if( property_exists( $object, '_meta' ) ) {

@@ -5,6 +5,7 @@ namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
+use gcgov\framework\models\environmentConfig;
 use gcgov\framework\services\log;
 use gcgov\framework\services\mongodb\attributes\deleteCascade;
 use JetBrains\PhpStorm\ArrayShape;
@@ -24,7 +25,7 @@ abstract class dispatcher
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function _updateEmbedded( $object ) : array {
-		log::info( 'Dispatch_updateEmbedded', 'Start _updateEmbedded for ' . $object::class );
+		log::info( 'Dispatch_updateEmbedded', 'Start _updateEmbedded for ' . $object::class .' '. $object->_id );
 		$embeddedUpdates = [];
 
 		//the type of object we are updating
@@ -61,28 +62,8 @@ abstract class dispatcher
 		}
 
 		//run bulk write for all updates
-		$embeddedUpdates = [];
-		if(count($mongoActions)>0) {
-			try {
-				$mdb     = new \gcgov\framework\services\mongodb\tools\mdb( collection: static::_getCollectionName() );
-				$session = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
-				$session->startTransaction( [ 'maxCommitTimeMS' => 2000 ] );
-				foreach( $mongoActions as $collectionName => $queries ) {
-					$result = $mdb->db->$collectionName->bulkWrite( $queries, [ 'session' => $session ] );
-					log::info( 'Dispatch_updateEmbedded', '---update collection ' . $collectionName );
-					log::info( 'Dispatch_updateEmbedded', '----Matched: ' . $result->getMatchedCount() );
-					log::info( 'Dispatch_updateEmbedded', '----Mod: ' . $result->getModifiedCount() );
+		$embeddedUpdates = self::_runMongoActions( $mongoActions, 'Dispatch_updateEmbedded' );
 
-					$embeddedUpdates[] = new updateDeleteResult( $result );
-				}
-
-				$session->commitTransaction();
-			}
-			catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-				log::error( 'Dispatch_updateEmbedded', $e->getMessage(), $e->getTrace() );
-				throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
-			}
-		}
 
 		return $embeddedUpdates;
 	}
@@ -133,28 +114,7 @@ abstract class dispatcher
 		}
 
 		//run bulk write for all updates
-		$embeddedDeletes = [];
-		if(count($mongoActions)>0) {
-			try {
-				$mdb     = new \gcgov\framework\services\mongodb\tools\mdb( collection: static::_getCollectionName() );
-				$session = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
-				$session->startTransaction( [ 'maxCommitTimeMS' => 2000 ] );
-				foreach( $mongoActions as $collectionName => $queries ) {
-					$result = $mdb->db->$collectionName->bulkWrite( $queries, [ 'session' => $session ] );
-					log::info( 'Dispatch_deleteEmbedded', '---delete item on collection ' . $collectionName );
-					log::info( 'Dispatch_deleteEmbedded', '----Matched: ' . $result->getMatchedCount() );
-					log::info( 'Dispatch_deleteEmbedded', '----Mod: ' . $result->getModifiedCount() );
-
-					$embeddedDeletes[] = new updateDeleteResult( $result );
-				}
-
-				$session->commitTransaction();
-			}
-			catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-				log::error( 'Dispatch_deleteEmbedded', $e->getMessage(), $e->getTrace() );
-				throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
-			}
-		}
+		$embeddedDeletes = self::_runMongoActions( $mongoActions, 'Dispatch_deleteEmbedded' );
 
 
 		return $embeddedDeletes;
@@ -188,7 +148,6 @@ abstract class dispatcher
 
 				//this is a delete cascade field
 				if( count( $attributes ) > 0 ) {
-					/** @var attributes\autoIncrement $autoIncrement */
 					$deleteCascadeAttributes[ $property->getName() ] = $attributes[ 0 ]->newInstance();
 				}
 			}
@@ -233,6 +192,9 @@ abstract class dispatcher
 			log::info( 'Dispatch_deleteCascade', '-- do cascade delete of ' . $objectTypeToDelete . ' ' . $item->_id );
 			//TODO: change this to a transaction bulk write
 			try {
+				//run a cascade delete check on the item
+				//delete the item
+				//delete embedded copies of the item
 				$deleteResponses[] = $objectTypeToDelete::delete( $item->_id );
 			}
 			catch( modelException $e ) {
@@ -253,7 +215,7 @@ abstract class dispatcher
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function _insertEmbedded( $objectToInsert ) : array {
-		log::info( 'Dispatch_insertEmbedded', 'Start _insertEmbedded for ' . $objectToInsert::class );
+		log::info( 'Dispatch_insertEmbedded', 'Start _insertEmbedded for ' . $objectToInsert::class .' ' . $objectToInsert->_id);
 
 		//the type of object we are updating
 		$updateType = '\\' . trim( get_class( $objectToInsert ), '/\\' );
@@ -341,49 +303,57 @@ abstract class dispatcher
 		}
 
 		//inject or update inspection
-		$mdb     = new \gcgov\framework\services\mongodb\tools\mdb( collection: static::_getCollectionName() );
-		$session = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
-		$session->startTransaction( [ 'maxCommitTimeMS' => 2000 ] );
+		$insertResults = self::_runMongoActions( $mongoActions, 'Dispatch_insertEmbedded' );
 
-		$insertResults = [];
-
-		try {
-			foreach( $mongoActions as $collectionName => $queries ) {
-				log::info( 'Dispatch_insertEmbedded', '--insert into ' . $collectionName . ' ' . json_encode( $queries ) );
-
-				//bulk actions for this collection
-				if( count( $queries ) > 1 ) {
-					$result = $mdb->db->$collectionName->bulkWrite( $queries, [ 'session' => $session ] );
-				}
-				//single insert for the collection
-				elseif( count( $queries ) == 1 ) {
-					$q       = $queries[ 0 ][ 'updateOne' ];
-					$options = array_merge( $q[ 2 ], [
-						'upsert'  => false,
-						'session' => $session
-					] );
-					$result  = $mdb->db->$collectionName->updateOne( $q[ 0 ], $q[ 1 ], $options );
-				}
-				else {
-					continue;
-				}
-
-				log::info( 'Dispatch_insertEmbedded', '----Matched: ' . $result->getMatchedCount() );
-				log::info( 'Dispatch_insertEmbedded', '----Mod: ' . $result->getModifiedCount() );
-
-				$insertResults[] = new updateDeleteResult( $result );
-			}
-
-			$session->commitTransaction();
-		}
-		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			log::error( 'Dispatch_insertEmbedded', $e->getMessage(), $e->getTrace() );
-			throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
-		}
 
 		return $insertResults;
 	}
 
+
+	/**
+	 * //run bulk write for mongo actions array
+	 *
+	 * @param  array   $mongoActions
+	 * @param  string  $logChannel
+	 *
+	 * @return updateDeleteResult[]
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	private static function _runMongoActions( array $mongoActions, string $logChannel ) : array {
+		$logging = config::getEnvironmentConfig()->type=='local';
+
+		$updateInsertDeleteResults = [];
+
+		if(count($mongoActions)>0) {
+			try {
+				$mdb     = new \gcgov\framework\services\mongodb\tools\mdb( collection: static::_getCollectionName() );
+
+				$session = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
+				$session->startTransaction( [ 'maxCommitTimeMS' => 2000 ] );
+
+				foreach( $mongoActions as $collectionName => $queries ) {
+					$result = $mdb->db->$collectionName->bulkWrite( $queries, [ 'session' => $session ] );
+
+					if($logging) {
+						log::info( $logChannel, '---touch collection ' . $collectionName );
+						log::info( $logChannel, '----Matched: ' . $result->getMatchedCount() );
+						log::info( $logChannel, '----Mod: ' . $result->getModifiedCount() );
+					}
+
+					$updateInsertDeleteResults[] = new updateDeleteResult( $result );
+				}
+
+				$session->commitTransaction();
+			}
+			catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+				log::error( $logChannel, $e->getMessage(), $e->getTrace() );
+				throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
+			}
+		}
+
+		return $updateInsertDeleteResults;
+
+	}
 
 	private static function convertFieldPathToComplexUpdate( string $fieldPath, bool $arrayFilter = true, string $arrayFilterKey = 'arrayFilter' ) : string {
 		//convert $fieldPath  `
