@@ -487,7 +487,7 @@ abstract class dispatcher
 		];
 
 		//determine update type (is this object inside more than one array?
-		if( substr_count( $pathToUpdate, '$' ) > 1 ) {
+		//if( substr_count( $pathToUpdate, '$' ) > 1 ) {
 			$complex = self::buildUpdateKeyArrayFilters( $pathToUpdate, true, $updateObject->_id );
 
 			//complex update
@@ -498,15 +498,15 @@ abstract class dispatcher
 			];
 
 			$options[ 'arrayFilters' ] = $complex['arrayFilters'];
-		}
-		else {
-			//simple update
-			$update = [
-				'$set' => [
-					$pathToUpdate => $updateObject
-				]
-			];
-		}
+//		}
+//		else {
+//			//simple update
+//			$update = [
+//				'$set' => [
+//					$pathToUpdate => $updateObject
+//				]
+//			];
+//		}
 
 		try {
 			$updateResponse = $mdb->collection->updateMany( $filter, $update, $options );
