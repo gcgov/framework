@@ -33,6 +33,11 @@ abstract class dispatcher
 		//get all model typemaps
 		$allTypeMaps = self::getAllTypeMaps();
 
+		/**
+		 * @see https://docs.mongodb.com/php-library/current/reference/method/MongoDBCollection-bulkWrite/
+		 * All bulk actions will go into this associative array where the first level key is the collection name and the value is an array of the bulk actions.
+		 *     EX: [ 'project'=>[ ['updateMany'=>[ $filter, $update, $options], ['updateMany'=>[ $filter, $update, $options] ] ] ]
+		 */
 		$mongoActions = [];
 
 		//find all places this type is embedded and update the instance
@@ -95,14 +100,16 @@ abstract class dispatcher
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function _deleteEmbedded( string $deleteType, \MongoDB\BSON\ObjectId $_id ) : array {
-		log::info( 'Dispatch_deleteEmbedded', 'Start _deleteEmbedded for ' . $deleteType );
-		$embeddedDeletes = [];
+		log::info( 'Dispatch_deleteEmbedded', 'Start _deleteEmbedded for ' . $deleteType.' - '. $_id );
 
 		//the type of object we are updating
 		$deleteType = '\\' . trim( $deleteType, '/\\' );
 
 		//get all model typemaps
 		$allTypeMaps = self::getAllTypeMaps();
+
+
+		$mongoActions = [];
 
 		//find all places this type is embedded and update the instance
 		foreach( $allTypeMaps as $collectionName => $typeMap ) {
@@ -114,12 +121,41 @@ abstract class dispatcher
 			//check if updateType is embedded in this typeMap
 			foreach( $typeMap->fieldPaths as $fieldKey => $fieldPath ) {
 				if( $deleteType == $fieldPath ) {
-					log::info( 'Dispatch_deleteEmbedded', '-- delete item on collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $deleteType );
+					if(!isset($mongoActions[$collectionName])) {
+						$mongoActions[$collectionName] = [];
+					}
+
+					log::info( 'Dispatch_deleteEmbedded', '-- generate delete for item on collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $deleteType );
 					//TODO: change this to a transaction bulk write
-					$embeddedDeletes[] = self::_doDelete( $collectionName, $fieldKey, $_id );
+					$mongoActions[$collectionName][] = self::_generateDeleteAction( $collectionName, $fieldKey, $_id );
 				}
 			}
 		}
+
+		//run bulk write for all updates
+		$embeddedDeletes = [];
+		if(count($mongoActions)>0) {
+			try {
+				$mdb     = new \gcgov\framework\services\mongodb\tools\mdb( collection: static::_getCollectionName() );
+				$session = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
+				$session->startTransaction( [ 'maxCommitTimeMS' => 2000 ] );
+				foreach( $mongoActions as $collectionName => $queries ) {
+					$result = $mdb->db->$collectionName->bulkWrite( $queries, [ 'session' => $session ] );
+					log::info( 'Dispatch_deleteEmbedded', '---delete item on collection ' . $collectionName );
+					log::info( 'Dispatch_deleteEmbedded', '----Matched: ' . $result->getMatchedCount() );
+					log::info( 'Dispatch_deleteEmbedded', '----Mod: ' . $result->getModifiedCount() );
+
+					$embeddedDeletes[] = new updateDeleteResult( $result );
+				}
+
+				$session->commitTransaction();
+			}
+			catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+				log::error( 'Dispatch_deleteEmbedded', $e->getMessage(), $e->getTrace() );
+				throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
+			}
+		}
+
 
 		return $embeddedDeletes;
 	}
@@ -430,19 +466,18 @@ abstract class dispatcher
 	 * @param  string                  $pathToUpdate
 	 * @param  \MongoDB\BSON\ObjectId  $_id
 	 *
-	 * @return \MongoDB\UpdateResult
+	 * @return array[]
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	private static function _doDelete( string $collectionName, string $pathToUpdate, \MongoDB\BSON\ObjectId $_id ) : \MongoDB\UpdateResult {
-		$mdb = new tools\mdb( collection: $collectionName );
+	#[ArrayShape( [ 'updateMany' => "array" ] )]
+	private static function _generateDeleteAction( string $collectionName, string $pathToUpdate, \MongoDB\BSON\ObjectId $_id ) : array {
 
 		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
 
 		$filter = [];
 
 		$options = [
-			'upsert'       => false,
-			'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' )
+			'upsert'       => false
 		];
 
 		//check whether this is an array or nullable
@@ -479,13 +514,15 @@ abstract class dispatcher
 			];
 		}
 
-		try {
-			return $mdb->collection->updateMany( $filter, $update, $options );
-		}
-		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			log::error( 'Dispatch_deleteEmbedded', $e->getMessage(), $e->getTrace() );
-			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
-		}
+		return [ 'updateMany' => [ $filter, $update, $options ] ];
+//
+//		try {
+//			return $mdb->collection->updateMany( $filter, $update, $options );
+//		}
+//		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+//			log::error( 'Dispatch_deleteEmbedded', $e->getMessage(), $e->getTrace() );
+//			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
+//		}
 	}
 
 
@@ -499,7 +536,6 @@ abstract class dispatcher
 	 */
 	#[ArrayShape( [ 'updateMany' => "array" ] )]
 	private static function _generateUpdateAction( string $collectionName, string $pathToUpdate, object $updateObject ) : array {
-		$mdb = new tools\mdb( collection: $collectionName );
 
 		//drop all dollar signs from the filter path (for some reason Mongo demands none in the filter)
 		$filterPath = self::convertFieldPathToFilterPath( $pathToUpdate );
@@ -509,8 +545,7 @@ abstract class dispatcher
 		];
 
 		$options = [
-			'upsert'       => false,
-			'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' )
+			'upsert'       => false
 		];
 
 		$complex = self::buildUpdateKeyArrayFilters( $pathToUpdate, true, $updateObject->_id );
