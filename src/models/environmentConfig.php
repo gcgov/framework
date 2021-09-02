@@ -1,11 +1,11 @@
 <?php
 
-
 namespace gcgov\framework\models;
 
 
 use gcgov\framework\exceptions\configException;
 use gcgov\framework\models\config\environment\mongoDatabase;
+use JetBrains\PhpStorm\Deprecated;
 
 
 class environmentConfig {
@@ -14,6 +14,12 @@ class environmentConfig {
 
 	public string $serverName = '';
 
+	public string $rootUrl    = '';
+
+	public string $basePath   = '';
+
+	#[Deprecated]
+	/** @deprecated */
 	public string $baseUrl    = '';
 
 	public string $cookieUrl  = '';
@@ -26,9 +32,10 @@ class environmentConfig {
 	/** @var \gcgov\framework\models\config\environment\sqlDatabase[] */
 	public array $sqlDatabases = [];
 
+	public array $appDictionary = [];
+
 
 	public function __construct() {
-
 	}
 
 
@@ -39,7 +46,6 @@ class environmentConfig {
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	public static function jsonDeserialize( string|\stdClass $json ) : environmentConfig {
-
 		if( is_string( $json ) ) {
 			try {
 				$json = json_decode( $json, false, 512, JSON_THROW_ON_ERROR );
@@ -52,6 +58,8 @@ class environmentConfig {
 		$environmentConfig             = new environmentConfig();
 		$environmentConfig->type       = $json->type ?? '';
 		$environmentConfig->serverName = $json->serverName ?? '';
+		$environmentConfig->rootUrl    = $json->rootUrl ?? '';
+		$environmentConfig->basePath   = $json->basePath ?? '';
 		$environmentConfig->baseUrl    = $json->baseUrl ?? '';
 		$environmentConfig->cookieUrl  = $json->cookieUrl ?? '';
 		$environmentConfig->phpPath    = $json->phpPath ?? '';
@@ -66,7 +74,21 @@ class environmentConfig {
 			}
 		}
 
+		$environmentConfig->appDictionary    = isset($json->appDictionary) ? (array) $json->appDictionary : [];
+
 		return $environmentConfig;
+	}
+
+	public function getRootUrl() {
+		return rtrim($this->rootUrl, '/ ');
+	}
+
+	public function getBaseUrl() {
+		return rtrim($this->rootUrl, '/ ').'/'.trim($this->basePath, '/ ');
+	}
+
+	public function getBasePath() {
+		return '/'.trim($this->basePath, '/ ');
 	}
 
 }
