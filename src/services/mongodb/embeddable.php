@@ -270,7 +270,7 @@ abstract class embeddable
 		}
 
 		//object ids
-		if( $propertyTypeName == \MongoDB\BSON\ObjectId::class ) {
+		if( trim( $propertyTypeName, '\\') == trim( \MongoDB\BSON\ObjectId::class, '\\') ) {
 			try {
 				return $rPropertyClass->newInstance( $jsonValue );
 			}
