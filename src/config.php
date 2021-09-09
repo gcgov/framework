@@ -19,6 +19,14 @@ final class config {
 	private static environmentConfig $environmentConfig;
 
 
+	public static function getTempDir() : string {
+		if( self::$rootDir === '' ) {
+			self::setRootDir();
+		}
+
+		return self::$rootDir.'/srv/tmp/tmp';
+	}
+
 	public static function getRootDir() : string {
 		if( self::$rootDir === '' ) {
 			self::setRootDir();
