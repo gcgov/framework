@@ -79,15 +79,15 @@ class environmentConfig {
 		return $environmentConfig;
 	}
 
-	public function getRootUrl() {
+	public function getRootUrl() : string {
 		return rtrim($this->rootUrl, '/ ');
 	}
 
-	public function getBaseUrl() {
+	public function getBaseUrl() : string {
 		return rtrim($this->rootUrl, '/ ').'/'.trim($this->basePath, '/ ');
 	}
 
-	public function getBasePath() {
+	public function getBasePath() : string {
 		return '/'.trim($this->basePath, '/ ');
 	}
 
