@@ -317,6 +317,10 @@ abstract class embeddable
 	 * @return array
 	 */
 	public function jsonSerialize() : array {
+		if(method_exists($this, '_beforeJsonSerialize')) {
+			$this->_beforeJsonSerialize();
+		}
+
 		$export = [];
 
 		//get the called class name
@@ -372,6 +376,10 @@ abstract class embeddable
 	 * Called by Mongo while inserting into the DB
 	 */
 	public function bsonSerialize() : array|\stdClass {
+		if(method_exists($this, '_beforeBsonSerialize')) {
+			$this->_beforeBsonSerialize();
+		}
+
 		$save = [];
 
 		//get the called class name
@@ -494,11 +502,16 @@ abstract class embeddable
 		if( isset( $data[ '_score' ] ) ) {
 			$this->_meta->score = round( $data[ '_score' ], 2 );
 		}
+
+		if(method_exists($this, '_afterBsonUnserialize')) {
+			$this->_afterBsonUnserialize( $data );
+		}
 	}
 
 
 	/**
 	 * @param  \ReflectionProperty  $rProperty
+	 * @param  mixed                $value
 	 *
 	 * @return mixed
 	 */
@@ -531,6 +544,8 @@ abstract class embeddable
 
 	/**
 	 * @param  \ReflectionProperty  $rProperty
+	 * @param                       $propertyType
+	 * @param                       $propertyTypeName
 	 * @param  mixed                $value
 	 *
 	 * @return mixed
