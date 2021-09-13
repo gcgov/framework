@@ -4,6 +4,7 @@ namespace gcgov\framework\models;
 
 
 use gcgov\framework\exceptions\configException;
+use gcgov\framework\models\config\environment\microsoft;
 use gcgov\framework\models\config\environment\mongoDatabase;
 use JetBrains\PhpStorm\Deprecated;
 
@@ -32,10 +33,13 @@ class environmentConfig {
 	/** @var \gcgov\framework\models\config\environment\sqlDatabase[] */
 	public array $sqlDatabases = [];
 
+	public microsoft $microsoft;
+
 	public array $appDictionary = [];
 
 
 	public function __construct() {
+		$this->microsoft = new microsoft();
 	}
 
 
@@ -63,15 +67,21 @@ class environmentConfig {
 		$environmentConfig->baseUrl    = $json->baseUrl ?? '';
 		$environmentConfig->cookieUrl  = $json->cookieUrl ?? '';
 		$environmentConfig->phpPath    = $json->phpPath ?? '';
+
 		if( isset( $json->mongoDatabases ) ) {
 			foreach( $json->mongoDatabases as $mongoDatabase ) {
 				$environmentConfig->mongoDatabases[] = mongoDatabase::jsonDeserialize( $mongoDatabase );
 			}
 		}
+
 		if( isset( $json->sqlDatabases ) ) {
 			foreach( $json->sqlDatabases as $sqlDatabase ) {
 				$environmentConfig->sqlDatabases[] = mongoDatabase::jsonDeserialize( $sqlDatabase );
 			}
+		}
+
+		if( isset( $json->microsoft ) ) {
+			$environmentConfig->microsoft = microsoft::jsonDeserialize( $json->microsoft );
 		}
 
 		$environmentConfig->appDictionary    = isset($json->appDictionary) ? (array) $json->appDictionary : [];

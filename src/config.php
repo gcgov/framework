@@ -18,7 +18,6 @@ final class config {
 
 	private static environmentConfig $environmentConfig;
 
-
 	public static function getTempDir() : string {
 		if( self::$rootDir === '' ) {
 			self::setRootDir();
