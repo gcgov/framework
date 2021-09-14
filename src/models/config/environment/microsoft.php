@@ -19,6 +19,9 @@ class microsoft
 
 	public string $driveId      = "";
 
+	public string $fromAddress  = "";
+
+
 	public function __construct() {
 	}
 
@@ -41,9 +44,10 @@ class microsoft
 
 		$microsoft               = new microsoft();
 		$microsoft->clientId     = $json->clientId ?? '';
-		$microsoft->clientSecret     = $json->clientSecret ?? '';
-		$microsoft->tenant     = $json->tenant ?? '';
-		$microsoft->driveId     = $json->driveId ?? '';
+		$microsoft->clientSecret = $json->clientSecret ?? '';
+		$microsoft->tenant       = $json->tenant ?? '';
+		$microsoft->driveId      = $json->driveId ?? '';
+		$microsoft->fromAddress  = $json->fromAddress ?? '';
 
 		return $microsoft;
 	}
