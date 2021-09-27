@@ -32,11 +32,13 @@ class environmentConfig {
 	public array $mongoDatabases = [];
 
 	/** @var \gcgov\framework\models\config\environment\sqlDatabase[] */
-	public array $sqlDatabases = [];
+	public array       $sqlDatabases  = [];
 
-	public microsoft $microsoft;
+	public microsoft   $microsoft;
 
-	public array $appDictionary = [];
+	public payjunction $payjunction;
+
+	public array       $appDictionary = [];
 
 
 	public function __construct() {
@@ -89,21 +91,24 @@ class environmentConfig {
 			$environmentConfig->payjunction = payjunction::jsonDeserialize( $json->payjunction );
 		}
 
-		$environmentConfig->appDictionary    = isset($json->appDictionary) ? (array) $json->appDictionary : [];
+		$environmentConfig->appDictionary = isset( $json->appDictionary ) ? (array) $json->appDictionary : [];
 
 		return $environmentConfig;
 	}
 
+
 	public function getRootUrl() : string {
-		return rtrim($this->rootUrl, '/ ');
+		return rtrim( $this->rootUrl, '/ ' );
 	}
+
 
 	public function getBaseUrl() : string {
-		return rtrim($this->rootUrl, '/ ').'/'.trim($this->basePath, '/ ');
+		return rtrim( $this->rootUrl, '/ ' ) . '/' . trim( $this->basePath, '/ ' );
 	}
 
+
 	public function getBasePath() : string {
-		return '/'.trim($this->basePath, '/ ');
+		return '/' . trim( $this->basePath, '/ ' );
 	}
 
 }
