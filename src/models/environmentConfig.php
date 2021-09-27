@@ -6,6 +6,7 @@ namespace gcgov\framework\models;
 use gcgov\framework\exceptions\configException;
 use gcgov\framework\models\config\environment\microsoft;
 use gcgov\framework\models\config\environment\mongoDatabase;
+use gcgov\framework\models\config\environment\payjunction;
 use JetBrains\PhpStorm\Deprecated;
 
 
@@ -82,6 +83,10 @@ class environmentConfig {
 
 		if( isset( $json->microsoft ) ) {
 			$environmentConfig->microsoft = microsoft::jsonDeserialize( $json->microsoft );
+		}
+
+		if( isset( $json->payjunction ) ) {
+			$environmentConfig->payjunction = payjunction::jsonDeserialize( $json->payjunction );
 		}
 
 		$environmentConfig->appDictionary    = isset($json->appDictionary) ? (array) $json->appDictionary : [];
