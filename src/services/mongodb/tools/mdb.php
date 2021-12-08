@@ -19,7 +19,13 @@ final class mdb {
 	public \MongoDB\Collection $collection;
 
 	/** @var bool */
-	public bool $audit = false;
+	public bool $audit              = false;
+
+	public bool $include_meta       = false;
+
+	public bool $include_metaLabels = false;
+
+	public bool $include_metaFields = false;
 
 
 	/**
@@ -41,7 +47,10 @@ final class mdb {
 
 			$this->collection = $this->db->{$collection};
 
-			$this->audit = $connector->audit;
+			$this->audit              = $connector->audit;
+			$this->include_meta       = $connector->include_meta;
+			$this->include_metaLabels = $connector->include_metaLabels;
+			$this->include_metaFields = $connector->include_metaFields;
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
 			throw new modelException( 'Database connection issue: ' . $e->getMessage(), 503, $e );

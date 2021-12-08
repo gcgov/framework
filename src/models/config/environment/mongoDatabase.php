@@ -18,9 +18,15 @@ class mongoDatabase
 	public string $database = '';
 
 	/** @var array Associative array to pass to the mongo client */
-	public array $clientParams = [];
+	public array $clientParams       = [];
 
-	public bool  $audit        = false;
+	public bool  $include_meta       = false;
+
+	public bool  $include_metaLabels = false;
+
+	public bool  $include_metaFields = false;
+
+	public bool  $audit              = false;
 
 
 	public function __construct() {
@@ -43,12 +49,15 @@ class mongoDatabase
 			}
 		}
 
-		$mongoDatabase               = new mongoDatabase();
-		$mongoDatabase->default      = $json->default ?? false;
-		$mongoDatabase->uri          = $json->uri ?? '';
-		$mongoDatabase->database     = $json->database ?? '';
-		$mongoDatabase->clientParams = isset( $json->clientParams ) ? (array) $json->clientParams : [];
-		$mongoDatabase->audit        = $json->audit ?? false;
+		$mongoDatabase                     = new mongoDatabase();
+		$mongoDatabase->default            = $json->default ?? false;
+		$mongoDatabase->uri                = $json->uri ?? '';
+		$mongoDatabase->database           = $json->database ?? '';
+		$mongoDatabase->clientParams       = isset( $json->clientParams ) ? (array) $json->clientParams : [];
+		$mongoDatabase->audit              = $json->audit ?? false;
+		$mongoDatabase->include_meta       = $json->include_meta ?? true;
+		$mongoDatabase->include_metaLabels = $json->include_metaLabels ?? true;
+		$mongoDatabase->include_metaFields = $json->include_metaFields ?? true;
 
 		return $mongoDatabase;
 	}

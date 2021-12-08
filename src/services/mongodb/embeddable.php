@@ -3,7 +3,9 @@
 namespace gcgov\framework\services\mongodb;
 
 
+use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
+use gcgov\framework\models\appConfig;
 use gcgov\framework\services\log;
 use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
 use gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize;
@@ -24,6 +26,9 @@ abstract class embeddable
 
 
 	public function __construct() {
+		if( config::getEnvironmentConfig()->mongoDatabases) {
+
+		}
 		$this->_meta = new _meta( get_called_class() );
 	}
 

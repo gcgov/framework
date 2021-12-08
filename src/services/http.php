@@ -1,23 +1,19 @@
 <?php
 
-namespace gcgov\framework\helpers;
+namespace gcgov\framework\services;
 
 
-class tools {
-
-
+class http {
 
 	/**
 	 * Get HTTP status code description from the status code
+	 * Ex: Provide 404 and function will return "Not Found"
 	 *
-	 * Provide 404 and function will return "Not Found"
-	 *
-	 * @param  int  $code  Provide the status code to get the description
+	 * @param  int  $code  Provide the status code to get the description. Leave blank to get current status
 	 *
 	 * @return string
 	 */
-	public static function getHttpStatusCodeText( int $code = 0 ) : string {
-
+	public static function statusText( int $code = 0 ) : string {
 		if( $code == 0 ) {
 			$code = http_response_code();
 		}
