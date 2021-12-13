@@ -15,7 +15,7 @@ class uiField {
 	 * @OA\Property()
 	 * @var string[]
 	 */
-	public string|array $errorMessages = '';
+	public string|array $errorMessages = [];
 
 	/** @OA\Property() */
 	public bool $success = false;
@@ -24,7 +24,7 @@ class uiField {
 	 * @OA\Property()
 	 * @var string[]
 	 */
-	public string|array $successMessages = '';
+	public string|array $successMessages = [];
 
 	/**
 	 * @OA\Property()
