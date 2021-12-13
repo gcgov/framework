@@ -7,6 +7,7 @@ use gcgov\framework\exceptions\configException;
 use gcgov\framework\models\config\environment\microsoft;
 use gcgov\framework\models\config\environment\mongoDatabase;
 use gcgov\framework\models\config\environment\payjunction;
+use gcgov\framework\models\config\environment\sqlDatabase;
 use JetBrains\PhpStorm\Deprecated;
 
 
@@ -79,7 +80,7 @@ class environmentConfig {
 
 		if( isset( $json->sqlDatabases ) ) {
 			foreach( $json->sqlDatabases as $sqlDatabase ) {
-				$environmentConfig->sqlDatabases[] = mongoDatabase::jsonDeserialize( $sqlDatabase );
+				$environmentConfig->sqlDatabases[] = sqlDatabase::jsonDeserialize( $sqlDatabase );
 			}
 		}
 

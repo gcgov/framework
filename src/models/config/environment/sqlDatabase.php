@@ -1,6 +1,5 @@
 <?php
 
-
 namespace gcgov\framework\models\config\environment;
 
 
@@ -8,17 +7,15 @@ use gcgov\framework\exceptions\configException;
 use gcgov\framework\interfaces\jsonDeserialize;
 
 
-class sqlDatabase implements jsonDeserialize {
+class sqlDatabase
+	implements
+	jsonDeserialize {
 
-	public bool            $default   = false;
+	public bool            $default = false;
 
-	public string          $server    = '';
+	public string          $name    = '';
 
-	public string          $driver    = '';
-
-	public string          $pdoDriver = '';
-
-	public string          $database  = '';
+	public string          $dsn     = '';
 
 	public sqlDatabaseUser $readAccount;
 
@@ -36,7 +33,6 @@ class sqlDatabase implements jsonDeserialize {
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	public static function jsonDeserialize( string|\stdClass $json ) : sqlDatabase {
-
 		if( is_string( $json ) ) {
 			try {
 				$json = json_decode( $json, false, 512, JSON_THROW_ON_ERROR );
@@ -47,11 +43,9 @@ class sqlDatabase implements jsonDeserialize {
 		}
 
 		$sqlDatabase               = new sqlDatabase();
-		$sqlDatabase->default      = isset( $json->default ) ? $json->default : false;
-		$sqlDatabase->server       = isset( $json->server ) ? $json->server : '';
-		$sqlDatabase->driver       = isset( $json->driver ) ? $json->driver : '';
-		$sqlDatabase->pdoDriver    = isset( $json->pdoDriver ) ? $json->pdoDriver : '';
-		$sqlDatabase->database     = isset( $json->database ) ? $json->database : '';
+		$sqlDatabase->default      = $json->default ?? false;
+		$sqlDatabase->name         = $json->name ?? '';
+		$sqlDatabase->dsn          = $json->dsn ?? '';
 		$sqlDatabase->readAccount  = isset( $json->readAccount ) ? sqlDatabaseUser::jsonDeserialize( $json->readAccount ) : new sqlDatabaseUser();
 		$sqlDatabase->writeAccount = isset( $json->writeAccount ) ? sqlDatabaseUser::jsonDeserialize( $json->writeAccount ) : new sqlDatabaseUser();
 

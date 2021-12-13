@@ -19,6 +19,7 @@
 	"thenetworg/oauth2-azure": "^2.0",
 	"guzzlehttp/guzzle": "^7.0",
 	"ext-mongodb": "*",
-	"ext-fileinfo": "*"
+	"ext-fileinfo": "*",
+	"ext-pdo": "*"
   }
 }
