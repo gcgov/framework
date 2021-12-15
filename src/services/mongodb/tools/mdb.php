@@ -21,9 +21,9 @@ final class mdb {
 	/** @var bool */
 	public bool $audit              = false;
 
-	public bool $include_meta       = false;
+	public bool $include_meta       = true;
 
-	public bool $include_metaLabels = false;
+	public bool $include_metaLabels = true;
 
 	public bool $include_metaFields = false;
 
