@@ -2,6 +2,7 @@
 namespace gcgov\framework\services\mongodb\models;
 
 
+use gcgov\framework\config;
 use gcgov\framework\services\log;
 use gcgov\framework\services\mongodb\attributes\label;
 use JetBrains\PhpStorm\ArrayShape;
@@ -52,10 +53,19 @@ class _meta
 	] )]
 	public function jsonSerialize() : array {
 		$export = [
-			'ui'     => $this->ui,
-			'labels' => $this->labels,
-			'fields' => $this->fields,
+			'ui'     => $this->ui
 		];
+
+		//TODO: make sure this is using the actual database it's being used for
+		if( isset(config::getEnvironmentConfig()->mongoDatabases[0]) ) {
+			$mdbConfig = config::getEnvironmentConfig()->mongoDatabases[0];
+			if($mdbConfig->include_metaLabels) {
+				$export['labels'] = $this->labels;
+			}
+			if($mdbConfig->include_metaFields) {
+				$export['fields'] = $this->fields;
+			}
+		}
 
 		if( $this->score != 0 ) {
 			$export[ 'score' ] = $this->score;

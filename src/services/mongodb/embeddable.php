@@ -26,9 +26,6 @@ abstract class embeddable
 
 
 	public function __construct() {
-		if( config::getEnvironmentConfig()->mongoDatabases) {
-
-		}
 		$this->_meta = new _meta( get_called_class() );
 	}
 
