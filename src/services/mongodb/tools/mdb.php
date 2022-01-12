@@ -79,4 +79,8 @@ final class mdb {
 		throw new modelException( 'No suitable Mongo Database connector found in environment config', 500 );
 	}
 
+
+	public function getCollectionCount() : int {
+		return $this->collection->countDocuments([]);
+	}
 }

@@ -325,6 +325,7 @@ abstract class dispatcher
 		$updateInsertDeleteResults = [];
 
 		if(count($mongoActions)>0) {
+			log::info( $logChannel, '-run queries ', $mongoActions  );
 			try {
 				$mdb     = new \gcgov\framework\services\mongodb\tools\mdb( collection: static::_getCollectionName() );
 
