@@ -101,7 +101,12 @@ final class renderer {
 	 * @return string
 	 */
 	private function processControllerDataResponse( controllerDataResponse $controllerDataResponse ) : string {
-		header( 'Content-Type:application/json' );
+		if (!headers_sent($filename, $lineNumber)) {
+			header( 'Content-Type:application/json' );
+		} else {
+			\gcgov\framework\services\log::debug( 'Renderer', 'Cannot set content-type header. Headers already sent in '.$filename.' on line '.$lineNumber );
+		}
+
 
 		if( $controllerDataResponse->getHttpStatus() != 200 ) {
 			http_response_code( $controllerDataResponse->getHttpStatus() );
