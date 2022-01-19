@@ -5,7 +5,6 @@ namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
-use gcgov\framework\models\environmentConfig;
 use gcgov\framework\services\log;
 use gcgov\framework\services\mongodb\attributes\deleteCascade;
 use JetBrains\PhpStorm\ArrayShape;
@@ -391,7 +390,7 @@ abstract class dispatcher
 		$appDir = config::getAppDir();
 
 		//get app files
-		$dir      = new \RecursiveDirectoryIterator( $appDir . '/models', \RecursiveDirectoryIterator::SKIP_DOTS );
+		$dir      = new \RecursiveDirectoryIterator( $appDir . '/models', \FilesystemIterator::SKIP_DOTS );
 		$filter   = new \RecursiveCallbackFilterIterator( $dir, function( $current, $key, $iterator ) {
 			if( $iterator->hasChildren() ) {
 				return true;
