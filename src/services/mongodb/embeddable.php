@@ -56,7 +56,7 @@ abstract class embeddable
 			//  - not typed
 			//  - starts with _
 			$excludeBsonSerializeAttributes = $rProperty->getAttributes( excludeBsonSerialize::class );
-			if( count( $excludeBsonSerializeAttributes ) > 0 || !$rProperty->hasType() || substr( $rProperty->getName(), 0, 1 ) === '_' ) {
+			if( count( $excludeBsonSerializeAttributes ) > 0 || !$rProperty->hasType() || str_starts_with( $rProperty->getName(), '_' ) ) {
 				continue;
 			}
 
@@ -72,8 +72,9 @@ abstract class embeddable
 				$typeIsArray = true;
 			}
 
+
 			//TODO: is this the best way to capture \app\models
-			if( substr( $typeName, 0, 3 ) == 'app' || substr( $typeName, 0, 4 ) == '\app' ) {
+			if( str_starts_with( $typeName, 'app' ) || str_starts_with( $typeName, '\app' ) ) {
 				//create mongo field path key
 				$baseFieldPathKey = $rProperty->getName();
 				if( $typeIsArray ) {
@@ -604,4 +605,80 @@ abstract class embeddable
 		}
 	}
 
+
+	public static function mongoFieldsExistsQuery( $fieldPrefix='' ) : array {
+		$query = [];
+
+		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
+
+		try {
+			$rClass = new \ReflectionClass( $calledClassFqn );
+		}
+		catch( \ReflectionException $e ) {
+			throw new databaseException( 'Failed to load ' . $calledClassFqn . ' to generate typemap', 500, $e );
+		}
+
+		$rProperties = $rClass->getProperties();
+		foreach( $rProperties as $rProperty ) {
+			//skip type mapping this if property is
+			//  - excluded from serialization
+			//  - starts with _
+			$excludeBsonSerializeAttributes = $rProperty->getAttributes( excludeBsonSerialize::class );
+			if( count( $excludeBsonSerializeAttributes ) > 0 || str_starts_with( $rProperty->getName(), '_' ) ) {
+				continue;
+			}
+
+			//get property type
+			$rPropertyName = $rProperty->getName();
+			$rPropertyType = $rProperty->getType();
+			$typeName      = $rPropertyType->getName();
+			$propertyIsArray = false;
+
+
+			//add base field to the search
+			$query[] = [ $rPropertyName => [ '$exists' => false ] ];
+
+			//handle typed arrays
+			if( $typeName == 'array' ) {
+				//get type  from @var doc block
+				$typeName    = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
+				$propertyIsArray = true;
+			}
+
+			//TODO: is this the best way to capture \app\models
+			if( (str_starts_with( $typeName, 'app' ) || str_starts_with( $typeName, '\app' )) && !$rPropertyType->allowsNull() ) {
+				//create mongo field path key
+				$baseFieldPathKey = ($fieldPrefix=='' ? '' : $fieldPrefix.'.') .$rPropertyName;
+
+				//add the field paths for the property type so that we get a full chain of types
+				try {
+					$rPropertyClass = new \ReflectionClass( $typeName );
+					if( $rPropertyClass->isSubclassOf( embeddable::class ) ) {
+						$instance        = $rPropertyClass->newInstanceWithoutConstructor();
+						/** @var \gcgov\framework\services\mongodb\typeMap $propertyTypeMap */
+						$fieldExistsQuery = $rPropertyClass->getMethod( 'mongoFieldsExistsQuery' )->invoke( $instance, $rPropertyName );
+						$propertyQuery = [ '$or' =>[] ];
+						foreach( $fieldExistsQuery as $or) {
+							foreach($or as $subFieldPathKey=>$exists) {
+								$propertyQuery[ '$or' ][][ $rPropertyName .'.'. $subFieldPathKey ] = $exists;
+							}
+						}
+						if($propertyIsArray) {
+							$propertyQuery[ $baseFieldPathKey ] = ['$gt'=>['$size'=>0]];
+							$query[] = $propertyQuery;
+						}
+						else {
+							$query = array_merge($query, $propertyQuery['$or']);
+						}
+
+					}
+				}
+				catch( \ReflectionException $e ) {
+					throw new databaseException( 'Failed to generate query for ' . $typeName, 500, $e );
+				}
+			}
+		}
+
+		return $query;
+	}
 }
