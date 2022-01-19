@@ -3,7 +3,9 @@
 namespace gcgov\framework\services\mongodb;
 
 
-class updateDeleteResult {
+class updateDeleteResult
+	implements
+	\JsonSerializable {
 
 	private bool                    $acknowledged  = false;
 
@@ -165,6 +167,23 @@ class updateDeleteResult {
 	/** @return \MongoDB\BSON\ObjectId[] */
 	public function getEmbeddedUpsertedIds() : array {
 		return $this->embeddedUpsertedIds;
+	}
+
+
+	public function jsonSerialize() {
+		$export = [
+			'acknowledged'          => $this->isAcknowledged(),
+			'deletedCount'          => $this->getDeletedCount(),
+			'modifiedCount'         => $this->getModifiedCount(),
+			'matchedCount'          => $this->getMatchedCount(),
+			'upsertedCount'         => $this->getUpsertedCount(),
+			'embeddedDeletedCount'  => $this->getEmbeddedDeletedCount(),
+			'embeddedModifiedCount' => $this->getEmbeddedModifiedCount(),
+			'embeddedMatchedCount'  => $this->getEmbeddedMatchedCount(),
+			'embeddedUpsertedCount' => $this->getEmbeddedUpsertedCount(),
+		];
+
+		return $export;
 	}
 
 }
