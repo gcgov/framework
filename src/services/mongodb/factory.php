@@ -133,10 +133,10 @@ abstract class factory
 		//auto increment fields on insert
 		if( $updateResult->getUpsertedCount() > 0 ) {
 			$autoIncrementUpdateResult = static::autoIncrementProperties( $object );
-
-			//dispatch inserts for all embedded versions
-			$embeddedInserts = static::_insertEmbedded( $object );
 		}
+
+		//dispatch inserts for all embedded versions
+		$embeddedInserts = static::_insertEmbedded( $object );
 
 		//dispatch updates for all embedded versions
 		$embeddedUpdates = static::_updateEmbedded( $object );

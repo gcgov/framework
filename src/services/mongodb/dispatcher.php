@@ -49,9 +49,51 @@ abstract class dispatcher
 
 			//check if updateType is embedded in this typeMap
 			foreach( $typeMap->fieldPaths as $fieldKey => $fieldPath ) {
+				//this field on this collection embeds the object being updated
 				if( $updateType == $fieldPath ) {
+
+					//add update queue for this collection if a queue does not exist
 					if(!isset($mongoActions[$collectionName])) {
 						$mongoActions[$collectionName] = [];
+					}
+
+					//check if this object is embeded using a foreign key
+					if( isset( $typeMap->foreignKeyMap[ $fieldKey ] ) ) {
+						$foreignKey = $typeMap->foreignKeyMap[ $fieldKey ];
+
+						if($object->$foreignKey!==null) {
+
+							$filterPath = self::convertFieldPathToFilterPath( $fieldKey );
+
+							$action = self::_generateDeleteAction($collectionName, $fieldKey, $object->_id );
+
+							$primaryFilterKey = self::getFieldPathToFirstParentModel( $fieldKey, $typeMap );
+							if( strlen( $primaryFilterKey ) > 0 ) {
+								$primaryFilterKey .= '.';
+							}
+							$primaryFilterKey .= '_id';
+							$primaryFilterKey = str_replace( '.$', '', $primaryFilterKey );
+							 $action['updateMany'][ 0 ][$primaryFilterKey] = [ '$ne'=> $object->$foreignKey ];
+//							$action = [
+//								'updateMany' => [
+//									[
+//										$filterPath . '._id' =>  $object->_id,
+//										'_id'=>[ '$ne'=> $object->$foreignKey ]
+//									],
+//									[
+//										'$pull'=>[
+//											$filterPath => [
+//												'_id'=>$object->_id
+//											]
+//										]
+//									],
+//									[
+//										'upsert'=>false
+//									]
+//								]
+//							];
+							$mongoActions[$collectionName][] = $action;
+						}
 					}
 
 					log::info( 'Dispatch_updateEmbedded', '--update collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $updateType );
