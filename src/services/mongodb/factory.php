@@ -29,6 +29,7 @@ abstract class factory
 	/**
 	 * @param  array  $filter  optional
 	 * @param  array  $sort    optional
+	 * @param  array  $options    optional
 	 *
 	 * @return array
 	 * @throws \gcgov\framework\exceptions\modelException
@@ -72,6 +73,35 @@ abstract class factory
 		$options = [
 			'typeMap' => static::_getTypeMap(),
 		];
+
+		try {
+			$cursor = $mdb->collection->findOne( $filter, $options );
+		}
+		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
+		}
+
+		if( $cursor === null ) {
+			throw new \gcgov\framework\exceptions\modelException( static::_getHumanName( capitalize: true ) . ' not found', 404 );
+		}
+
+		return $cursor;
+	}
+
+
+	/**
+	 * @param  array  $filter  optional
+	 * @param  array  $options    optional
+	 *
+	 * @return object
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function getOneBy( array $filter = [], array $options = []  ) : object {
+		$mdb = new tools\mdb( collection: static::_getCollectionName() );
+
+		$options = array_merge( $options, [
+			'typeMap' => static::_getTypeMap()
+		] );
 
 		try {
 			$cursor = $mdb->collection->findOne( $filter, $options );
