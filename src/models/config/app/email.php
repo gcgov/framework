@@ -1,6 +1,5 @@
 <?php
 
-
 namespace gcgov\framework\models\config\app;
 
 
@@ -8,11 +7,17 @@ use gcgov\framework\interfaces\jsonDeserialize;
 use gcgov\framework\exceptions\configException;
 
 
-class email implements jsonDeserialize {
+class email
+	implements
+	jsonDeserialize {
 
-	public string $fromAddress = '';
+	public string $fromAddress    = '';
 
-	public string $fromName    = '';
+	public string $fromName       = '';
+
+	public string $replyToAddress = '';
+
+	public string $replyToName    = '';
 
 
 	public function __construct() {
@@ -26,7 +31,6 @@ class email implements jsonDeserialize {
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	public static function jsonDeserialize( string|\stdClass $json ) : email {
-
 		if( is_string( $json ) ) {
 			try {
 				$json = json_decode( $json, false, 512, JSON_THROW_ON_ERROR );
@@ -36,9 +40,11 @@ class email implements jsonDeserialize {
 			}
 		}
 
-		$email              = new email();
-		$email->fromAddress = isset( $json->fromAddress ) ? $json->fromAddress : '';
-		$email->fromName    = isset( $json->fromName ) ? $json->fromName : '';
+		$email                 = new email();
+		$email->fromAddress    = isset( $json->fromAddress ) ? $json->fromAddress : '';
+		$email->fromName       = isset( $json->fromName ) ? $json->fromName : '';
+		$email->replyToAddress = isset( $json->replyToAddress ) ? $json->replyToAddress : '';
+		$email->replyToName    = isset( $json->replyToName ) ? $json->replyToName : '';
 
 		return $email;
 	}

@@ -4,7 +4,7 @@ namespace gcgov\framework\exceptions;
 
 class serviceException
 	extends
-	\LogicException {
+	\Exception {
 
 	// Redefine the exception so message isn't optional
 

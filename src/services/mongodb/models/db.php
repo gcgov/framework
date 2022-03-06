@@ -3,7 +3,9 @@
 namespace gcgov\framework\services\mongodb\models;
 
 
-class db {
+class db
+	extends
+	\andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	/** @OA\Property() */
 	public float $score = 0;

@@ -17,11 +17,14 @@ use gcgov\framework\services\mongodb\models\_meta;
 
 
 abstract class embeddable
+	extends
+	\andrewsauder\jsonDeserialize\jsonDeserialize
 	implements
-	\MongoDB\BSON\Persistable,
-	\JsonSerializable,
-	\gcgov\framework\interfaces\jsonDeserialize {
+	\MongoDB\BSON\Persistable {
 
+	#[excludeBsonSerialize]
+	#[excludeBsonUnserialize]
+	#[excludeJsonDeserialize]
 	public _meta $_meta;
 
 
@@ -35,10 +38,9 @@ abstract class embeddable
 	 *
 	 * @return \gcgov\framework\services\mongodb\typeMap
 	 */
-	public static function _typeMap( $chainClass=[] ) : typeMap {
-
+	public static function _typeMap( $chainClass = [] ) : typeMap {
 		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
-		$chainClass[] = $calledClassFqn;
+		$chainClass[]   = $calledClassFqn;
 
 		try {
 			$rClass = new \ReflectionClass( $calledClassFqn );
@@ -72,7 +74,6 @@ abstract class embeddable
 				$typeIsArray = true;
 			}
 
-
 			//TODO: is this the best way to capture \app\models
 			if( str_starts_with( $typeName, 'app' ) || str_starts_with( $typeName, '\app' ) ) {
 				//create mongo field path key
@@ -83,13 +84,12 @@ abstract class embeddable
 
 				//add foreign field mapping for upserting embedded objects
 				$foreignKeyAttributes = $rProperty->getAttributes( foreignKey::class );
-				if($foreignKeyAttributes>0) {
-					foreach($foreignKeyAttributes as $foreignKeyAttribute) {
+				if( $foreignKeyAttributes > 0 ) {
+					foreach( $foreignKeyAttributes as $foreignKeyAttribute ) {
 						/** @var \gcgov\framework\services\mongodb\attributes\foreignKey $fkAttribute */
-						$fkAttribute = $foreignKeyAttribute->newInstance();
+						$fkAttribute                                 = $foreignKeyAttribute->newInstance();
 						$typeMap->foreignKeyMap[ $baseFieldPathKey ] = $fkAttribute->propertyName;
 					}
-
 				}
 
 				//add the primary property type
@@ -99,7 +99,7 @@ abstract class embeddable
 				try {
 					$rPropertyClass = new \ReflectionClass( $typeName );
 					if( $rPropertyClass->isSubclassOf( embeddable::class ) ) {
-						$instance        = $rPropertyClass->newInstanceWithoutConstructor();
+						$instance = $rPropertyClass->newInstanceWithoutConstructor();
 						/** @var \gcgov\framework\services\mongodb\typeMap $propertyTypeMap */
 						$propertyTypeMap = $rPropertyClass->getMethod( '_typeMap' )->invoke( $instance, $chainClass );
 						foreach( $propertyTypeMap->fieldPaths as $subFieldPathKey => $class ) {
@@ -119,267 +119,266 @@ abstract class embeddable
 		return $typeMap;
 	}
 
+//
+//	/**
+//	 * Initialize from outside object
+//	 *
+//	 * @param  string|\stdClass  $json
+//	 *
+//	 * @return mixed Instance of the called class
+//	 * @throws \gcgov\framework\exceptions\modelException
+//	 * @throws \gcgov\framework\services\mongodb\exceptions\databaseException
+//	 */
+//	public static function jsonDeserialize( string|\stdClass $json ) : mixed {
+//		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
+//
+//		//parse the json
+//		$json = tools\helpers::jsonToObject( $json, 'Malformed ' . $calledClassFqn . ' JSON', 400 );
+//
+//		if(is_array($json)) {
+//			$objects = [];
+//			foreach($json as $stdObject) {
+//				$objects[] = self::jsonDeserializeObject( $calledClassFqn, $stdObject );
+//			}
+//			return $objects;
+//		}
+//		else {
+//			return self::jsonDeserializeObject( $calledClassFqn, $json );
+//		}
+//
+//
+//	}
+//
+//	private static function jsonDeserializeObject( string $calledClassFqn, \stdClass $json ) {
+//		//load new instance of this class
+//		try {
+//			$rClass   = new \ReflectionClass( $calledClassFqn );
+//			$instance = $rClass->newInstance();
+//		}
+//		catch( \ReflectionException $e ) {
+//			throw new databaseException( 'Failed to load type ' . $calledClassFqn . ' for deserialization', 500, $e );
+//		}
+//
+//		//get properties of the class
+//		$rProperties = $rClass->getProperties();
+//
+//		//load data from $json into the class $instance
+//		foreach( $rProperties as $rProperty ) {
+//			$propertyName = $rProperty->getName();
+//
+//			//exclude if attribute says to
+//			$attributes = $rProperty->getAttributes( excludeJsonDeserialize::class );
+//			if( count( $attributes ) > 0 ) {
+//				continue;
+//			}
+//
+//			if( $propertyName === '_meta' ) {
+//				continue;
+//			}
+//
+//			//if there is not a matching json property, ignore it
+//			if( !property_exists( $json, $propertyName ) ) {
+//				continue;
+//			}
+//
+//			//get the type of this property
+//			$rPropertyType = $rProperty->getType();
+//
+//			//if the property is an array, check if the doc comment defines the type
+//			$propertyIsTypedArray = false;
+//			if( $rPropertyType->getName() == 'array' ) {
+//				$arrayType = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
+//				if( $arrayType != 'array' ) {
+//					$propertyIsTypedArray = true;
+//				}
+//			}
+//
+//			//load the data from json into the instance of our class
+//			if( $propertyIsTypedArray ) {
+//				$instance->$propertyName = [];
+//				foreach( $json->$propertyName as $key => $jsonItem ) {
+//					$instance->$propertyName[ $key ] = self::jsonDeserializeDataItem( $instance, $rProperty, $jsonItem, false );
+//				}
+//			}
+//			else {
+//				$instance->$propertyName = self::jsonDeserializeDataItem( $instance, $rProperty, $json->$propertyName, $rPropertyType->allowsNull() );
+//			}
+//		}
+//
+//		return $instance;
+//	}
+//
+//
+//	/**
+//	 * @param  mixed                $instance    Instance of the class we are building
+//	 * @param  \ReflectionProperty  $rProperty   Reflection of the property we are working with
+//	 * @param  mixed                $jsonValue   Set the property equal to this value - provided from the json object
+//	 * @param  boolean              $allowsNull  Can the property be set to null
+//	 *
+//	 * @return mixed
+//	 * @throws \gcgov\framework\exceptions\modelException
+//	 * @throws \gcgov\framework\services\mongodb\exceptions\databaseException
+//	 */
+//	private static function jsonDeserializeDataItem( mixed $instance, \ReflectionProperty $rProperty, mixed $jsonValue, bool $allowsNull ) : mixed {
+//		$propertyName     = $rProperty->getName();
+//		$rPropertyType    = $rProperty->getType();
+//		$propertyTypeName = $rPropertyType->getName();
+//
+//		//get type of array if specified
+//		if( $propertyTypeName == 'array' ) {
+//			//get type  from @var doc block
+//			$propertyTypeName = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
+//		}
+//
+//		//if the property type is a class we try to get reflection information about it and set the value properly, otherwise it does the default types in the catch
+//		try {
+//			$rPropertyClass = new \ReflectionClass( $propertyTypeName );
+//		}
+//			//regular non class types
+//		catch( \ReflectionException $e ) {
+//			if( $jsonValue !== null ) {
+//				if( $propertyTypeName == 'array' ) {
+//					return (array) $jsonValue;
+//				}
+//
+//				//cast jsonValue to the property type
+//				$castSuccessfully = settype( $jsonValue, $propertyTypeName );
+//				if( !$castSuccessfully ) {
+//					throw new modelException( 'Invalid data type for ' . $propertyName );
+//				}
+//
+//				return $jsonValue;
+//			}
+//
+//			//return default value
+//			return $rProperty->getValue( $instance );
+//		}
+//
+//		//error messagings
+//		$errorMessageDataPosition = $instance::class . ' ' . $propertyName;
+//
+//		//if no value is provided and nulls are not allowed, create a new instance
+//		if( empty( $jsonValue ) && !$allowsNull ) {
+//			try {
+//				return $rPropertyClass->newInstance();
+//			}
+//			catch( \ReflectionException $e ) {
+//				throw new databaseException( 'Failed to instantiate type ' . $propertyTypeName . ' for ' . $errorMessageDataPosition, 500, $e );
+//			}
+//		}
+//		//no value provided, nulls allowed - use the default instantiated value
+//		elseif( empty( $jsonValue ) && $allowsNull ) {
+//			//return default value
+//			return $rProperty->getValue( $instance );
+//		}
+//
+//		//object ids
+//		if( trim( $propertyTypeName, '\\') == trim( \MongoDB\BSON\ObjectId::class, '\\') ) {
+//			try {
+//				return $rPropertyClass->newInstance( $jsonValue );
+//			}
+//			catch( \MongoDB\Driver\Exception\InvalidArgumentException $e ) {
+//				throw new \gcgov\framework\exceptions\modelException( 'Invalid id provided for ' . $errorMessageDataPosition, 400, $e );
+//			}
+//			catch( \ReflectionException $e ) {
+//				throw new databaseException( 'Failed to instantiate type ' . $propertyTypeName . ' for ' . $errorMessageDataPosition, 500, $e );
+//			}
+//		}
+//
+//		//implementers of jsonDeserialize
+//		elseif( $rPropertyClass->implementsInterface( \gcgov\framework\interfaces\jsonDeserialize::class ) ) {
+//			try {
+//				$method           = $rPropertyClass->getMethod( 'jsonDeserialize' );
+//				$tempTypeInstance = $rPropertyClass->newInstanceWithoutConstructor();
+//
+//				return $method->invoke( $tempTypeInstance, $jsonValue );
+//			}
+//			catch( \ReflectionException $e ) {
+//				throw new databaseException( 'Failed to instantiate type ' . $propertyTypeName . ' for ' . $errorMessageDataPosition, 500, $e );
+//			}
+//		}
+//
+//		//datetimes
+//		elseif( $rPropertyClass->implementsInterface( \DateTimeInterface::class ) ) {
+//			try {
+//				return $rPropertyClass->newInstance( $jsonValue );
+//			}
+//			catch( \ReflectionException $e ) {
+//				throw new databaseException( 'Failed to instantiate type ' . $propertyTypeName . ' for ' . $errorMessageDataPosition, 500, $e );
+//			}
+//			catch( \Exception $e ) {
+//				throw new \gcgov\framework\exceptions\modelException( 'Invalid date time provided for ' . $errorMessageDataPosition, 400, $e );
+//			}
+//		}
+//
+//		//error out if we don't know how to handle - ie. Dates, etc
+//		throw new \Error( 'Missing type to parse in json deserialize: ' . $propertyTypeName );
+//	}
 
-	/**
-	 * Initialize from outside object
-	 *
-	 * @param  string|\stdClass  $json
-	 *
-	 * @return mixed Instance of the called class
-	 * @throws \gcgov\framework\exceptions\modelException
-	 * @throws \gcgov\framework\services\mongodb\exceptions\databaseException
-	 */
-	public static function jsonDeserialize( string|\stdClass $json ) : mixed {
-		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
-
-		//parse the json
-		$json = tools\helpers::jsonToObject( $json, 'Malformed ' . $calledClassFqn . ' JSON', 400 );
-
-		if(is_array($json)) {
-			$objects = [];
-			foreach($json as $stdObject) {
-				$objects[] = self::jsonDeserializeObject( $calledClassFqn, $stdObject );
-			}
-			return $objects;
-		}
-		else {
-			return self::jsonDeserializeObject( $calledClassFqn, $json );
-		}
-
-
-	}
-
-	private static function jsonDeserializeObject( string $calledClassFqn, \stdClass $json ) {
-		//load new instance of this class
-		try {
-			$rClass   = new \ReflectionClass( $calledClassFqn );
-			$instance = $rClass->newInstance();
-		}
-		catch( \ReflectionException $e ) {
-			throw new databaseException( 'Failed to load type ' . $calledClassFqn . ' for deserialization', 500, $e );
-		}
-
-		//get properties of the class
-		$rProperties = $rClass->getProperties();
-
-		//load data from $json into the class $instance
-		foreach( $rProperties as $rProperty ) {
-			$propertyName = $rProperty->getName();
-
-			//exclude if attribute says to
-			$attributes = $rProperty->getAttributes( excludeJsonDeserialize::class );
-			if( count( $attributes ) > 0 ) {
-				continue;
-			}
-
-			if( $propertyName === '_meta' ) {
-				continue;
-			}
-
-			//if there is not a matching json property, ignore it
-			if( !property_exists( $json, $propertyName ) ) {
-				continue;
-			}
-
-			//get the type of this property
-			$rPropertyType = $rProperty->getType();
-
-			//if the property is an array, check if the doc comment defines the type
-			$propertyIsTypedArray = false;
-			if( $rPropertyType->getName() == 'array' ) {
-				$arrayType = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
-				if( $arrayType != 'array' ) {
-					$propertyIsTypedArray = true;
-				}
-			}
-
-			//load the data from json into the instance of our class
-			if( $propertyIsTypedArray ) {
-				$instance->$propertyName = [];
-				foreach( $json->$propertyName as $key => $jsonItem ) {
-					$instance->$propertyName[ $key ] = self::jsonDeserializeDataItem( $instance, $rProperty, $jsonItem, false );
-				}
-			}
-			else {
-				$instance->$propertyName = self::jsonDeserializeDataItem( $instance, $rProperty, $json->$propertyName, $rPropertyType->allowsNull() );
-			}
-		}
-
-		return $instance;
-	}
-
-
-	/**
-	 * @param  mixed                $instance    Instance of the class we are building
-	 * @param  \ReflectionProperty  $rProperty   Reflection of the property we are working with
-	 * @param  mixed                $jsonValue   Set the property equal to this value - provided from the json object
-	 * @param  boolean              $allowsNull  Can the property be set to null
-	 *
-	 * @return mixed
-	 * @throws \gcgov\framework\exceptions\modelException
-	 * @throws \gcgov\framework\services\mongodb\exceptions\databaseException
-	 */
-	private static function jsonDeserializeDataItem( mixed $instance, \ReflectionProperty $rProperty, mixed $jsonValue, bool $allowsNull ) : mixed {
-		$propertyName     = $rProperty->getName();
-		$rPropertyType    = $rProperty->getType();
-		$propertyTypeName = $rPropertyType->getName();
-
-		//get type of array if specified
-		if( $propertyTypeName == 'array' ) {
-			//get type  from @var doc block
-			$propertyTypeName = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
-		}
-
-		//if the property type is a class we try to get reflection information about it and set the value properly, otherwise it does the default types in the catch
-		try {
-			$rPropertyClass = new \ReflectionClass( $propertyTypeName );
-		}
-			//regular non class types
-		catch( \ReflectionException $e ) {
-			if( $jsonValue !== null ) {
-				if( $propertyTypeName == 'array' ) {
-					return (array) $jsonValue;
-				}
-
-				//cast jsonValue to the property type
-				$castSuccessfully = settype( $jsonValue, $propertyTypeName );
-				if( !$castSuccessfully ) {
-					throw new modelException( 'Invalid data type for ' . $propertyName );
-				}
-
-				return $jsonValue;
-			}
-
-			//return default value
-			return $rProperty->getValue( $instance );
-		}
-
-		//error messagings
-		$errorMessageDataPosition = $instance::class . ' ' . $propertyName;
-
-		//if no value is provided and nulls are not allowed, create a new instance
-		if( empty( $jsonValue ) && !$allowsNull ) {
-			try {
-				return $rPropertyClass->newInstance();
-			}
-			catch( \ReflectionException $e ) {
-				throw new databaseException( 'Failed to instantiate type ' . $propertyTypeName . ' for ' . $errorMessageDataPosition, 500, $e );
-			}
-		}
-		//no value provided, nulls allowed - use the default instantiated value
-		elseif( empty( $jsonValue ) && $allowsNull ) {
-			//return default value
-			return $rProperty->getValue( $instance );
-		}
-
-		//object ids
-		if( trim( $propertyTypeName, '\\') == trim( \MongoDB\BSON\ObjectId::class, '\\') ) {
-			try {
-				return $rPropertyClass->newInstance( $jsonValue );
-			}
-			catch( \MongoDB\Driver\Exception\InvalidArgumentException $e ) {
-				throw new \gcgov\framework\exceptions\modelException( 'Invalid id provided for ' . $errorMessageDataPosition, 400, $e );
-			}
-			catch( \ReflectionException $e ) {
-				throw new databaseException( 'Failed to instantiate type ' . $propertyTypeName . ' for ' . $errorMessageDataPosition, 500, $e );
-			}
-		}
-
-		//implementers of jsonDeserialize
-		elseif( $rPropertyClass->implementsInterface( \gcgov\framework\interfaces\jsonDeserialize::class ) ) {
-			try {
-				$method           = $rPropertyClass->getMethod( 'jsonDeserialize' );
-				$tempTypeInstance = $rPropertyClass->newInstanceWithoutConstructor();
-
-				return $method->invoke( $tempTypeInstance, $jsonValue );
-			}
-			catch( \ReflectionException $e ) {
-				throw new databaseException( 'Failed to instantiate type ' . $propertyTypeName . ' for ' . $errorMessageDataPosition, 500, $e );
-			}
-		}
-
-		//datetimes
-		elseif( $rPropertyClass->implementsInterface( \DateTimeInterface::class ) ) {
-			try {
-				return $rPropertyClass->newInstance( $jsonValue );
-			}
-			catch( \ReflectionException $e ) {
-				throw new databaseException( 'Failed to instantiate type ' . $propertyTypeName . ' for ' . $errorMessageDataPosition, 500, $e );
-			}
-			catch( \Exception $e ) {
-				throw new \gcgov\framework\exceptions\modelException( 'Invalid date time provided for ' . $errorMessageDataPosition, 400, $e );
-			}
-		}
-
-		//error out if we don't know how to handle - ie. Dates, etc
-		throw new \Error( 'Missing type to parse in json deserialize: ' . $propertyTypeName );
-	}
-
-
-	/**
-	 * @return array
-	 */
-	public function jsonSerialize() : array {
-		if(method_exists($this, '_beforeJsonSerialize')) {
-			$this->_beforeJsonSerialize();
-		}
-
-		$export = [];
-
-		//get the called class name
-		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
-
-		try {
-			$rClass = new \ReflectionClass( $calledClassFqn );
-		}
-		catch( \ReflectionException $e ) {
-			throw new databaseException( 'Failed to serialize data to json for ' . $calledClassFqn, 500, $e );
-		}
-
-		//get properties of the class and add them to the export
-		$rProperties = $rClass->getProperties();
-		foreach( $rProperties as $rProperty ) {
-			$propertyName = $rProperty->getName();
-
-			//if property is not meant to be serialized, exclude it
-			$attributes = $rProperty->getAttributes( excludeJsonSerialize::class );
-			if( count( $attributes ) === 0 ) {
-
-				$rPropertyType = $rProperty->getType();
-
-				//if the property is an array, check if the doc comment defines the type
-				$propertyIsTypedArray = false;
-				if( $rPropertyType->getName() == 'array' ) {
-					$arrayType = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
-					if( $arrayType != 'array' ) {
-						$propertyIsTypedArray = true;
-					}
-				}
-
-				//load the data from json into the instance of our class
-				if( $propertyIsTypedArray ) {
-					$export[ $propertyName ] = [];
-					$values                  = $rProperty->getValue( $this );
-					foreach( $values as $key => $value ) {
-						$export[ $propertyName ][ $key ] = $this->jsonSerializeDataItem( $rProperty, $value );
-					}
-				}
-				else {
-					$value                   = $rProperty->getValue( $this );
-					$export[ $propertyName ] = $this->jsonSerializeDataItem( $rProperty, $value );
-				}
-			}
-		}
-
-		return $export;
-	}
-
+//
+//	/**
+//	 * @return array
+//	 */
+//	public function jsonSerialize() : array {
+//		if(method_exists($this, '_beforeJsonSerialize')) {
+//			$this->_beforeJsonSerialize();
+//		}
+//
+//		$export = [];
+//
+//		//get the called class name
+//		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
+//
+//		try {
+//			$rClass = new \ReflectionClass( $calledClassFqn );
+//		}
+//		catch( \ReflectionException $e ) {
+//			throw new databaseException( 'Failed to serialize data to json for ' . $calledClassFqn, 500, $e );
+//		}
+//
+//		//get properties of the class and add them to the export
+//		$rProperties = $rClass->getProperties();
+//		foreach( $rProperties as $rProperty ) {
+//			$propertyName = $rProperty->getName();
+//
+//			//if property is not meant to be serialized, exclude it
+//			$attributes = $rProperty->getAttributes( excludeJsonSerialize::class );
+//			if( count( $attributes ) === 0 ) {
+//
+//				$rPropertyType = $rProperty->getType();
+//
+//				//if the property is an array, check if the doc comment defines the type
+//				$propertyIsTypedArray = false;
+//				if( $rPropertyType->getName() == 'array' ) {
+//					$arrayType = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
+//					if( $arrayType != 'array' ) {
+//						$propertyIsTypedArray = true;
+//					}
+//				}
+//
+//				//load the data from json into the instance of our class
+//				if( $propertyIsTypedArray ) {
+//					$export[ $propertyName ] = [];
+//					$values                  = $rProperty->getValue( $this );
+//					foreach( $values as $key => $value ) {
+//						$export[ $propertyName ][ $key ] = $this->jsonSerializeDataItem( $rProperty, $value );
+//					}
+//				}
+//				else {
+//					$value                   = $rProperty->getValue( $this );
+//					$export[ $propertyName ] = $this->jsonSerializeDataItem( $rProperty, $value );
+//				}
+//			}
+//		}
+//
+//		return $export;
+//	}
 
 	/**
 	 * Called by Mongo while inserting into the DB
 	 */
 	public function bsonSerialize() : array|\stdClass {
-		if(method_exists($this, '_beforeBsonSerialize')) {
+		if( method_exists( $this, '_beforeBsonSerialize' ) ) {
 			$this->_beforeBsonSerialize();
 		}
 
@@ -398,12 +397,11 @@ abstract class embeddable
 		//get properties of the class and add them to the export
 		$rProperties = $rClass->getProperties();
 		foreach( $rProperties as $rProperty ) {
-			$propertyName = $rProperty->getName();
-
 			//if property has been removed from the object, do not touch it
-			if(!$rProperty->isInitialized($this)) {
+			if( !$rProperty->isInitialized( $this ) ) {
 				continue;
 			}
+
 
 			//if property is not meant to be serialized, exclude it
 			$attributes = $rProperty->getAttributes( excludeBsonSerialize::class );
@@ -411,16 +409,22 @@ abstract class embeddable
 				continue;
 			}
 
-			//ignore properties that start with _
-			if( substr( $propertyName, 0, 1 ) === '_' && $propertyName !== '_id' ) {
-				continue;
-			}
+			$propertyName = $rProperty->getName();
 
-			$rPropertyType = $rProperty->getType();
+			$rPropertyType = null;
+			$rPropertyTypeName = '';
+
+			if($rProperty->hasType()) {
+				$rPropertyType = $rProperty->getType();
+
+				if( !( $rPropertyType instanceof \ReflectionUnionType ) ) {
+					$rPropertyTypeName = $rPropertyType->getName();
+				}
+			}
 
 			//if the property is an array, check if the doc comment defines the type
 			$propertyIsTypedArray = false;
-			if( $rPropertyType->getName() == 'array' ) {
+			if( $rPropertyTypeName == 'array' ) {
 				$arrayType = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
 				if( $arrayType != 'array' ) {
 					$propertyIsTypedArray = true;
@@ -462,6 +466,8 @@ abstract class embeddable
 			throw new databaseException( 'Failed to unserialize bson data for ' . $calledClassFqn, 500, $e );
 		}
 
+		$this->_meta = new _meta( $calledClassFqn );
+
 		//get properties of the class and set their values to the data provided from the database
 		$rProperties = $rClass->getProperties();
 		foreach( $rProperties as $rProperty ) {
@@ -473,8 +479,16 @@ abstract class embeddable
 				continue;
 			}
 
-			$propertyType     = $rProperty->getType();
-			$propertyTypeName = $propertyType->getName();
+			$propertyType = null;
+			$propertyTypeName = '';
+
+			if($rProperty->hasType()) {
+				$propertyType = $rProperty->getType();
+
+				if( !( $propertyType instanceof \ReflectionUnionType ) ) {
+					$propertyTypeName = $propertyType->getName();
+				}
+			}
 
 			//if the property is an array, check if the doc comment defines the type
 			$propertyIsTypedArray = false;
@@ -511,29 +525,29 @@ abstract class embeddable
 			$this->_meta->score = round( $data[ '_score' ], 2 );
 		}
 
-		if(method_exists($this, '_afterBsonUnserialize')) {
+		if( method_exists( $this, '_afterBsonUnserialize' ) ) {
 			$this->_afterBsonUnserialize( $data );
 		}
 	}
 
 
-	/**
-	 * @param  \ReflectionProperty  $rProperty
-	 * @param  mixed                $value
-	 *
-	 * @return mixed
-	 */
-	private function jsonSerializeDataItem( \ReflectionProperty $rProperty, mixed $value ) : mixed {
-		if( $value instanceof \MongoDB\BSON\ObjectId ) {
-			return (string) $value;
-		}
-		elseif( $value instanceof \DateTimeInterface ) {
-			return $value->format( \DateTime::ATOM );
-		}
-
-		return $value;
-	}
-
+//	/**
+//	 * @param  \ReflectionProperty  $rProperty
+//	 * @param  mixed                $value
+//	 *
+//	 * @return mixed
+//	 */
+//	private function jsonSerializeDataItem( \ReflectionProperty $rProperty, mixed $value ) : mixed {
+//		if( $value instanceof \MongoDB\BSON\ObjectId ) {
+//			return (string) $value;
+//		}
+//		elseif( $value instanceof \DateTimeInterface ) {
+//			return $value->format( \DateTime::ATOM );
+//		}
+//
+//		return $value;
+//	}
+//
 
 	/**
 	 * @param  \ReflectionProperty  $rProperty
@@ -561,7 +575,7 @@ abstract class embeddable
 	private function bsonUnserializeDataItem( \ReflectionProperty $rProperty, $propertyType, $propertyTypeName, mixed $value ) : mixed {
 		//$data[$propertyName] was not in the database result
 		if( $value === null ) {
-			if( !$propertyType->allowsNull() ) {
+			if( $propertyType!==null && !$propertyType->allowsNull() ) {
 				//attempt to instantiate special types
 				try {
 					$rPropertyClass       = new \ReflectionClass( $propertyTypeName );
@@ -588,15 +602,15 @@ abstract class embeddable
 
 				if( $rPropertyClass->implementsInterface( \DateTimeInterface::class ) ) {
 					if( $value instanceof \MongoDB\BSON\UTCDateTime ) {
-						return \DateTimeImmutable::createFromMutable( $value->toDateTime() )
-						                         ->setTimezone( new \DateTimeZone( "America/New_York" ) );
+						return \DateTimeImmutable::createFromMutable( $value->toDateTime() )->setTimezone( new \DateTimeZone( "America/New_York" ) );
 					}
 					elseif( is_string( $value ) ) {
 						try {
 							return new \DateTimeImmutable( $value );
 						}
 						catch( \Exception $e ) {
-							log::warning( 'MongoService', 'Invalid date is stored in database. '.$e->getMessage(), $e->getTrace() );
+							log::warning( 'MongoService', 'Invalid date is stored in database. ' . $e->getMessage(), $e->getTrace() );
+
 							return new \DateTimeImmutable();
 						}
 					}
@@ -611,7 +625,7 @@ abstract class embeddable
 	}
 
 
-	public static function mongoFieldsExistsQuery( $fieldPrefix='' ) : array {
+	public static function mongoFieldsExistsQuery( $fieldPrefix = '' ) : array {
 		$query = [];
 
 		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
@@ -634,11 +648,10 @@ abstract class embeddable
 			}
 
 			//get property type
-			$rPropertyName = $rProperty->getName();
-			$rPropertyType = $rProperty->getType();
-			$typeName      = $rPropertyType->getName();
+			$rPropertyName   = $rProperty->getName();
+			$rPropertyType   = $rProperty->getType();
+			$typeName        = $rPropertyType->getName();
 			$propertyIsArray = false;
-
 
 			//add base field to the search
 			$query[] = [ $rPropertyName => [ '$exists' => false ] ];
@@ -646,36 +659,35 @@ abstract class embeddable
 			//handle typed arrays
 			if( $typeName == 'array' ) {
 				//get type  from @var doc block
-				$typeName    = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
+				$typeName        = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
 				$propertyIsArray = true;
 			}
 
 			//TODO: is this the best way to capture \app\models
-			if( (str_starts_with( $typeName, 'app' ) || str_starts_with( $typeName, '\app' )) && !$rPropertyType->allowsNull() ) {
+			if( ( str_starts_with( $typeName, 'app' ) || str_starts_with( $typeName, '\app' ) ) && !$rPropertyType->allowsNull() ) {
 				//create mongo field path key
-				$baseFieldPathKey = ($fieldPrefix=='' ? '' : $fieldPrefix.'.') .$rPropertyName;
+				$baseFieldPathKey = ( $fieldPrefix == '' ? '' : $fieldPrefix . '.' ) . $rPropertyName;
 
 				//add the field paths for the property type so that we get a full chain of types
 				try {
 					$rPropertyClass = new \ReflectionClass( $typeName );
 					if( $rPropertyClass->isSubclassOf( embeddable::class ) ) {
-						$instance        = $rPropertyClass->newInstanceWithoutConstructor();
+						$instance = $rPropertyClass->newInstanceWithoutConstructor();
 						/** @var \gcgov\framework\services\mongodb\typeMap $propertyTypeMap */
 						$fieldExistsQuery = $rPropertyClass->getMethod( 'mongoFieldsExistsQuery' )->invoke( $instance, $rPropertyName );
-						$propertyQuery = [ '$or' =>[] ];
-						foreach( $fieldExistsQuery as $or) {
-							foreach($or as $subFieldPathKey=>$exists) {
-								$propertyQuery[ '$or' ][][ $rPropertyName .'.'. $subFieldPathKey ] = $exists;
+						$propertyQuery    = [ '$or' => [] ];
+						foreach( $fieldExistsQuery as $or ) {
+							foreach( $or as $subFieldPathKey => $exists ) {
+								$propertyQuery[ '$or' ][][ $rPropertyName . '.' . $subFieldPathKey ] = $exists;
 							}
 						}
-						if($propertyIsArray) {
-							$propertyQuery[ $baseFieldPathKey ] = ['$gt'=>['$size'=>0]];
-							$query[] = $propertyQuery;
+						if( $propertyIsArray ) {
+							$propertyQuery[ $baseFieldPathKey ] = [ '$gt' => [ '$size' => 0 ] ];
+							$query[]                            = $propertyQuery;
 						}
 						else {
-							$query = array_merge($query, $propertyQuery['$or']);
+							$query = array_merge( $query, $propertyQuery[ '$or' ] );
 						}
-
 					}
 				}
 				catch( \ReflectionException $e ) {
@@ -686,4 +698,5 @@ abstract class embeddable
 
 		return $query;
 	}
+
 }

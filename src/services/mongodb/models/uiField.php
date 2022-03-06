@@ -3,7 +3,9 @@
 namespace gcgov\framework\services\mongodb\models;
 
 
-class uiField {
+class uiField
+	extends
+	\andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	/** @OA\Property() */
 	public string $label = '';

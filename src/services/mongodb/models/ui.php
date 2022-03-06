@@ -3,7 +3,9 @@
 namespace gcgov\framework\services\mongodb\models;
 
 
-class ui {
+class ui
+	extends
+	\andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	/** @OA\Property() */
 	public bool $loading = false;
@@ -43,5 +45,8 @@ class ui {
 
 	/** @OA\Property() */
 	public string $errorMessage = '';
+
+	public function __construct() {
+	}
 
 }

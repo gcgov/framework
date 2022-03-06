@@ -9,6 +9,8 @@ use JetBrains\PhpStorm\ArrayShape;
 
 
 class _meta
+	extends
+	\andrewsauder\jsonDeserialize\jsonDeserialize
 	implements
 	\JsonSerializable {
 
@@ -17,11 +19,14 @@ class _meta
 
 	/**
 	 * @OA\Property()
-	 * @var uiField[] $fields
+	 * @var \gcgov\framework\services\mongodb\models\uiField[] $fields
 	 */
 	public array $fields = [];
 
-	/** @OA\Property() */
+	/**
+	 * @OA\Property()
+	 * @var string[]
+	 */
 	public array $labels;
 
 	/** @OA\Property() */
@@ -33,9 +38,11 @@ class _meta
 	private bool $exportDb = false;
 
 
-	public function __construct( string $className ) {
+	public function __construct( ?string $className=null ) {
 		$this->ui = new ui();
-		$this->generateAttributes( $className );
+		if(!empty($className)) {
+			$this->generateAttributes( $className );
+		}
 	}
 
 
