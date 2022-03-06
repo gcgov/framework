@@ -400,6 +400,11 @@ abstract class embeddable
 		foreach( $rProperties as $rProperty ) {
 			$propertyName = $rProperty->getName();
 
+			//if property has been removed from the object, do not touch it
+			if(!$rProperty->isInitialized($this)) {
+				continue;
+			}
+
 			//if property is not meant to be serialized, exclude it
 			$attributes = $rProperty->getAttributes( excludeBsonSerialize::class );
 			if( count( $attributes ) > 0 ) {
