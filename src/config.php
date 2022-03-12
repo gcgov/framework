@@ -1,6 +1,5 @@
 <?php
 
-
 namespace gcgov\framework;
 
 
@@ -10,21 +9,27 @@ use gcgov\framework\models\environmentConfig;
 
 final class config {
 
-	private static string            $rootDir = '';
+	private static string            $rootDir     = '';
 
-	private static string            $appDir  = '';
+	private static string            $appDir      = '';
+
+	private static string            $modelsDir   = '';
+
+	private static string            $servicesDir = '';
 
 	private static appConfig         $appConfig;
 
 	private static environmentConfig $environmentConfig;
+
 
 	public static function getTempDir() : string {
 		if( self::$rootDir === '' ) {
 			self::setRootDir();
 		}
 
-		return self::$rootDir.'/srv/tmp/tmp';
+		return self::$rootDir . '/srv/tmp/tmp';
 	}
+
 
 	public static function getRootDir() : string {
 		if( self::$rootDir === '' ) {
@@ -37,7 +42,7 @@ final class config {
 
 	private static function setRootDir() : void {
 		$appDir        = self::getAppDir();
-		self::$rootDir = substr($appDir, 0, strrpos($appDir, '/'));
+		self::$rootDir = substr( $appDir, 0, strrpos( $appDir, '/' ) );
 	}
 
 
@@ -52,9 +57,37 @@ final class config {
 
 	private static function setAppDir() : void {
 		$appClass     = new \ReflectionClass( '\app\app' );
-		$appDir = rtrim( dirname( $appClass->getFileName() ), '/\\' );
-		$nixAppDir = str_replace('\\', '/', $appDir);
+		$appDir       = rtrim( dirname( $appClass->getFileName() ), '/\\' );
+		$nixAppDir    = str_replace( '\\', '/', $appDir );
 		self::$appDir = $nixAppDir;
+	}
+
+
+	public static function getModelsDir() : string {
+		if( self::$modelsDir === '' ) {
+			self::setModelsDir();
+		}
+
+		return self::$modelsDir;
+	}
+
+
+	private static function setModelsDir() : void {
+		self::$modelsDir = self::getAppDir().'/models/';
+	}
+
+
+	public static function getServicesDir() : string {
+		if( self::$servicesDir === '' ) {
+			self::setServicesDir();
+		}
+
+		return self::$servicesDir;
+	}
+
+
+	private static function setServicesDir() : void {
+		self::$servicesDir = self::getAppDir().'/services/';
 	}
 
 
@@ -63,9 +96,10 @@ final class config {
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	public static function getAppConfig() : appConfig {
-		if(!isset(self::$appConfig)) {
+		if( !isset( self::$appConfig ) ) {
 			self::setAppConfig();
 		}
+
 		return self::$appConfig;
 	}
 
@@ -77,7 +111,6 @@ final class config {
 		$appDir          = self::getAppDir();
 		$appConfigFile   = $appDir . '/config/app.json';
 		self::$appConfig = appConfig::jsonDeserialize( file_get_contents( $appConfigFile ) );
-
 	}
 
 
@@ -86,9 +119,10 @@ final class config {
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	public static function getEnvironmentConfig() : environmentConfig {
-		if(!isset(self::$environmentConfig)) {
+		if( !isset( self::$environmentConfig ) ) {
 			self::setEnvironmentConfig();
 		}
+
 		return self::$environmentConfig;
 	}
 
@@ -101,6 +135,5 @@ final class config {
 		$environmentConfigFile   = $appDir . '/config/environment.json';
 		self::$environmentConfig = environmentConfig::jsonDeserialize( file_get_contents( $environmentConfigFile ) );
 	}
-
 
 }
