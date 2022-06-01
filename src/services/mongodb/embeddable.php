@@ -24,7 +24,6 @@ abstract class embeddable
 
 	#[excludeBsonSerialize]
 	#[excludeBsonUnserialize]
-	#[excludeJsonSerialize]
 	#[excludeJsonDeserialize]
 	public _meta $_meta;
 
