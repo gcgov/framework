@@ -148,15 +148,15 @@ abstract class embeddable
 		//get properties of the class and add them to the export
 		$rProperties = $rClass->getProperties();
 		foreach( $rProperties as $rProperty ) {
-			//if property has been removed from the object, do not touch it
-			if( !$rProperty->isInitialized( $this ) ) {
-				continue;
-			}
-
 
 			//if property is not meant to be serialized, exclude it
 			$attributes = $rProperty->getAttributes( excludeBsonSerialize::class );
 			if( count( $attributes )>0 ) {
+				continue;
+			}
+
+			//if property has been removed from the object, do not touch it
+			if( !$rProperty->isInitialized( $this ) ) {
 				continue;
 			}
 
