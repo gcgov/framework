@@ -7,9 +7,10 @@ use Attribute;
 
 
 #[Attribute( Attribute::TARGET_PROPERTY )]
-class excludeJsonSerialize {
+class excludeJsonSerialize extends \andrewsauder\jsonDeserialize\attributes\excludeJsonSerialize {
 
 	public function __construct() {
+		parent::__construct();
 	}
 
 }
