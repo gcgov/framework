@@ -2,13 +2,10 @@
 
 namespace gcgov\framework\services\jwtAuth;
 
-
-use app\models\userRefreshToken;
 use gcgov\framework\config;
 use gcgov\framework\exceptions\configException;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\exceptions\serviceException;
-
 
 class jwtAuth {
 
@@ -148,7 +145,7 @@ class jwtAuth {
 		}
 
 		$identifier       = new \MongoDB\BSON\ObjectId();
-		$userRefreshToken = new userRefreshToken( $authUser->userId, $duration, (string)$identifier );
+		$userRefreshToken = new \gcgov\framework\services\jwtAuth\models\userRefreshToken( $authUser->userId, $duration, (string)$identifier );
 
 
 		//create token
@@ -176,7 +173,7 @@ class jwtAuth {
 			// Builds a new token
 			->getToken( $this->configuration->signer(), $this->configuration->signingKey() );
 
-		userRefreshToken::save( $userRefreshToken );
+		\gcgov\framework\services\jwtAuth\models\userRefreshToken::save( $userRefreshToken );
 
 		return $token;
 	}
@@ -276,7 +273,7 @@ class jwtAuth {
 		//decode
 		$parsedToken = $this->configuration->parser()->parse( $token );
 
-		userRefreshToken::delete( $parsedToken->claims()->get( 'sub' ) );
+		\gcgov\framework\services\jwtAuth\models\userRefreshToken::delete( $parsedToken->claims()->get( 'sub' ) );
 
 	}
 
@@ -285,8 +282,8 @@ class jwtAuth {
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	private function validateRefreshTokenIdentity( string $tokenSelector, string $token ): \MongoDB\BSON\ObjectId {
-		/** @var \app\models\userRefreshToken $refreshToken */
-		$refreshToken = \app\models\userRefreshToken::getOne( $tokenSelector );
+		/** @var \gcgov\framework\services\jwtAuth\models\userRefreshToken $refreshToken */
+		$refreshToken = \gcgov\framework\services\jwtAuth\models\userRefreshToken::getOne( $tokenSelector );
 
 		if( !empty( $refreshToken->userId ) && !empty( $refreshToken->token ) && password_verify( $token, $refreshToken->token ) ) {
 			return $refreshToken->userId;
