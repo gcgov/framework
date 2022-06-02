@@ -6,7 +6,7 @@ namespace gcgov\framework\models;
  * Singleton to store authenticated user globally
  * @OA\Schema()
  */
-class authUser extends \gcgov\framework\interfaces\singleton {
+class authUser {
 
 	/** @OA\Property() */
 	public string $userId = '';
@@ -32,6 +32,38 @@ class authUser extends \gcgov\framework\interfaces\singleton {
 	 */
 	public array $roles = [];
 
+	private static authUser $instance;
+
+	private function __construct() {
+	}
+
+	final public static function getInstance() {
+		$calledClass = get_called_class();
+
+		if( !isset( self::$instance ) ) {
+			self::$instance = new $calledClass();
+		}
+
+		return self::$instance;
+	}
+
+	/**
+	 * Avoid clone instance
+	 */
+	final public function __clone() {
+	}
+
+	/**
+	 * Avoid serialize instance
+	 */
+	final public function __sleep() {
+	}
+
+	/**
+	 * Avoid unserialize instance
+	 */
+	final public  function __wakeup() {
+	}
 
 	public function toJwtData(): array {
 		return [
