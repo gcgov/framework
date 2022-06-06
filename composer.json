@@ -18,7 +18,7 @@
 		"lcobucci/clock": "^2.0",
 		"thenetworg/oauth2-azure": "^2.0",
 		"guzzlehttp/guzzle": "^7.0",
-		"andrewsauder/json-deserialize": "^2.4.0",
+		"andrewsauder/json-deserialize": "^2.4.1",
 		"ext-mongodb": "*",
 		"ext-fileinfo": "*",
 		"ext-pdo": "*"

@@ -28,11 +28,12 @@ abstract class embeddable
 		$this->_meta = new _meta( get_called_class() );
 	}
 
+
 	protected function _beforeJsonSerialize(): void {
 		$this->_meta = new _meta( get_called_class() );
 	}
 
-	//TODO: exclude redact fields
+
 	protected function _afterJsonSerialize( array $export ): array {
 		error_log('_afterJsonSerialize'.get_called_class());
 
@@ -66,11 +67,39 @@ abstract class embeddable
 		return $export;
 	}
 
-	//TODO: exclude redact fields
+
 	protected function _afterJsonDeserialize(): void {
 		$this->_meta = new _meta( get_called_class() );
-		//error_log('_afterJsonDeserialize'.get_called_class());
 
+		//get the called class name
+		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
+
+
+		try {
+			$reflectionClass = new \ReflectionClass( $calledClassFqn );
+
+			foreach( $reflectionClass->getProperties() as $property ) {
+
+				//get all attributes for this property
+				$propertyAttributes = $property->getAttributes(redact::class );
+				foreach( $propertyAttributes as $propertyAttribute ) {
+					$authUser = authUser::getInstance();
+					$redactAttributeInstance = $propertyAttribute->newInstance();
+					if( count($redactAttributeInstance->redactIfUserHasAnyRoles)>0 && count(array_intersect( $redactAttributeInstance->redactIfUserHasAnyRoles, $authUser->roles ))>0 ) {
+						$key = $property->getName();
+						unset( $this->$key );
+					}
+					elseif( count($redactAttributeInstance->redactIfUserHasAllRoles)>0 && count(array_diff( $redactAttributeInstance->redactIfUserHasAllRoles, $authUser->roles ))===0 ) {
+						$key = $property->getName();
+						unset( $this->$key );
+					}
+				}
+			}
+		}
+		catch( \ReflectionException $e ) {
+			log::error( 'MongoService', 'Generate attribute data failed: ' . $e->getMessage(), $e->getTrace() );
+			error_log( $e );
+		}
 	}
 
 	public function setMeta() {
