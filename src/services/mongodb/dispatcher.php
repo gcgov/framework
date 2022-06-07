@@ -7,6 +7,7 @@ use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\log;
 use gcgov\framework\services\mongodb\attributes\deleteCascade;
+use gcgov\framework\services\mongodb\tools\typeMapCache;
 use JetBrains\PhpStorm\ArrayShape;
 
 
@@ -429,6 +430,10 @@ abstract class dispatcher
 	 * @return \gcgov\framework\services\mongodb\typeMap[]
 	 */
 	private static function getAllTypeMaps() : array {
+		if( typeMapCache::allTypeMapsFetched() ) {
+			return typeMapCache::getAll();
+		}
+
 		$appDir = config::getAppDir();
 
 		//get app files
@@ -468,6 +473,8 @@ abstract class dispatcher
 				throw new \gcgov\framework\services\mongodb\exceptions\dispatchException( 'Reflection failed on class ' . $classFqn, 500, $e );
 			}
 		}
+
+		typeMapCache::setAllTypeMapsFetched( true );
 
 		return $allTypeMaps;
 	}
