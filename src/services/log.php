@@ -56,18 +56,25 @@ final class log {
 	}
 
 
-	private static function getLogger( string $channel = '' ) : Logger {
+	/** @var Logger[] */
+	private static array $loggers = [];
+
+	private static function getLogger( string $channel = '' ): Logger {
+		if( isset( self::$loggers[ $channel ] ) ) {
+			return self::$loggers[ $channel ];
+		}
+
 		if( empty( $channel ) ) {
 			$channel = \gcgov\framework\config::getAppConfig()?->app?->title ?? 'app';
 		}
 
-		// Create the logger
-		$logger = new Logger( $channel );
+		$handlers = [
+			new StreamHandler( \gcgov\framework\config::getRootDir() . '/logs/' . $channel . '.log' )
+		];
 
-		// Now add some handlers
-		$logger->pushHandler( new StreamHandler( \gcgov\framework\config::getRootDir() . '/logs/' . $channel . '.log', Logger::DEBUG ) );
+		self::$loggers[ $channel ] = new Logger( $channel, $handlers );
 
-		return $logger;
+		return self::$loggers[ $channel ];
 	}
 
 }
