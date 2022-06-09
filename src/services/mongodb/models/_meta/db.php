@@ -1,6 +1,6 @@
 <?php
 
-namespace gcgov\framework\services\mongodb\models;
+namespace gcgov\framework\services\mongodb\models\_meta;
 
 
 class db

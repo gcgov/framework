@@ -3,8 +3,11 @@ namespace gcgov\framework\services\mongodb\models;
 
 
 use gcgov\framework\config;
-use gcgov\framework\services\log;
+use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\label;
+use gcgov\framework\services\mongodb\models\_meta\db;
+use gcgov\framework\services\mongodb\models\_meta\ui;
+use gcgov\framework\services\mongodb\models\_meta\uiField;
 use JetBrains\PhpStorm\ArrayShape;
 
 
@@ -19,7 +22,7 @@ class _meta
 
 	/**
 	 * @OA\Property()
-	 * @var \gcgov\framework\services\mongodb\models\uiField[] $fields
+	 * @var \gcgov\framework\services\mongodb\models\_meta\uiField[] $fields
 	 */
 	public array $fields = [];
 
@@ -109,7 +112,6 @@ class _meta
 		}
 		catch( \ReflectionException $e ) {
 			log::error( 'MongoService', 'Generate attribute data failed: ' . $e->getMessage(), $e->getTrace() );
-			error_log( $e );
 		}
 	}
 
