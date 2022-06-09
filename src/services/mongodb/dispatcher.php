@@ -5,7 +5,7 @@ namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
-use gcgov\framework\services\log;
+use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\deleteCascade;
 use gcgov\framework\services\mongodb\tools\typeMapCache;
 use JetBrains\PhpStorm\ArrayShape;
@@ -74,7 +74,7 @@ abstract class dispatcher
 							}
 							$primaryFilterKey .= '_id';
 							$primaryFilterKey = str_replace( '.$', '', $primaryFilterKey );
-							 $action['updateMany'][ 0 ][$primaryFilterKey] = [ '$ne'=> $object->$foreignKey ];
+							$action['updateMany'][ 0 ][$primaryFilterKey] = [ '$ne'=> $object->$foreignKey ];
 //							$action = [
 //								'updateMany' => [
 //									[

@@ -2,7 +2,7 @@
 namespace gcgov\framework\services\mongodb\models;
 
 
-use gcgov\framework\services\log;
+use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
 use gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize;
 use gcgov\framework\services\mongodb\attributes\excludeJsonDeserialize;

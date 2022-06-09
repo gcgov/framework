@@ -3,7 +3,7 @@
 namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\models\authUser;
-use gcgov\framework\services\log;
+use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
 use gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize;
 use gcgov\framework\services\mongodb\attributes\excludeJsonDeserialize;
@@ -63,7 +63,6 @@ abstract class embeddable
 		}
 		catch( \ReflectionException $e ) {
 			log::error( 'MongoService', 'Generate attribute data failed: ' . $e->getMessage(), $e->getTrace() );
-			error_log( $e );
 		}
 		return $export;
 	}
@@ -99,7 +98,6 @@ abstract class embeddable
 		}
 		catch( \ReflectionException $e ) {
 			log::error( 'MongoService', 'Generate attribute data failed: ' . $e->getMessage(), $e->getTrace() );
-			error_log( $e );
 		}
 	}
 

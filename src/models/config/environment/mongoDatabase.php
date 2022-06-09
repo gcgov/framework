@@ -22,6 +22,8 @@ class mongoDatabase extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	public bool  $include_metaFields = false;
 
+	public bool  $logging            = false;
+
 	public bool  $audit              = false;
 
 
