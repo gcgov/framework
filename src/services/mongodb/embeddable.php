@@ -31,12 +31,14 @@ abstract class embeddable
 
 
 	protected function _beforeJsonSerialize(): void {
-		$this->_meta = new _meta( get_called_class() );
+		if( !isset($this->_meta) ) {
+			$this->_meta = new _meta( get_called_class() );
+		}
 	}
 
 
 	protected function _afterJsonSerialize( array $export ): array {
-		error_log( '_afterJsonSerialize' . get_called_class() );
+		log::info('MongoService', '_afterJsonSerialize' . get_called_class() );
 
 		//get the called class name
 		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
