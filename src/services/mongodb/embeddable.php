@@ -138,8 +138,11 @@ abstract class embeddable
 
 				//get property type
 				$rPropertyType = $rProperty->getType();
-				$typeName      = $rPropertyType->getName();
-				$typeIsArray   = false;
+				$typeName    = '';
+				$typeIsArray = false;
+				if( !($rPropertyType instanceof \ReflectionUnionType) ) {
+					$typeName    = $rPropertyType->getName();
+				}
 
 				//handle typed arrays
 				if( $typeName=='array' ) {
