@@ -117,86 +117,100 @@ abstract class embeddable
 		$chainClass[]   = $calledClassFqn;
 
 		$typeMap = typeMapCache::get( $calledClassFqn );
-		if( !isset( $typeMap ) ) {
+		if( isset( $typeMap ) ) {
+			return $typeMap;
+		}
+
+		$typeMap = new \gcgov\framework\services\mongodb\typeMap( $calledClassFqn );
+
+		try {
+			$rClass = new \ReflectionClass( $calledClassFqn );
+		}
+		catch( \ReflectionException $e ) {
+			throw new databaseException( 'Failed to load ' . $calledClassFqn . ' to generate typemap', 500, $e );
+		}
+
+		if( $rClass->isSubclassOf( \gcgov\framework\services\mongodb\model::class  ) ) {
 			try {
-				$rClass = new \ReflectionClass( $calledClassFqn );
+				$instance = $rClass->newInstanceWithoutConstructor();
 			}
 			catch( \ReflectionException $e ) {
-				throw new databaseException( 'Failed to load ' . $calledClassFqn . ' to generate typemap', 500, $e );
+				throw new databaseException( 'Failed to instantiate ' . $calledClassFqn . ' to generate typemap', 500, $e );
 			}
-
-			$typeMap = new \gcgov\framework\services\mongodb\typeMap( $calledClassFqn );
-
-			$rProperties = $rClass->getProperties();
-			foreach( $rProperties as $rProperty ) {
-				//skip type mapping this if property is
-				//  - excluded from serialization
-				//  - not typed
-				//  - starts with _
-				$excludeBsonSerializeAttributes = $rProperty->getAttributes( excludeBsonSerialize::class );
-				if( count( $excludeBsonSerializeAttributes )>0 || !$rProperty->hasType() || str_starts_with( $rProperty->getName(), '_' ) ) {
-					continue;
-				}
-
-				//get property type
-				$rPropertyType = $rProperty->getType();
-				$typeName    = '';
-				$typeIsArray = false;
-				if( !($rPropertyType instanceof \ReflectionUnionType) ) {
-					$typeName    = $rPropertyType->getName();
-				}
-
-				//handle typed arrays
-				if( $typeName=='array' ) {
-					//get type  from @var doc block
-					$typeName    = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
-					$typeIsArray = true;
-				}
-
-				//TODO: is this the best way to capture \app\models
-				if( str_starts_with( $typeName, 'app' ) || str_starts_with( $typeName, '\app' ) ) {
-					//create mongo field path key
-					$baseFieldPathKey = $rProperty->getName();
-					if( $typeIsArray ) {
-						$baseFieldPathKey .= '.$';
-					}
-
-					//add foreign field mapping for upserting embedded objects
-					$foreignKeyAttributes = $rProperty->getAttributes( foreignKey::class );
-					if( $foreignKeyAttributes>0 ) {
-						foreach( $foreignKeyAttributes as $foreignKeyAttribute ) {
-							/** @var \gcgov\framework\services\mongodb\attributes\foreignKey $fkAttribute */
-							$fkAttribute                                 = $foreignKeyAttribute->newInstance();
-							$typeMap->foreignKeyMap[ $baseFieldPathKey ] = $fkAttribute->propertyName;
-						}
-					}
-
-					//add the primary property type
-					$typeMap->fieldPaths[ $baseFieldPathKey ] = typeHelpers::classNameToFqn( $typeName );
-
-					//add the field paths for the property type so that we get a full chain of types
-					try {
-						$rPropertyClass = new \ReflectionClass( $typeName );
-						if( $rPropertyClass->isSubclassOf( embeddable::class ) ) {
-							$instance = $rPropertyClass->newInstanceWithoutConstructor();
-							/** @var \gcgov\framework\services\mongodb\typeMap $propertyTypeMap */
-							$propertyTypeMap = $rPropertyClass->getMethod( '_typeMap' )->invoke( $instance, $chainClass );
-							foreach( $propertyTypeMap->fieldPaths as $subFieldPathKey => $class ) {
-								$typeMap->fieldPaths[ $baseFieldPathKey . '.' . $subFieldPathKey ] = typeHelpers::classNameToFqn( $class );
-							}
-							foreach( $propertyTypeMap->foreignKeyMap as $subFieldPathKey => $fkPropertyName ) {
-								$typeMap->foreignKeyMap[ $baseFieldPathKey . '.' . $subFieldPathKey ] = $fkPropertyName;
-							}
-						}
-					}
-					catch( \ReflectionException $e ) {
-						throw new databaseException( 'Failed to generate type map for ' . $typeName, 500, $e );
-					}
-				}
-			}
-
-			typeMapCache::set( $calledClassFqn, $typeMap );
+			$typeMap->model = true;
+			$typeMap->collection = $instance->_getCollectionName();
 		}
+
+		$rProperties = $rClass->getProperties();
+		foreach( $rProperties as $rProperty ) {
+			//skip type mapping this if property is
+			//  - excluded from serialization
+			//  - not typed
+			//  - starts with _
+			$excludeBsonSerializeAttributes = $rProperty->getAttributes( excludeBsonSerialize::class );
+			if( count( $excludeBsonSerializeAttributes )>0 || !$rProperty->hasType() || str_starts_with( $rProperty->getName(), '_' ) ) {
+				continue;
+			}
+
+			//get property type
+			$rPropertyType = $rProperty->getType();
+			$typeName    = '';
+			$typeIsArray = false;
+			if( !($rPropertyType instanceof \ReflectionUnionType) ) {
+				$typeName    = $rPropertyType->getName();
+			}
+
+			//handle typed arrays
+			if( $typeName=='array' ) {
+				//get type  from @var doc block
+				$typeName    = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
+				$typeIsArray = true;
+			}
+
+			//TODO: is this the best way to capture \app\models
+			if( str_starts_with( $typeName, 'app' ) || str_starts_with( $typeName, '\app' ) ) {
+				//create mongo field path key
+				$baseFieldPathKey = $rProperty->getName();
+				if( $typeIsArray ) {
+					$baseFieldPathKey .= '.$';
+				}
+
+				//add foreign field mapping for upserting embedded objects
+				$foreignKeyAttributes = $rProperty->getAttributes( foreignKey::class );
+				if( $foreignKeyAttributes>0 ) {
+					foreach( $foreignKeyAttributes as $foreignKeyAttribute ) {
+						/** @var \gcgov\framework\services\mongodb\attributes\foreignKey $fkAttribute */
+						$fkAttribute                                 = $foreignKeyAttribute->newInstance();
+						$typeMap->foreignKeyMap[ $baseFieldPathKey ] = $fkAttribute->propertyName;
+					}
+				}
+
+				//add the primary property type
+				$typeMap->fieldPaths[ $baseFieldPathKey ] = typeHelpers::classNameToFqn( $typeName );
+
+				//add the field paths for the property type so that we get a full chain of types
+				try {
+					$rPropertyClass = new \ReflectionClass( $typeName );
+					if( $rPropertyClass->isSubclassOf( embeddable::class ) ) {
+						$instance = $rPropertyClass->newInstanceWithoutConstructor();
+						/** @var \gcgov\framework\services\mongodb\typeMap $propertyTypeMap */
+						$propertyTypeMap = $rPropertyClass->getMethod( '_typeMap' )->invoke( $instance, $chainClass );
+						foreach( $propertyTypeMap->fieldPaths as $subFieldPathKey => $class ) {
+							$typeMap->fieldPaths[ $baseFieldPathKey . '.' . $subFieldPathKey ] = typeHelpers::classNameToFqn( $class );
+						}
+						foreach( $propertyTypeMap->foreignKeyMap as $subFieldPathKey => $fkPropertyName ) {
+							$typeMap->foreignKeyMap[ $baseFieldPathKey . '.' . $subFieldPathKey ] = $fkPropertyName;
+						}
+					}
+				}
+				catch( \ReflectionException $e ) {
+					throw new databaseException( 'Failed to generate type map for ' . $typeName, 500, $e );
+				}
+			}
+		}
+
+		typeMapCache::set( $calledClassFqn, $typeMap );
+
 
 		return $typeMap;
 	}

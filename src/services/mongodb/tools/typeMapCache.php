@@ -12,8 +12,14 @@ final class typeMapCache {
 	/** @var \gcgov\framework\services\mongodb\typeMap[] */
 	private static array $typeMaps = [];
 
+	/** @var \gcgov\framework\services\mongodb\typeMap[] */
+	private static array $modelTypeMaps = [];
+
 	public static function set( string $className, \gcgov\framework\services\mongodb\typeMap $typeMap ) {
 		self::$typeMaps[ $className ] = $typeMap;
+		if( $typeMap->model ) {
+			self::$modelTypeMaps[ $typeMap->collection ]  = $typeMap;
+		}
 	}
 
 	public static function get( string $className ): ?\gcgov\framework\services\mongodb\typeMap {
@@ -26,8 +32,8 @@ final class typeMapCache {
 	/**
 	 * @return \gcgov\framework\services\mongodb\typeMap[]
 	 */
-	public static function getAll(): array {
-		return self::$typeMaps;
+	public static function getAllModels(): array {
+		return self::$modelTypeMaps;
 	}
 
 	/**

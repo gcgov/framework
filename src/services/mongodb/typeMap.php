@@ -15,14 +15,13 @@ class typeMap {
 
 	public string $root = '';
 
-	/**
-	 * @var string[]
-	 */
+	/** @var string[] */
 	public array $fieldPaths = [];
 
-	/**
-	 * @var string[]
-	 */
+	public bool $model = false;
+	public string $collection = '';
+
+	/** @var string[] */
 	public array $foreignKeyMap = [];
 
 

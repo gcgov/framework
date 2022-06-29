@@ -431,7 +431,7 @@ abstract class dispatcher
 	 */
 	private static function getAllTypeMaps() : array {
 		if( typeMapCache::allTypeMapsFetched() ) {
-			return typeMapCache::getAll();
+			return typeMapCache::getAllModels();
 		}
 
 		$appDir = config::getAppDir();
