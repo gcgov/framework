@@ -8,6 +8,7 @@ use gcgov\framework\services\mongodb\attributes\label;
 use gcgov\framework\services\mongodb\models\_meta\db;
 use gcgov\framework\services\mongodb\models\_meta\ui;
 use gcgov\framework\services\mongodb\models\_meta\uiField;
+use gcgov\framework\services\mongodb\tools\metaAttributeCache;
 use JetBrains\PhpStorm\ArrayShape;
 
 
@@ -36,14 +37,14 @@ class _meta
 	public ?db $db = null;
 
 	/** @OA\Property() */
-	public float $score    = 0;
+	public float $score = 0;
 
 	private bool $exportDb = false;
 
 
-	public function __construct( ?string $className=null ) {
+	public function __construct( ?string $className = null ) {
 		$this->ui = new ui();
-		if(!empty($className)) {
+		if( !empty( $className ) ) {
 			$this->generateAttributes( $className );
 		}
 	}
@@ -61,23 +62,23 @@ class _meta
 	                'db'     => "\gcgov\framework\services\mongodb\models\db|null",
 	                'score'  => "float|int"
 	] )]
-	public function jsonSerialize() : array {
+	public function jsonSerialize(): array {
 		$export = [
-			'ui'     => $this->ui
+			'ui' => $this->ui
 		];
 
 		//TODO: make sure this is using the actual database it's being used for
-		if( isset(config::getEnvironmentConfig()->mongoDatabases[0]) ) {
-			$mdbConfig = config::getEnvironmentConfig()->mongoDatabases[0];
-			if($mdbConfig->include_metaLabels) {
-				$export['labels'] = $this->labels;
+		if( isset( config::getEnvironmentConfig()->mongoDatabases[ 0 ] ) ) {
+			$mdbConfig = config::getEnvironmentConfig()->mongoDatabases[ 0 ];
+			if( $mdbConfig->include_metaLabels ) {
+				$export[ 'labels' ] = $this->labels;
 			}
-			if($mdbConfig->include_metaFields) {
-				$export['fields'] = $this->fields;
+			if( $mdbConfig->include_metaFields ) {
+				$export[ 'fields' ] = $this->fields;
 			}
 		}
 
-		if( $this->score != 0 ) {
+		if( $this->score!=0 ) {
 			$export[ 'score' ] = $this->score;
 		}
 
@@ -90,6 +91,16 @@ class _meta
 
 
 	private function generateAttributes( string $className ) {
+		$labels = metaAttributeCache::getLabels( $className );
+		$fields = metaAttributeCache::getFields( $className );
+
+		if( isset( $labels ) && isset( $fields ) ) {
+			$this->labels = $labels;
+			$this->fields = $fields;
+			return;
+		}
+
+		//cache does not exist
 		$this->labels = [];
 		$this->fields = [];
 
@@ -102,13 +113,16 @@ class _meta
 				//get all attributes for this property
 				$propertyAttributes = $property->getAttributes();
 				foreach( $propertyAttributes as $propertyAttribute ) {
-					if( $propertyAttribute->getName() == label::class ) {
+					if( $propertyAttribute->getName()==label::class ) {
 						$labelAttributeInstance                      = $propertyAttribute->newInstance();
 						$this->fields[ $property->getName() ]->label = $labelAttributeInstance->label;
 						$this->labels[ $property->getName() ]        = $labelAttributeInstance->label;
 					}
 				}
 			}
+
+			metaAttributeCache::set( $className, $this->labels, $this->fields );
+
 		}
 		catch( \ReflectionException $e ) {
 			log::error( 'MongoService', 'Generate attribute data failed: ' . $e->getMessage(), $e->getTrace() );
