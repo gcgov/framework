@@ -3,9 +3,7 @@
 namespace gcgov\framework\services\mongodb\models\_meta;
 
 
-class ui
-	extends
-	\andrewsauder\jsonDeserialize\jsonDeserialize {
+class ui {
 
 	/** @OA\Property() */
 	public bool $loading = false;
