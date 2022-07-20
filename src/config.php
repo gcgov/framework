@@ -103,7 +103,7 @@ final class config {
 
 
 	private static function setSrvDir(): void {
-		self::$srvDir = self::getAppDir() . '/srv/';
+		self::$srvDir = self::getRootDir() . '/srv/';
 	}
 
 
