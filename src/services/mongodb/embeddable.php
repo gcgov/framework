@@ -474,7 +474,10 @@ abstract class embeddable
 			//get property type
 			$rPropertyName   = $rProperty->getName();
 			$rPropertyType   = $rProperty->getType();
-			$typeName        = $rPropertyType->getName();
+			$typeName = '';
+			if(!($rPropertyType instanceof \ReflectionUnionType)) {
+				$typeName = $rPropertyType->getName();
+			}
 			$propertyIsArray = false;
 
 			//add base field to the search

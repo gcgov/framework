@@ -46,7 +46,7 @@ class build {
 
 				//check if this class is an instance of our model \gcgov\framework\services\mongodb\model
 				if( $classReflection->isSubclassOf( \gcgov\framework\services\mongodb\model::class ) ) {
-					error_log('Standardize '.$classFqn.' ('.$classIndex.'/'.$classCount.')');
+					error_log('Standardize '.$classFqn.' ('.round((($classIndex+1) / $classCount)*100, 2 ).'%)');
 					$queryOrs = $classFqn::mongoFieldsExistsQuery();
 					$dbObjects = $classFqn::getAll( [ '$or'=>$queryOrs ]);
 					foreach($dbObjects as &$dbObject) {
