@@ -4,6 +4,7 @@ namespace gcgov\framework\services\mongodb;
 
 
 use gcgov\framework\exceptions\modelException;
+use gcgov\framework\services\mongodb\models\_meta;
 use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\autoIncrement;
 use gcgov\framework\services\mongodb\models\audit;
@@ -174,7 +175,10 @@ abstract class factory
 		$combinedResult = new updateDeleteResult( $updateResult, array_merge( $embeddedUpdates, $embeddedInserts ?? [] ) );
 
 		//update _meta property of object to show results
-		if( property_exists( $object, '_meta' ) ) {
+		if( property_exists( $object, '_meta' )  ) {
+			if( !isset($object->_meta)) {
+				$object->_meta = new _meta( get_called_class() );
+			}
 			$object->_meta->setDb( $combinedResult );
 		}
 
