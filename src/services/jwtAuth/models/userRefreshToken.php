@@ -48,10 +48,10 @@ final class userRefreshToken
 	public string                 $creatorIP              = '';
 
 
-	public function __construct( \MongoDB\BSON\ObjectId $userId, \DateInterval $duration, string $token ) {
+	public function __construct( \MongoDB\BSON\ObjectId|string $userId, \DateInterval $duration, string $token ) {
 		parent::__construct();
 		$this->_id                    = new \MongoDB\BSON\ObjectId();
-		$this->userId                 = $userId;
+		$this->userId                 = $userId instanceof \MongoDB\BSON\ObjectId ? $userId : new \MongoDB\BSON\ObjectId($userId);
 		$this->token                  = password_hash( $token, PASSWORD_DEFAULT );
 		$this->creation               = new \DateTimeImmutable();
 		$this->expiration             = $this->creation->add( $duration );

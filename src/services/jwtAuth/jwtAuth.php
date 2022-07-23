@@ -110,7 +110,7 @@ class jwtAuth {
 			// Configures the audience (aud claim)
 			->permittedFor( $this->permittedFor )
 			//configures sub
-			->relatedTo( (string)$authUser->userId )
+			->relatedTo( (string) $authUser->userId )
 			//configures jti claim for id -- will use for refresh token instead so that we can revoke a refresh token
 			//->identifiedBy('asdf)
 			// Configures the time that the token was issue (iat claim)
