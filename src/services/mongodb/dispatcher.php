@@ -58,44 +58,36 @@ abstract class dispatcher
 						$mongoActions[$collectionName] = [];
 					}
 
-					//check if this object is embeded using a foreign key
 					if( isset( $typeMap->foreignKeyMap[ $fieldKey ] ) ) {
 						$foreignKey = $typeMap->foreignKeyMap[ $fieldKey ];
 
+						//skip updating the object if the foreign key filter doesn't match
+						if( isset($typeMap->foreignKeyMapEmbeddedFilters[ $fieldKey ]) && count( $typeMap->foreignKeyMapEmbeddedFilters[ $fieldKey ] )>0 ) {
+							foreach( $typeMap->foreignKeyMapEmbeddedFilters[ $fieldKey ] as $embeddedPropertyName=>$inclusionValue) {
+								if( $object->$embeddedPropertyName!=$inclusionValue ) {
+									log::info( 'Dispatch_updateEmbedded', '--Not doing anything with this because object is filtered out of: ' . $collectionName . ' ' . $fieldKey . ' => ' . $typeMap->foreignKeyMap[ $fieldKey ] . ' because field '. $embeddedPropertyName .' is not equal to ' . $inclusionValue );
+									continue 2;
+								}
+							}
+						}
+
+						//remove object if it's foreign key no longer matches where it is currently embedded
 						if($object->$foreignKey!==null) {
-
-							$filterPath = self::convertFieldPathToFilterPath( $fieldKey );
-
-							$action = self::_generateDeleteAction($collectionName, $fieldKey, $object->_id );
-
 							$primaryFilterKey = self::getFieldPathToFirstParentModel( $fieldKey, $typeMap );
 							if( strlen( $primaryFilterKey ) > 0 ) {
 								$primaryFilterKey .= '.';
 							}
 							$primaryFilterKey .= '_id';
 							$primaryFilterKey = str_replace( '.$', '', $primaryFilterKey );
+
+							$action = self::_generateDeleteAction($collectionName, $fieldKey, $object->_id );
 							$action['updateMany'][ 0 ][$primaryFilterKey] = [ '$ne'=> $object->$foreignKey ];
-//							$action = [
-//								'updateMany' => [
-//									[
-//										$filterPath . '._id' =>  $object->_id,
-//										'_id'=>[ '$ne'=> $object->$foreignKey ]
-//									],
-//									[
-//										'$pull'=>[
-//											$filterPath => [
-//												'_id'=>$object->_id
-//											]
-//										]
-//									],
-//									[
-//										'upsert'=>false
-//									]
-//								]
-//							];
+
 							$mongoActions[$collectionName][] = $action;
 						}
+
 					}
+
 
 					log::info( 'Dispatch_updateEmbedded', '--update collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $updateType );
 					$mongoActions[$collectionName][] = self::_generateUpdateAction( $collectionName, $fieldKey, $object );
@@ -285,6 +277,16 @@ abstract class dispatcher
 					if( substr( $fieldKey, -1, 1 ) != '$' ) {
 						log::info( 'Dispatch_insertEmbedded', '--Not doing anything with this because object is not in an array: ' . $collectionName . ' ' . $fieldKey . ' => ' . $typeMap->foreignKeyMap[ $fieldKey ] );
 						continue;
+					}
+
+					//exclude inserting objects that do not match the filter
+					if( isset($typeMap->foreignKeyMapEmbeddedFilters[ $fieldKey ]) && count( $typeMap->foreignKeyMapEmbeddedFilters[ $fieldKey ] )>0 ) {
+						foreach( $typeMap->foreignKeyMapEmbeddedFilters[ $fieldKey ] as $embeddedPropertyName=>$inclusionValue) {
+							if( $objectToInsert->$embeddedPropertyName!=$inclusionValue ) {
+								log::info( 'Dispatch_insertEmbedded', '--Not doing anything with this because object is filtered out of: ' . $collectionName . ' ' . $fieldKey . ' => ' . $typeMap->foreignKeyMap[ $fieldKey ] . ' because field '. $embeddedPropertyName .' is not equal to ' . $inclusionValue );
+								continue 2;
+							}
+						}
 					}
 
 					//build primary key filter to filter the parent collection to objects that match the foreign key of the object we are inserting

@@ -24,6 +24,8 @@ class typeMap {
 	/** @var string[] */
 	public array $foreignKeyMap = [];
 
+	public array $foreignKeyMapEmbeddedFilters = [];
+
 
 	public function __construct( string $root, array $fieldPaths = [] ) {
 		$this->root       = $root;

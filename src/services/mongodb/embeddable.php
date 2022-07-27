@@ -182,6 +182,7 @@ abstract class embeddable
 						/** @var \gcgov\framework\services\mongodb\attributes\foreignKey $fkAttribute */
 						$fkAttribute                                 = $foreignKeyAttribute->newInstance();
 						$typeMap->foreignKeyMap[ $baseFieldPathKey ] = $fkAttribute->propertyName;
+						$typeMap->foreignKeyMapEmbeddedFilters[ $baseFieldPathKey ] = $fkAttribute->embeddedObjectFilter;
 					}
 				}
 
@@ -200,6 +201,7 @@ abstract class embeddable
 						}
 						foreach( $propertyTypeMap->foreignKeyMap as $subFieldPathKey => $fkPropertyName ) {
 							$typeMap->foreignKeyMap[ $baseFieldPathKey . '.' . $subFieldPathKey ] = $fkPropertyName;
+							$typeMap->foreignKeyMapEmbeddedFilters[ $baseFieldPathKey . '.' . $subFieldPathKey ] = $propertyTypeMap->foreignKeyMapEmbeddedFilters[$subFieldPathKey];
 						}
 					}
 				}
