@@ -3,6 +3,7 @@
 namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\models\authUser;
+use gcgov\framework\services\mongodb\attributes\includeMeta;
 use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
 use gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize;
@@ -46,6 +47,14 @@ abstract class embeddable
 
 		try {
 			$reflectionClass = new \ReflectionClass( $calledClassFqn );
+
+			$classIncludeMetaAttributes = $reflectionClass->getAttributes(includeMeta::class );
+			foreach($classIncludeMetaAttributes as $classIncludeMetaAttribute) {
+				$includeMetaAttributeInstance = $classIncludeMetaAttribute->newInstance();
+				if(!$includeMetaAttributeInstance->includeMeta ) {
+					unset( $export[ '_meta' ] );
+				}
+			}
 
 			foreach( $reflectionClass->getProperties() as $property ) {
 
@@ -103,9 +112,6 @@ abstract class embeddable
 		}
 	}
 
-	public function setMeta() {
-		$this->_meta = new _meta( get_called_class() );
-	}
 
 	/**
 	 * @param string[] $chainClass
