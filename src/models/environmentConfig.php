@@ -65,4 +65,8 @@ class environmentConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 		return '/' . trim( $this->basePath, '/ ' );
 	}
 
+	public function isLocal(): bool {
+		return $this->type=='local';
+	}
+
 }
