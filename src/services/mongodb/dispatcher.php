@@ -279,6 +279,11 @@ abstract class dispatcher
 						continue;
 					}
 
+					//don't try if the foreign key for the collection is null on the object we're inserting
+					if($objectToInsert->$foreignKey===null) {
+						continue;
+					}
+
 					//exclude inserting objects that do not match the filter
 					if( isset($typeMap->foreignKeyMapEmbeddedFilters[ $fieldKey ]) && count( $typeMap->foreignKeyMapEmbeddedFilters[ $fieldKey ] )>0 ) {
 						foreach( $typeMap->foreignKeyMapEmbeddedFilters[ $fieldKey ] as $embeddedPropertyName=>$inclusionValue) {
