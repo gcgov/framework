@@ -29,6 +29,24 @@ abstract class factory
 
 	/**
 	 * @param  array  $filter  optional
+	 * @param  array  $options    optional
+	 *
+	 * @return int
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function countDocuments( array $filter = [], array $options = [] ) : int {
+		$mdb = new tools\mdb( collection: static::_getCollectionName() );
+
+		try {
+			return $mdb->collection->countDocuments( $filter, $options );
+		}
+		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+			throw new \gcgov\framework\exceptions\modelException( 'Database counting collection '.static::_getCollectionName().' for filter: '.json_encode($filter).' with options: '.json_encode($options), 500, $e );
+		}
+	}
+
+	/**
+	 * @param  array  $filter  optional
 	 * @param  array  $sort    optional
 	 * @param  array  $options    optional
 	 *

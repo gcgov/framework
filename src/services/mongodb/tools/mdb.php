@@ -80,7 +80,7 @@ final class mdb {
 	}
 
 
-	public function getCollectionCount() : int {
-		return $this->collection->countDocuments([]);
+	public function getCollectionCount( $filter ) : int {
+		return $this->collection->countDocuments( $filter );
 	}
 }
