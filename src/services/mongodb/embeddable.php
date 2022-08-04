@@ -32,14 +32,14 @@ abstract class embeddable
 
 
 	protected function _beforeJsonSerialize(): void {
-		if( !isset($this->_meta) ) {
+		if( !isset( $this->_meta ) ) {
 			$this->_meta = new _meta( get_called_class() );
 		}
 	}
 
 
 	protected function _afterJsonSerialize( array $export ): array {
-		log::info('MongoService', '_afterJsonSerialize' . get_called_class() );
+		log::info( 'MongoService', '_afterJsonSerialize' . get_called_class() );
 
 		//get the called class name
 		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
@@ -48,10 +48,10 @@ abstract class embeddable
 		try {
 			$reflectionClass = new \ReflectionClass( $calledClassFqn );
 
-			$classIncludeMetaAttributes = $reflectionClass->getAttributes(includeMeta::class );
-			foreach($classIncludeMetaAttributes as $classIncludeMetaAttribute) {
+			$classIncludeMetaAttributes = $reflectionClass->getAttributes( includeMeta::class );
+			foreach( $classIncludeMetaAttributes as $classIncludeMetaAttribute ) {
 				$includeMetaAttributeInstance = $classIncludeMetaAttribute->newInstance();
-				if(!$includeMetaAttributeInstance->includeMeta ) {
+				if( !$includeMetaAttributeInstance->includeMeta ) {
 					unset( $export[ '_meta' ] );
 				}
 			}
@@ -63,7 +63,10 @@ abstract class embeddable
 				foreach( $propertyAttributes as $propertyAttribute ) {
 					$authUser                = authUser::getInstance();
 					$redactAttributeInstance = $propertyAttribute->newInstance();
-					if( count( $redactAttributeInstance->redactIfUserHasAnyRoles )>0 && count( array_intersect( $redactAttributeInstance->redactIfUserHasAnyRoles, $authUser->roles ) )>0 ) {
+					if( count( $redactAttributeInstance->redactIfUserHasAnyRoles )===0 && count( $redactAttributeInstance->redactIfUserHasAllRoles )===0 ) {
+						unset( $export[ $property->getName() ] );
+					}
+					elseif( count( $redactAttributeInstance->redactIfUserHasAnyRoles )>0 && count( array_intersect( $redactAttributeInstance->redactIfUserHasAnyRoles, $authUser->roles ) )>0 ) {
 						unset( $export[ $property->getName() ] );
 					}
 					elseif( count( $redactAttributeInstance->redactIfUserHasAllRoles )>0 && count( array_diff( $redactAttributeInstance->redactIfUserHasAllRoles, $authUser->roles ) )===0 ) {
@@ -96,7 +99,11 @@ abstract class embeddable
 				foreach( $propertyAttributes as $propertyAttribute ) {
 					$authUser                = authUser::getInstance();
 					$redactAttributeInstance = $propertyAttribute->newInstance();
-					if( count( $redactAttributeInstance->redactIfUserHasAnyRoles )>0 && count( array_intersect( $redactAttributeInstance->redactIfUserHasAnyRoles, $authUser->roles ) )>0 ) {
+					if( count( $redactAttributeInstance->redactIfUserHasAnyRoles )===0 && count( $redactAttributeInstance->redactIfUserHasAllRoles )===0 ) {
+						$key = $property->getName();
+						unset( $this->$key );
+					}
+					elseif( count( $redactAttributeInstance->redactIfUserHasAnyRoles )>0 && count( array_intersect( $redactAttributeInstance->redactIfUserHasAnyRoles, $authUser->roles ) )>0 ) {
 						$key = $property->getName();
 						unset( $this->$key );
 					}
@@ -136,14 +143,14 @@ abstract class embeddable
 			throw new databaseException( 'Failed to load ' . $calledClassFqn . ' to generate typemap', 500, $e );
 		}
 
-		if( $rClass->isSubclassOf( \gcgov\framework\services\mongodb\model::class  ) ) {
+		if( $rClass->isSubclassOf( \gcgov\framework\services\mongodb\model::class ) ) {
 			try {
 				$instance = $rClass->newInstanceWithoutConstructor();
 			}
 			catch( \ReflectionException $e ) {
 				throw new databaseException( 'Failed to instantiate ' . $calledClassFqn . ' to generate typemap', 500, $e );
 			}
-			$typeMap->model = true;
+			$typeMap->model      = true;
 			$typeMap->collection = $instance->_getCollectionName();
 		}
 
@@ -160,10 +167,10 @@ abstract class embeddable
 
 			//get property type
 			$rPropertyType = $rProperty->getType();
-			$typeName    = '';
-			$typeIsArray = false;
-			if( !($rPropertyType instanceof \ReflectionUnionType) ) {
-				$typeName    = $rPropertyType->getName();
+			$typeName      = '';
+			$typeIsArray   = false;
+			if( !( $rPropertyType instanceof \ReflectionUnionType ) ) {
+				$typeName = $rPropertyType->getName();
 			}
 
 			//handle typed arrays
@@ -186,8 +193,8 @@ abstract class embeddable
 				if( $foreignKeyAttributes>0 ) {
 					foreach( $foreignKeyAttributes as $foreignKeyAttribute ) {
 						/** @var \gcgov\framework\services\mongodb\attributes\foreignKey $fkAttribute */
-						$fkAttribute                                 = $foreignKeyAttribute->newInstance();
-						$typeMap->foreignKeyMap[ $baseFieldPathKey ] = $fkAttribute->propertyName;
+						$fkAttribute                                                = $foreignKeyAttribute->newInstance();
+						$typeMap->foreignKeyMap[ $baseFieldPathKey ]                = $fkAttribute->propertyName;
 						$typeMap->foreignKeyMapEmbeddedFilters[ $baseFieldPathKey ] = $fkAttribute->embeddedObjectFilter;
 					}
 				}
@@ -206,8 +213,8 @@ abstract class embeddable
 							$typeMap->fieldPaths[ $baseFieldPathKey . '.' . $subFieldPathKey ] = typeHelpers::classNameToFqn( $class );
 						}
 						foreach( $propertyTypeMap->foreignKeyMap as $subFieldPathKey => $fkPropertyName ) {
-							$typeMap->foreignKeyMap[ $baseFieldPathKey . '.' . $subFieldPathKey ] = $fkPropertyName;
-							$typeMap->foreignKeyMapEmbeddedFilters[ $baseFieldPathKey . '.' . $subFieldPathKey ] = $propertyTypeMap->foreignKeyMapEmbeddedFilters[$subFieldPathKey];
+							$typeMap->foreignKeyMap[ $baseFieldPathKey . '.' . $subFieldPathKey ]                = $fkPropertyName;
+							$typeMap->foreignKeyMapEmbeddedFilters[ $baseFieldPathKey . '.' . $subFieldPathKey ] = $propertyTypeMap->foreignKeyMapEmbeddedFilters[ $subFieldPathKey ];
 						}
 					}
 				}
@@ -480,10 +487,10 @@ abstract class embeddable
 			}
 
 			//get property type
-			$rPropertyName   = $rProperty->getName();
-			$rPropertyType   = $rProperty->getType();
-			$typeName = '';
-			if(!($rPropertyType instanceof \ReflectionUnionType)) {
+			$rPropertyName = $rProperty->getName();
+			$rPropertyType = $rProperty->getType();
+			$typeName      = '';
+			if( !( $rPropertyType instanceof \ReflectionUnionType ) ) {
 				$typeName = $rPropertyType->getName();
 			}
 			$propertyIsArray = false;
