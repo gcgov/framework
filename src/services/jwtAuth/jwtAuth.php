@@ -27,7 +27,7 @@ class jwtAuth {
 	private string $keyPath = '';
 
 
-	public function __construct() {
+	public function __construct( string $guid=null ) {
 
 		//standard config
 		if( file_exists( config::getSrvDir().'/jwtCertificates/' ) ) {
@@ -52,13 +52,31 @@ class jwtAuth {
 		$this->guids = json_decode( file_get_contents( $this->keyPath . 'guids.json' ) );
 
 		//guid specific init
-		try {
-			$randomGuidIndex = random_int( 0, 4 );
+		if( !isset( $guid ) ) {
+			try {
+				$guidIndex = random_int( 0, 4 );
+			}
+			catch( \Exception $e ) {
+				$guidIndex = rand( 0, 4 );
+			}
 		}
-		catch( \Exception $e ) {
-			$randomGuidIndex = rand( 0, 4 );
+		else {
+			if( file_exists( $this->keyPath . 'private-'.$guid.'.pem' ) && file_exists( $this->keyPath . 'public-'.$guid.'.pem' ) ) {
+				if( in_array( $guid, $this->guids )) {
+					$guidIndex = array_search( $guid, $this->guids );
+				}
+				else {
+					$this->guids[] = $guid;
+					$guidIndex = count($this->guids)-1;
+				}
+			}
+			else {
+				throw new configException( 'Missing private or public key for guid '.$guid );
+			}
 		}
-		$this->init( $this->guids[ $randomGuidIndex ] );
+
+		$this->init( $this->guids[ $guidIndex ] );
+
 
 	}
 
