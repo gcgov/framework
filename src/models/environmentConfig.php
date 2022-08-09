@@ -51,6 +51,7 @@ class environmentConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 		$this->payjunction = new payjunction();
 	}
 
+
 	public function getRootUrl(): string {
 		return rtrim( $this->rootUrl, '/ ' );
 	}
@@ -65,8 +66,29 @@ class environmentConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 		return '/' . trim( $this->basePath, '/ ' );
 	}
 
+
 	public function isLocal(): bool {
 		return $this->type=='local';
+	}
+
+
+	public function getDefaultSqlDatabase(): ?sqlDatabase {
+		foreach( $this->sqlDatabases as $sqlDatabase ) {
+			if( $sqlDatabase->default ) {
+				return $sqlDatabase;
+			}
+		}
+		return null;
+	}
+
+
+	public function getSqlDatabaseByName( string $name ): ?sqlDatabase {
+		foreach( $this->sqlDatabases as $sqlDatabase ) {
+			if( $sqlDatabase->name===$name ) {
+				return $sqlDatabase;
+			}
+		}
+		return null;
 	}
 
 }
