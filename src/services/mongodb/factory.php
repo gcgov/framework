@@ -144,7 +144,11 @@ abstract class factory
 	 * @return \gcgov\framework\services\mongodb\updateDeleteResult
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function save( &$object, bool $upsert = true ) : updateDeleteResult {
+	public static function save( &$object, bool $upsert = true, bool $callBeforeAfterHooks = true ) : updateDeleteResult {
+		if( $callBeforeAfterHooks && method_exists( get_called_class(), '_beforeSave' ) ) {
+			static::_beforeSave( $object );
+		}
+
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		//AUDIT CHANGE STREAM
@@ -175,6 +179,9 @@ abstract class factory
 			log::info( 'MongoService', '--Upserted: ' . $updateResult->getUpsertedCount() );
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+			if( $callBeforeAfterHooks && method_exists( get_called_class(), '_afterSave' ) ) {
+				static::_afterSave( $object, false );
+			}
 			throw new \gcgov\framework\exceptions\modelException( 'Database error. ' . $e->getMessage(), 500, $e );
 		}
 
@@ -206,6 +213,9 @@ abstract class factory
 			audit::save( $auditChangeStream );
 		}
 
+		if( $callBeforeAfterHooks && method_exists( get_called_class(), '_afterSave' ) ) {
+			static::_afterSave( $object, true, $combinedResult );
+		}
 		return $combinedResult;
 	}
 
