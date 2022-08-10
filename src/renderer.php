@@ -102,7 +102,7 @@ final class renderer {
 	 */
 	private function processControllerDataResponse( controllerDataResponse $controllerDataResponse ) : string {
 		if (!headers_sent($filename, $lineNumber)) {
-			header( 'Content-Type:application/json' );
+			header( 'Content-Type:'.$controllerDataResponse->getContentType() );
 		} else {
 			\gcgov\framework\services\log::debug( 'Renderer', 'Cannot set content-type header. Headers already sent in '.$filename.' on line '.$lineNumber );
 		}
@@ -115,9 +115,17 @@ final class renderer {
 			}
 		}
 
-		$encodedResponse = json_encode( $controllerDataResponse->getData() );
-		if( $encodedResponse === false ) {
-			return \app\renderer::processSystemErrorException( new \LogicException( 'JSON encoding of controller->data failed', 0 ) );
+		if( $controllerDataResponse->getContentType()==='application/json' ) {
+			$encodedResponse = json_encode( $controllerDataResponse->getData() );
+			if( $encodedResponse === false ) {
+				return \app\renderer::processSystemErrorException( new \LogicException( 'JSON encoding of controller->data failed', 0 ) );
+			}
+		}
+		elseif( $controllerDataResponse->getContentType()==='text/plain' ) {
+			$encodedResponse = (string) $controllerDataResponse->getData();
+		}
+		else {
+			return \app\renderer::processSystemErrorException( new \LogicException( 'Unsupported content-type provided in controller response', 500 ) );
 		}
 
 		return $encodedResponse;
