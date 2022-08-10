@@ -436,27 +436,32 @@ abstract class embeddable
 
 		//$data[ $propertyName ] exists and has value
 		else {
-			try {
-				$rPropertyClass = new \ReflectionClass( $propertyTypeName );
+			if( $propertyTypeName==='array' && $value instanceof \stdClass) {
+				return (array) $value;
+			}
+			else {
+				try {
+					$rPropertyClass = new \ReflectionClass( $propertyTypeName );
 
-				if( $rPropertyClass->implementsInterface( \DateTimeInterface::class ) ) {
-					if( $value instanceof \MongoDB\BSON\UTCDateTime ) {
-						return \DateTimeImmutable::createFromMutable( $value->toDateTime() )->setTimezone( new \DateTimeZone( "America/New_York" ) );
-					}
-					elseif( is_string( $value ) ) {
-						try {
-							return new \DateTimeImmutable( $value );
+					if( $rPropertyClass->implementsInterface( \DateTimeInterface::class ) ) {
+						if( $value instanceof \MongoDB\BSON\UTCDateTime ) {
+							return \DateTimeImmutable::createFromMutable( $value->toDateTime() )->setTimezone( new \DateTimeZone( "America/New_York" ) );
 						}
-						catch( \Exception $e ) {
-							log::warning( 'MongoService', 'Invalid date is stored in database. ' . $e->getMessage(), $e->getTrace() );
+						elseif( is_string( $value ) ) {
+							try {
+								return new \DateTimeImmutable( $value );
+							}
+							catch( \Exception $e ) {
+								log::warning( 'MongoService', 'Invalid date is stored in database. ' . $e->getMessage(), $e->getTrace() );
 
-							return new \DateTimeImmutable();
+								return new \DateTimeImmutable();
+							}
 						}
 					}
 				}
-			}
-				//regular non class types
-			catch( \ReflectionException $e ) {
+					//regular non class types
+				catch( \ReflectionException $e ) {
+				}
 			}
 
 			return $value;
