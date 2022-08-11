@@ -29,9 +29,10 @@ class formatting {
 
 		$correction1 = $forceLowerCase ? strtolower( $fileName ) : $fileName;
 		$correction2 = str_replace( $illegalChars, $replacementForIllegalChars, $correction1 );
-		$correction3 = preg_replace( '/(' . $replacementForIllegalChars . ')+/', ' ', $correction2 );
+		$correction3 = preg_replace( '/(\r\n|\r|\n)+/', ' ', $correction2 );
+		$correction4 = preg_replace( '/(' . $replacementForIllegalChars . ')+/', ' ', $correction3 );
 
-		return $correction3;
+		return $correction4;
 	}
 
 
@@ -54,9 +55,10 @@ class formatting {
 		];
 		$correction1  = $forceLowerCase ? strtolower( $tabName ) : $tabName;
 		$correction2  = str_replace( $illegalChars, $replacementForIllegalChars, $correction1 );
-		$correction3  = preg_replace( '/(' . $replacementForIllegalChars . ')+/', ' ', $correction2 );
+		$correction3 = preg_replace( '/(\r\n|\r|\n)+/', ' ', $correction2 );
+		$correction4  = preg_replace( '/(' . $replacementForIllegalChars . ')+/', ' ', $correction3 );
 
-		return $correction3;
+		return $correction4;
 	}
 
 
