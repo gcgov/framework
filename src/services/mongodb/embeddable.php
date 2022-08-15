@@ -94,6 +94,15 @@ abstract class embeddable
 
 			foreach( $reflectionClass->getProperties() as $property ) {
 
+				//meta
+				$classIncludeMetaAttributes = $reflectionClass->getAttributes( includeMeta::class );
+				foreach( $classIncludeMetaAttributes as $classIncludeMetaAttribute ) {
+					$includeMetaAttributeInstance = $classIncludeMetaAttribute->newInstance();
+					if( !$includeMetaAttributeInstance->includeMeta ) {
+						unset( $this->_meta );
+					}
+				}
+
 				//get all attributes for this property
 				$propertyAttributes = $property->getAttributes( redact::class );
 				foreach( $propertyAttributes as $propertyAttribute ) {
