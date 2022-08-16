@@ -39,8 +39,6 @@ abstract class embeddable
 
 
 	protected function _afterJsonSerialize( array $export ): array {
-		log::info( 'MongoService', '_afterJsonSerialize' . get_called_class() );
-
 		//get the called class name
 		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
 
@@ -382,7 +380,12 @@ abstract class embeddable
 				}
 
 				//set the class property = the parsed value from the database
-				$this->$propertyName = $this->bsonUnserializeDataItem( $rProperty, $propertyType, $propertyTypeName, $value );
+				try {
+					$this->$propertyName = $this->bsonUnserializeDataItem( $rProperty, $propertyType, $propertyTypeName, $value );
+				}
+				catch(\Exception|\TypeError $e) {
+					error_log($e);
+				}
 			}
 		}
 
@@ -446,6 +449,9 @@ abstract class embeddable
 		//$data[ $propertyName ] exists and has value
 		else {
 			if( $propertyTypeName==='array' && $value instanceof \stdClass) {
+				return (array) $value;
+			}
+			if( $propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONArray) {
 				return (array) $value;
 			}
 			else {
