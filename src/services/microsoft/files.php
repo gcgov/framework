@@ -84,6 +84,70 @@ class files {
 
 
 	/**
+	 * @throws \gcgov\framework\exceptions\serviceException
+	 */
+	public function getFileById( string $itemId ) : \Microsoft\Graph\Model\DriveItem {
+		//get application access token
+		$accessToken = $this->getMicrosoftAccessToken();
+
+		//get file list
+		try {
+			$graph = new \Microsoft\Graph\Graph();
+			$graph->setAccessToken( $accessToken );
+
+			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
+			$driveItem = $graph->createRequest( "GET", "/drives/". config::getEnvironmentConfig()->microsoft->driveId.'/items/'.$itemId )
+			                    ->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+
+			return $driveItem;
+		}
+		catch( ClientException $e ) {
+			throw new serviceException( 'Not found', $e->getCode(), $e );
+		}
+		catch( GuzzleException $e ) {
+			throw new serviceException( 'Error getting files from Microsoft', 500, $e );
+		}
+		catch( GraphException $e ) {
+			throw new serviceException( $e->getMessage(), 500, $e );
+		}
+	}
+
+
+	/**
+	 * @throws \gcgov\framework\exceptions\serviceException
+	 */
+	public function downloadFile( string $itemId, string $pathToTempSave ) : string {
+		//get application access token
+		$accessToken = $this->getMicrosoftAccessToken();
+
+		if(!file_exists($pathToTempSave.'/'.$itemId)) {
+			mkdir($pathToTempSave.'/'.$itemId, 777, true);
+		}
+
+		//get file list
+		try {
+			$graph = new \Microsoft\Graph\Graph();
+			$graph->setAccessToken( $accessToken );
+
+			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
+			$driveItem = $graph->createRequest( "GET", '/drives/'. config::getEnvironmentConfig()->microsoft->driveId.'/items/'.$itemId )->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+			$graph->createRequest( "GET", '/drives/'. config::getEnvironmentConfig()->microsoft->driveId.'/items/'.$itemId.'/content' )->download( $pathToTempSave.'/'.$itemId.'/'.$driveItem->getName() );
+
+			return $pathToTempSave.'/'.$itemId.'/'.$driveItem->getName();
+		}
+		catch( ClientException $e ) {
+			throw new serviceException( 'File not found', $e->getCode(), $e );
+		}
+		catch( GuzzleException $e ) {
+			throw new serviceException( 'Error getting files from Microsoft', 500, $e );
+		}
+		catch( GraphException $e ) {
+			throw new serviceException( $e->getMessage(), 500, $e );
+		}
+	}
+
+
+	/**
 	 * @param  string  $serverFullFilePath
 	 * @param  string  $fileName
 	 * @param  string[]   $uploadPathParts Ex: [ '2021-0001', 'Building 1', 'Inspections' ] will turn into {root}/2021-0001/Building 1/Inspections
