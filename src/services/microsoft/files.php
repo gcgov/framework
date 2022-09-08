@@ -11,22 +11,24 @@ use Microsoft\Graph\Exception\GraphException;
 
 class files {
 
-	public string $rootBasePath = '';
+	public string $rootBasePath         = '';
+	private bool  $usingUserAccessToken = false;
 
-	public function __construct( $rootBasePath='' ) {
-		if(strlen(trim($rootBasePath, ' \\/'))>0) {
-			$this->rootBasePath = trim( $rootBasePath, ' \\/').'/';
+
+	public function __construct( $rootBasePath = '' ) {
+		if( strlen( trim( $rootBasePath, ' \\/' ) )>0 ) {
+			$this->rootBasePath = trim( $rootBasePath, ' \\/' ) . '/';
 		}
 	}
 
 
 	/**
-	 * @param  string[]  $microsoftPathParts  Ex: [ '2021-0001', 'Building 1', 'Inspections' ] will turn into {root}/2021-0001/Building 1/Inspections
+	 * @param string[] $microsoftPathParts Ex: [ '2021-0001', 'Building 1', 'Inspections' ] will turn into {root}/2021-0001/Building 1/Inspections
 	 *
 	 * @return \Microsoft\Graph\Model\DriveItem[]
 	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
-	public function list( array $microsoftPathParts ) : array {
+	public function list( array $microsoftPathParts ): array {
 
 		//get application access token
 		$accessToken = $this->getMicrosoftAccessToken();
@@ -37,7 +39,7 @@ class files {
 		}
 		catch( serviceException $e ) {
 			//if the error is that the folder doesn't exist, try to create it
-			if( $e->getCode() == 404 ) {
+			if( $e->getCode()==404 ) {
 				//generate the folders recursively
 				//$newDriveItems = $this->createMicrosoftDirectories( $accessToken, $microsoftPathParts );
 				//try to get the files again
@@ -56,7 +58,7 @@ class files {
 	/**
 	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
-	public function getFile( array $microsoftPathParts ) : \Microsoft\Graph\Model\DriveItem {
+	public function getFile( array $microsoftPathParts ): \Microsoft\Graph\Model\DriveItem {
 		//get application access token
 		$accessToken = $this->getMicrosoftAccessToken();
 
@@ -66,8 +68,8 @@ class files {
 			$graph->setAccessToken( $accessToken );
 
 			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
-			$driveItem = $graph->createRequest( "GET", "/drives/". config::getEnvironmentConfig()->microsoft->driveId.'/root:/'.$this->rootBasePath . implode( '/', $microsoftPathParts ) )
-			                    ->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+			$driveItem = $graph->createRequest( "GET", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/root:/' . $this->rootBasePath . implode( '/', $microsoftPathParts ) )
+				->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
 
 			return $driveItem;
 		}
@@ -86,7 +88,7 @@ class files {
 	/**
 	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
-	public function getFileById( string $itemId ) : \Microsoft\Graph\Model\DriveItem {
+	public function getFileById( string $itemId ): \Microsoft\Graph\Model\DriveItem {
 		//get application access token
 		$accessToken = $this->getMicrosoftAccessToken();
 
@@ -96,8 +98,8 @@ class files {
 			$graph->setAccessToken( $accessToken );
 
 			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
-			$driveItem = $graph->createRequest( "GET", "/drives/". config::getEnvironmentConfig()->microsoft->driveId.'/items/'.$itemId )
-			                    ->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+			$driveItem = $graph->createRequest( "GET", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/items/' . $itemId )
+				->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
 
 			return $driveItem;
 		}
@@ -116,12 +118,12 @@ class files {
 	/**
 	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
-	public function downloadFile( string $itemId, string $pathToTempSave ) : string {
+	public function downloadFile( string $itemId, string $pathToTempSave ): string {
 		//get application access token
 		$accessToken = $this->getMicrosoftAccessToken();
 
-		if(!file_exists($pathToTempSave.'/'.$itemId)) {
-			mkdir($pathToTempSave.'/'.$itemId, 777, true);
+		if( !file_exists( $pathToTempSave . '/' . $itemId ) ) {
+			mkdir( $pathToTempSave . '/' . $itemId, 777, true );
 		}
 
 		//get file list
@@ -130,10 +132,10 @@ class files {
 			$graph->setAccessToken( $accessToken );
 
 			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
-			$driveItem = $graph->createRequest( "GET", '/drives/'. config::getEnvironmentConfig()->microsoft->driveId.'/items/'.$itemId )->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
-			$graph->createRequest( "GET", '/drives/'. config::getEnvironmentConfig()->microsoft->driveId.'/items/'.$itemId.'/content' )->download( $pathToTempSave.'/'.$itemId.'/'.$driveItem->getName() );
+			$driveItem = $graph->createRequest( "GET", '/drives/' . config::getEnvironmentConfig()->microsoft->driveId . '/items/' . $itemId )->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+			$graph->createRequest( "GET", '/drives/' . config::getEnvironmentConfig()->microsoft->driveId . '/items/' . $itemId . '/content' )->download( $pathToTempSave . '/' . $itemId . '/' . $driveItem->getName() );
 
-			return $pathToTempSave.'/'.$itemId.'/'.$driveItem->getName();
+			return $pathToTempSave . '/' . $itemId . '/' . $driveItem->getName();
 		}
 		catch( ClientException $e ) {
 			throw new serviceException( 'File not found', $e->getCode(), $e );
@@ -148,13 +150,15 @@ class files {
 
 
 	/**
-	 * @param  string  $serverFullFilePath
-	 * @param  string  $fileName
-	 * @param  string[]   $uploadPathParts Ex: [ '2021-0001', 'Building 1', 'Inspections' ] will turn into {root}/2021-0001/Building 1/Inspections
+	 * @param string   $serverFullFilePath
+	 * @param string   $fileName
+	 * @param string[] $uploadPathParts Ex: [ '2021-0001', 'Building 1', 'Inspections' ] will turn into {root}/2021-0001/Building 1/Inspections
+	 * @param string   $fileDescription
 	 *
 	 * @return \gcgov\framework\services\microsoft\components\upload
+	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
-	public function upload( string $serverFullFilePath, string $fileName, array $uploadPathParts ) : \gcgov\framework\services\microsoft\components\upload {
+	public function upload( string $serverFullFilePath, string $fileName, array $uploadPathParts, string $fileDescription = '' ): \gcgov\framework\services\microsoft\components\upload {
 
 		$response = new \gcgov\framework\services\microsoft\components\upload();
 
@@ -165,31 +169,44 @@ class files {
 		$graph = new \Microsoft\Graph\Graph();
 		$graph->setAccessToken( $accessToken );
 
-		$fileEndpoint = "/drives/".config::getEnvironmentConfig()->microsoft->driveId.'/root:/'.$this->rootBasePath . implode( '/', $uploadPathParts ) . '/' . $fileName;
+		$fileEndpoint = "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/root:/' . $this->rootBasePath . implode( '/', $uploadPathParts ) . '/' . $fileName;
 
 		$fileSize = filesize( $serverFullFilePath );
 
 		try {
 			//if less than 4 mb, simple upload
-			if( $fileSize <= 4194304 ) {
+			if( $fileSize<=4194304 ) {
+				/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
 				$driveItem = $graph->createRequest( "PUT", $fileEndpoint . ":/content" )
-				                   ->attachBody( file_get_contents( $serverFullFilePath ) )
-				                   ->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+					->attachBody( file_get_contents( $serverFullFilePath ) )
+					->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+
+				if(!empty($fileDescription)) {
+					try {
+						$driveItem = $graph->createRequest( "PATCH", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/items/' . $driveItem->getId() )
+							->attachBody( [ "description" => $fileDescription ] )
+							->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+					}
+					catch( GraphException|GuzzleException $e ) {
+						error_log('Failed to update description of small file');
+						error_log($e);
+					}
+				}
 			}
 			//larger than 4 mb, upload in chunks
 			else {
 				//1. create upload session
 				$graphBody = [
 					"@microsoft.graph.conflictBehavior" => "rename",
-					"description"                       => "",
+					"description"                       => $fileDescription,
 					"fileSystemInfo"                    => [ "@odata.type" => "microsoft.graph.fileSystemInfo" ],
 					"name"                              => $fileName,
 				];
 
 				$uploadSession = $graph->createRequest( "POST", $fileEndpoint . ":/createUploadSession" )
-				                       ->attachBody( $graphBody )
-				                       ->setReturnType( \Microsoft\Graph\Model\UploadSession::class )
-				                       ->execute();
+					->attachBody( $graphBody )
+					->setReturnType( \Microsoft\Graph\Model\UploadSession::class )
+					->execute();
 
 				//2. upload bytes
 				$fragSize       = 1024 * 1024 * 4;
@@ -199,12 +216,12 @@ class files {
 				$i              = 0;
 
 				if( $stream = fopen( $serverFullFilePath, 'r' ) ) {
-					while( $i < $numFragments ) {
+					while( $i<$numFragments ) {
 						$chunkSize = $numBytes = $fragSize;
 						$start     = $i * $fragSize;
 						$end       = $i * $fragSize + $chunkSize - 1;
 						$offset    = $i * $fragSize;
-						if( $bytesRemaining < $chunkSize ) {
+						if( $bytesRemaining<$chunkSize ) {
 							$chunkSize = $numBytes = $bytesRemaining;
 							$end       = $fileSize - 1;
 						}
@@ -218,9 +235,9 @@ class files {
 							"Content-Range"  => $content_range
 						];
 						$uploadByte     = $graph->createRequest( "PUT", $graphUrl )->addHeaders( $headers )
-						                        ->attachBody( $data )
-						                        ->setReturnType( \Microsoft\Graph\Model\UploadSession::class )
-						                        ->setTimeout( "1000" )->execute();
+							->attachBody( $data )
+							->setReturnType( \Microsoft\Graph\Model\UploadSession::class )
+							->setTimeout( "1000" )->execute();
 						$bytesRemaining = $bytesRemaining - $chunkSize;
 						$i++;
 					}
@@ -228,12 +245,12 @@ class files {
 				}
 
 				$driveItem = $graph->createRequest( "GET", $fileEndpoint )
-				                   ->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+					->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
 			}
 
 			$response->files[] = $driveItem;
 		}
-		catch( GraphException | GuzzleException $e ) {
+		catch( GraphException|GuzzleException $e ) {
 			$response->errors[] = new \gcgov\framework\services\microsoft\components\envelope( $e->getCode(), true, $fileName . ' did not upload. ' . $e->getMessage() );
 		}
 
@@ -270,28 +287,31 @@ class files {
 	 * @return mixed
 	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
-	private function getMicrosoftAccessToken() : string {
+	private function getMicrosoftAccessToken(): string {
 		$microsoftAuth = new auth();
 
 		//get user access token
 		if( isset( $_SERVER[ 'HTTP_X_MSACCESSTOKEN' ] ) ) {
-
-			return (string) $microsoftAuth->getAccessToken( $_SERVER[ 'HTTP_X_MSACCESSTOKEN' ] );
+			$this->usingUserAccessToken = true;
+			return (string)$microsoftAuth->getAccessToken( $_SERVER[ 'HTTP_X_MSACCESSTOKEN' ] );
 
 		}
 		//get access token
 		else {
+			$this->usingUserAccessToken = false;
 			return $microsoftAuth->getApplicationAccessToken();
 		}
 	}
+
+
 	/**
 	 * @param          $accessToken
-	 * @param  string  $path
+	 * @param string   $path
 	 *
 	 * @return \Microsoft\Graph\Model\DriveItem[]
 	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
-	private function getMicrosoftDriveItems( $accessToken, string $path ) : array {
+	private function getMicrosoftDriveItems( $accessToken, string $path ): array {
 		//get file list
 		try {
 			$graph = new \Microsoft\Graph\Graph();
@@ -299,11 +319,11 @@ class files {
 
 			//get all the project folders
 			/** @var \Microsoft\Graph\Model\DriveItem[] $driveItems */
-			$driveItems = $graph->createRequest( "GET", "/drives/".config::getEnvironmentConfig()->microsoft->driveId.'/root:/'.$this->rootBasePath . $path . ":/children" )
-			                    ->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+			$driveItems = $graph->createRequest( "GET", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/root:/' . $this->rootBasePath . $path . ":/children" )
+				->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
 
 			foreach( $driveItems as $i => $driveItem ) {
-				if( $driveItem->getFolder() !== null ) {
+				if( $driveItem->getFolder()!==null ) {
 					$children = $this->getMicrosoftDriveItems( $accessToken, $path . '/' . $driveItem->getName() );
 					$driveItems[ $i ]->setChildren( $children );
 				}
@@ -325,11 +345,11 @@ class files {
 
 	/**
 	 * @param            $accessToken
-	 * @param  string[]  $basePath
+	 * @param string[]   $basePath
 	 *
 	 * @return \Microsoft\Graph\Model\DriveItem[]
 	 */
-	private function createMicrosoftDirectories( $accessToken, array $basePath ) : array {
+	private function createMicrosoftDirectories( $accessToken, array $basePath ): array {
 		$driveItems = [];
 
 		$graph = new \Microsoft\Graph\Graph();
@@ -339,17 +359,17 @@ class files {
 		foreach( $basePath as $i => $directoryName ) {
 			$body = [
 				'name'                              => $directoryName,
-				'folder'                            => (object) [],
+				'folder'                            => (object)[],
 				'@microsoft.graph.conflictBehavior' => 'fail'
 			];
 
 			try {
 				/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
-				$driveItems[] = $graph->createRequest( "POST", "/drives/".config::getEnvironmentConfig()->microsoft->driveId.'/root:/'.$this->rootBasePath . $path . ":/children" )
-				                      ->attachBody( $body )->setReturnType( \Microsoft\Graph\Model\DriveItem::class )
-				                      ->execute();
+				$driveItems[] = $graph->createRequest( "POST", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/root:/' . $this->rootBasePath . $path . ":/children" )
+					->attachBody( $body )->setReturnType( \Microsoft\Graph\Model\DriveItem::class )
+					->execute();
 			}
-			catch( \Exception | \GuzzleHttp\Exception\GuzzleException $e ) {
+			catch( \Exception|\GuzzleHttp\Exception\GuzzleException $e ) {
 				error_log( $path . '/' . $directoryName . ' not created - already exists?' );
 				error_log( $e );
 			}
