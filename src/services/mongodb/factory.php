@@ -386,4 +386,22 @@ abstract class factory
 		return new updateDeleteResult( $updateResult );
 	}
 
+
+	/**
+	 * Run a Mongo db aggregation on the collection
+	 * @return \app\models\project[]
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function aggregation( array $pipeline = [], $options = [] ): array {
+		$mdb = new tools\mdb( collection: static::_getCollectionName() );
+
+		try {
+			$cursor = $mdb->collection->aggregate( $pipeline, $options );
+		}
+		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
+		}
+
+		return $cursor->toArray();
+	}
 }
