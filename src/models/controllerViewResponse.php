@@ -1,13 +1,10 @@
 <?php
 
-
 namespace gcgov\framework\models;
 
+use gcgov\framework\interfaces\_controllerViewResponse;
 
-use gcgov\framework\interfaces\_controllerResponse;
-
-
-class controllerViewResponse implements _controllerResponse {
+class controllerViewResponse extends controllerResponse implements _controllerViewResponse {
 
 	/**
 	 * @var string path to view file
@@ -21,28 +18,29 @@ class controllerViewResponse implements _controllerResponse {
 
 
 	/**
-	 * @param  string  $view Path to view file
-	 * @param  array   $vars Associative array where keys will be converted to local variables in view
+	 * @param string $view Path to view file
+	 * @param array  $vars Associative array where keys will be converted to local variables in view
 	 */
-	public function __construct( string $view, array $vars ) {
-		$this->setView($view);
-		$this->setVars($vars);
+	public function __construct( string $view, array $vars, array $headers=[] ) {
+		parent::__construct( $headers );
+		$this->setView( $view );
+		$this->setVars( $vars );
 	}
 
 
 	/**
 	 * @return string
 	 */
-	public function getView() : string {
+	public function getView(): string {
 
 		return $this->view;
 	}
 
 
 	/**
-	 * @param  string  $view
+	 * @param string $view
 	 */
-	public function setView( string $view ) : void {
+	public function setView( string $view ): void {
 
 		$this->view = $view;
 	}
@@ -51,19 +49,18 @@ class controllerViewResponse implements _controllerResponse {
 	/**
 	 * @return array
 	 */
-	public function getVars() : array {
+	public function getVars(): array {
 
 		return $this->vars;
 	}
 
 
 	/**
-	 * @param  array  $vars
+	 * @param array $vars
 	 */
-	public function setVars( array $vars ) : void {
+	public function setVars( array $vars ): void {
 
 		$this->vars = $vars;
 	}
-
 
 }

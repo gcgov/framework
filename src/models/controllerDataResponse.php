@@ -5,7 +5,7 @@ namespace gcgov\framework\models;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\interfaces\_controllerDataResponse;
 
-class controllerDataResponse implements _controllerDataResponse {
+class controllerDataResponse extends controllerResponse implements _controllerDataResponse {
 
 	public const SupportedContentTypes = [
 		'application/json',
@@ -25,9 +25,7 @@ class controllerDataResponse implements _controllerDataResponse {
 	 */
 	public function __construct( mixed $data = null, array $headers = [] ) {
 		$this->setData( $data );
-		if(count($headers)>0) {
-			$this->setHeaders( $headers );
-		}
+		parent::__construct( $headers );
 	}
 
 
@@ -50,24 +48,6 @@ class controllerDataResponse implements _controllerDataResponse {
 
 
 	/**
-	 * @return int
-	 */
-	public function getHttpStatus(): int {
-
-		return $this->httpStatus;
-	}
-
-
-	/**
-	 * @param int $httpStatus
-	 */
-	public function setHttpStatus( int $httpStatus ): void {
-
-		$this->httpStatus = $httpStatus;
-	}
-
-
-	/**
 	 * @return string
 	 */
 	public function getContentType(): string {
@@ -78,50 +58,15 @@ class controllerDataResponse implements _controllerDataResponse {
 	/**
 	 * @param string $contentType
 	 *
-	 * @throws \gcgov\framework\exceptions\modelException
+	 * @throws \gcgov\framework\exceptions\controllerException
 	 */
 	public function setContentType( string $contentType ): void {
 		if( in_array( $contentType, self::SupportedContentTypes ) ) {
 			$this->contentType = $contentType;
 		}
 		else {
-			throw new modelException( 'Content-Type: ' . $contentType . ' has not been implemented in \gcgov\framework\renderer. Supported types: ' . json_encode( self::SupportedContentTypes ) );
+			throw new \gcgov\framework\exceptions\controllerException( 'Content-Type: ' . $contentType . ' has not been implemented in \gcgov\framework\renderer. Supported types: ' . json_encode( self::SupportedContentTypes ) );
 		}
-	}
-
-
-	/**
-	 * @return array
-	 */
-	public function getHeaders(): array {
-		return $this->headers;
-	}
-
-
-	/**
-	 * @param \gcgov\framework\models\controllerResponseHeader[] $headers
-	 */
-	public function setHeaders( array $headers ): void {
-		$this->headers = $headers;
-	}
-
-
-	/**
-	 * @param \gcgov\framework\models\controllerResponseHeader[] $additionalHeaders
-	 */
-	public function addHeaders( array $additionalHeaders ): void {
-		foreach( $additionalHeaders as $additionalHeader ) {
-			$this->headers[] = $additionalHeader;
-		}
-	}
-
-
-	/**
-	 * @param string $name
-	 * @param string $value
-	 */
-	public function addHeader( string $name, string $value ): void {
-		$this->headers[] =  new \gcgov\framework\models\controllerResponseHeader( $name, $value );
 	}
 
 }
