@@ -1,12 +1,9 @@
 <?php
 
-
 namespace gcgov\framework\models;
-
 
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\interfaces\_controllerResponse;
-
 
 class controllerDataResponse implements _controllerResponse {
 
@@ -17,14 +14,20 @@ class controllerDataResponse implements _controllerResponse {
 
 	private string $contentType = 'application/json';
 	private mixed  $data        = null;
-	private int    $httpStatus  = 200;
+	/** @var \gcgov\framework\models\controllerResponseHeader[] */
+	private array $headers    = [];
+	private int   $httpStatus = 200;
 
 
 	/**
-	 * @param mixed $data Data to be json encoded and output
+	 * @param mixed                                              $data Data to be json encoded and output
+	 * @param \gcgov\framework\models\controllerResponseHeader[] $headers
 	 */
-	public function __construct( mixed $data = null ) {
+	public function __construct( mixed $data = null, array $headers = [] ) {
 		$this->setData( $data );
+		if(count($headers)>0) {
+			$this->setHeaders( $headers );
+		}
 	}
 
 
@@ -86,5 +89,39 @@ class controllerDataResponse implements _controllerResponse {
 		}
 	}
 
+
+	/**
+	 * @return array
+	 */
+	public function getHeaders(): array {
+		return $this->headers;
+	}
+
+
+	/**
+	 * @param \gcgov\framework\models\controllerResponseHeader[] $headers
+	 */
+	public function setHeaders( array $headers ): void {
+		$this->headers = $headers;
+	}
+
+
+	/**
+	 * @param \gcgov\framework\models\controllerResponseHeader[] $additionalHeaders
+	 */
+	public function addHeaders( array $additionalHeaders ): void {
+		foreach( $additionalHeaders as $additionalHeader ) {
+			$this->headers[] = $additionalHeader;
+		}
+	}
+
+
+	/**
+	 * @param string $name
+	 * @param string $value
+	 */
+	public function addHeader( string $name, string $value ): void {
+		$this->headers[] =  new \gcgov\framework\models\controllerResponseHeader( $name, $value );
+	}
 
 }

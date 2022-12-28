@@ -103,9 +103,12 @@ final class renderer {
 	private function processControllerDataResponse( controllerDataResponse $controllerDataResponse ): string {
 		if( !headers_sent( $filename, $lineNumber ) ) {
 			header( 'Content-Type:' . $controllerDataResponse->getContentType() );
+			foreach( $controllerDataResponse->getHeaders() as $header ) {
+				$header->output();
+			}
 		}
 		else {
-			\gcgov\framework\services\log::debug( 'Renderer', 'Cannot set content-type header. Headers already sent in ' . $filename . ' on line ' . $lineNumber );
+			\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $filename . ' on line ' . $lineNumber );
 		}
 
 		if( $controllerDataResponse->getHttpStatus()!=200 ) {
