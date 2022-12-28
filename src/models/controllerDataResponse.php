@@ -14,9 +14,6 @@ class controllerDataResponse extends controllerResponse implements _controllerDa
 
 	private string $contentType = 'application/json';
 	private mixed  $data        = null;
-	/** @var \gcgov\framework\models\controllerResponseHeader[] */
-	private array $headers    = [];
-	private int   $httpStatus = 200;
 
 
 	/**
