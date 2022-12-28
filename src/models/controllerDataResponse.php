@@ -3,9 +3,9 @@
 namespace gcgov\framework\models;
 
 use gcgov\framework\exceptions\modelException;
-use gcgov\framework\interfaces\_controllerResponse;
+use gcgov\framework\interfaces\_controllerDataResponse;
 
-class controllerDataResponse implements _controllerResponse {
+class controllerDataResponse implements _controllerDataResponse {
 
 	public const SupportedContentTypes = [
 		'application/json',

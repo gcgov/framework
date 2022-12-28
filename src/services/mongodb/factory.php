@@ -2,13 +2,11 @@
 
 namespace gcgov\framework\services\mongodb;
 
-
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\models\_meta;
 use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\autoIncrement;
 use gcgov\framework\services\mongodb\models\audit;
-
 
 /**
  * Standard factory methods provided for all models
@@ -18,48 +16,49 @@ abstract class factory
 	extends
 	dispatcher {
 
-	abstract static function _getCollectionName() : string;
+	abstract static function _getCollectionName(): string;
 
 
-	abstract static function _getTypeMap() : array;
+	abstract static function _getTypeMap(): array;
 
 
-	abstract static function _getHumanName( bool $capitalize = false, bool $plural = false ) : string;
+	abstract static function _getHumanName( bool $capitalize = false, bool $plural = false ): string;
 
 
 	/**
-	 * @param  array  $filter  optional
-	 * @param  array  $options    optional
+	 * @param array $filter  optional
+	 * @param array $options optional
 	 *
 	 * @return int
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function countDocuments( array $filter = [], array $options = [] ) : int {
+	public static function countDocuments( array $filter = [], array $options = [] ): int {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		try {
 			return $mdb->collection->countDocuments( $filter, $options );
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			throw new \gcgov\framework\exceptions\modelException( 'Database counting collection '.static::_getCollectionName().' for filter: '.json_encode($filter).' with options: '.json_encode($options), 500, $e );
+			throw new \gcgov\framework\exceptions\modelException( 'Database counting collection ' . static::_getCollectionName() . ' for filter: ' . json_encode( $filter ) . ' with options: ' . json_encode( $options ), 500, $e );
 		}
 	}
 
+
 	/**
-	 * @param  array  $filter  optional
-	 * @param  array  $sort    optional
-	 * @param  array  $options    optional
+	 * @param array $filter  optional
+	 * @param array $sort    optional
+	 * @param array $options optional
 	 *
 	 * @return array
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getAll( array $filter = [], array $sort = [], array $options = [] ) : array {
+	public static function getAll( array $filter = [], array $sort = [], array $options = [] ): array {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$options = array_merge( $options, [
 			'typeMap' => static::_getTypeMap()
 		] );
-		if( count( $sort ) > 0 ) {
+		if( count( $sort )>0 ) {
 			$options[ 'sort' ] = $sort;
 		}
 
@@ -75,12 +74,46 @@ abstract class factory
 
 
 	/**
-	 * @param  \MongoDB\BSON\ObjectId|string  $_id
+	 * @param int|string|null $limit
+	 * @param int|string|null $page
+	 * @param array           $filter  optional
+	 * @param array           $options optional
+	 *
+	 * @return \gcgov\framework\services\mongodb\getResult
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function getPagedResponse( int|string|null $limit, int|string|null $page, array $filter = [], array $options = [] ): getResult {
+		$mdb = new tools\mdb( collection: static::_getCollectionName() );
+
+		$result = new getResult( $limit, $page );
+
+		$options            = array_merge( $options, [
+			'typeMap' => static::_getTypeMap()
+		] );
+		$options[ 'limit' ] = $result->getLimit();
+		$options[ 'skip' ]  = ( $result->getPage() - 1 ) * $result->getLimit();
+
+		try {
+			$cursor = $mdb->collection->find( $filter, $options );
+			$result->setData( $cursor->toArray() );
+		}
+		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
+		}
+
+		$result->setTotalDocumentCount( self::countDocuments( $filter ) );
+
+		return $result;
+	}
+
+
+	/**
+	 * @param \MongoDB\BSON\ObjectId|string $_id
 	 *
 	 * @return object
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getOne( \MongoDB\BSON\ObjectId|string $_id ) : object {
+	public static function getOne( \MongoDB\BSON\ObjectId|string $_id ): object {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
@@ -100,7 +133,7 @@ abstract class factory
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
 		}
 
-		if( $cursor === null ) {
+		if( $cursor===null ) {
 			throw new \gcgov\framework\exceptions\modelException( static::_getHumanName( capitalize: true ) . ' not found', 404 );
 		}
 
@@ -109,13 +142,13 @@ abstract class factory
 
 
 	/**
-	 * @param  array  $filter  optional
-	 * @param  array  $options    optional
+	 * @param array $filter  optional
+	 * @param array $options optional
 	 *
 	 * @return object
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getOneBy( array $filter = [], array $options = []  ) : object {
+	public static function getOneBy( array $filter = [], array $options = [] ): object {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$options = array_merge( $options, [
@@ -129,7 +162,7 @@ abstract class factory
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
 		}
 
-		if( $cursor === null ) {
+		if( $cursor===null ) {
 			throw new \gcgov\framework\exceptions\modelException( static::_getHumanName( capitalize: true ) . ' not found', 404 );
 		}
 
@@ -139,12 +172,12 @@ abstract class factory
 
 	/**
 	 * @param        $object
-	 * @param  bool  $upsert
+	 * @param bool   $upsert
 	 *
 	 * @return \gcgov\framework\services\mongodb\updateDeleteResult
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function save( &$object, bool $upsert = true, bool $callBeforeAfterHooks = true ) : updateDeleteResult {
+	public static function save( &$object, bool $upsert = true, bool $callBeforeAfterHooks = true ): updateDeleteResult {
 		if( $callBeforeAfterHooks && method_exists( get_called_class(), '_beforeSave' ) ) {
 			static::_beforeSave( $object );
 		}
@@ -152,7 +185,7 @@ abstract class factory
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		//AUDIT CHANGE STREAM
-		if( $mdb->audit && static::_getCollectionName() != 'audit' ) {
+		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
 			$auditChangeStream = new audit();
 			$auditChangeStream->startChangeStreamWatch( $mdb->collection );
 		}
@@ -185,9 +218,8 @@ abstract class factory
 			throw new \gcgov\framework\exceptions\modelException( 'Database error. ' . $e->getMessage(), 500, $e );
 		}
 
-
 		//auto increment fields on insert
-		if( $updateResult->getUpsertedCount() > 0 ) {
+		if( $updateResult->getUpsertedCount()>0 ) {
 			$autoIncrementUpdateResult = static::autoIncrementProperties( $object );
 		}
 
@@ -200,15 +232,15 @@ abstract class factory
 		$combinedResult = new updateDeleteResult( $updateResult, array_merge( $embeddedUpdates, $embeddedInserts ?? [] ) );
 
 		//update _meta property of object to show results
-		if( property_exists( $object, '_meta' )  ) {
-			if( !isset($object->_meta)) {
+		if( property_exists( $object, '_meta' ) ) {
+			if( !isset( $object->_meta ) ) {
 				$object->_meta = new _meta( get_called_class() );
 			}
 			$object->_meta->setDb( $combinedResult );
 		}
 
 		//AUDIT CHANGE STREAM
-		if( $mdb->audit && static::_getCollectionName() != 'audit' && ($combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0)) {
+		if( $mdb->audit && static::_getCollectionName()!='audit' && ( $combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0 ) ) {
 			$auditChangeStream->processChangeStream( $combinedResult );
 			audit::save( $auditChangeStream );
 		}
@@ -221,16 +253,16 @@ abstract class factory
 
 
 	/**
-	 * @param  \MongoDB\BSON\ObjectId|string  $_id
+	 * @param \MongoDB\BSON\ObjectId|string $_id
 	 *
 	 * @return \gcgov\framework\services\mongodb\updateDeleteResult
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function delete( \MongoDB\BSON\ObjectId|string $_id ) : updateDeleteResult {
+	public static function delete( \MongoDB\BSON\ObjectId|string $_id ): updateDeleteResult {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		//AUDIT CHANGE STREAM
-		if( $mdb->audit && static::_getCollectionName() != 'audit' ) {
+		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
 			$auditChangeStream = new audit();
 			$auditChangeStream->startChangeStreamWatch( $mdb->collection );
 		}
@@ -263,12 +295,12 @@ abstract class factory
 		//combine primary delete with embedded
 		$combinedResult = new updateDeleteResult( $deleteResult, $embeddedDeletes );
 
-		if( $combinedResult->getEmbeddedDeletedCount() + $combinedResult->getDeletedCount() + $combinedResult->getModifiedCount() + $combinedResult->getEmbeddedModifiedCount() == 0 ) {
+		if( $combinedResult->getEmbeddedDeletedCount() + $combinedResult->getDeletedCount() + $combinedResult->getModifiedCount() + $combinedResult->getEmbeddedModifiedCount()==0 ) {
 			throw new modelException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found', 404 );
 		}
 
 		//AUDIT CHANGE STREAM
-		if( $mdb->audit && static::_getCollectionName() != 'audit' && $combinedResult->getDeletedCount()>0) {
+		if( $mdb->audit && static::_getCollectionName()!='audit' && $combinedResult->getDeletedCount()>0 ) {
 			$auditChangeStream->processChangeStream( $combinedResult );
 			audit::save( $auditChangeStream );
 		}
@@ -278,12 +310,12 @@ abstract class factory
 
 
 	/**
-	 * @param  \gcgov\framework\services\mongodb\model  $object
+	 * @param \gcgov\framework\services\mongodb\model $object
 	 *
 	 * @return \gcgov\framework\services\mongodb\updateDeleteResult
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	private static function autoIncrementProperties( model $object ) : updateDeleteResult {
+	private static function autoIncrementProperties( model $object ): updateDeleteResult {
 		log::info( 'MongoServiceAutoIncrement', 'Start auto increment ' . $object::class );
 
 		/** @var attributes\autoIncrement[] $autoIncrementAttributes */
@@ -297,7 +329,7 @@ abstract class factory
 				$attributes = $property->getAttributes( autoIncrement::class );
 
 				//this is an auto increment field
-				if( count( $attributes ) > 0 ) {
+				if( count( $attributes )>0 ) {
 					/** @var attributes\autoIncrement $autoIncrement */
 					$autoIncrementAttributes[ $property->getName() ] = $attributes[ 0 ]->newInstance();
 				}
@@ -311,7 +343,7 @@ abstract class factory
 		}
 
 		//if no properties are auto increments, do nothing
-		if( count( $autoIncrementAttributes ) === 0 ) {
+		if( count( $autoIncrementAttributes )===0 ) {
 			return new updateDeleteResult();
 		}
 
@@ -329,10 +361,10 @@ abstract class factory
 			foreach( $autoIncrementAttributes as $propertyName => $autoIncrement ) {
 				//create key for auto increment group
 				$key = static::_getCollectionName() . '.' . $propertyName;
-				if( $autoIncrement->groupByPropertyName !== '' ) {
+				if( $autoIncrement->groupByPropertyName!=='' ) {
 					$key .= '.' . $object->{$autoIncrement->groupByPropertyName};
 				}
-				if( $autoIncrement->groupByMethodName !== '' ) {
+				if( $autoIncrement->groupByMethodName!=='' ) {
 					$key .= '.' . $object->{$autoIncrement->groupByMethodName}();
 				}
 				log::info( 'MongoServiceAutoIncrement', '--' . $key );
@@ -342,7 +374,7 @@ abstract class factory
 
 				//set the new count on the object (by ref)
 				//if the value is supposed to be formatted
-				if( $autoIncrement->countFormatMethod !== '' ) {
+				if( $autoIncrement->countFormatMethod!=='' ) {
 					$object->{$propertyName} = $object->{$autoIncrement->countFormatMethod}( $internalCounter->currentCount );
 				}
 				else {
@@ -370,7 +402,7 @@ abstract class factory
 
 			$session->commitTransaction();
 		}
-		catch( \MongoDB\Driver\Exception\RuntimeException | \MongoDB\Driver\Exception\CommandException $e ) {
+		catch( \MongoDB\Driver\Exception\RuntimeException|\MongoDB\Driver\Exception\CommandException $e ) {
 			$session->abortTransaction();
 			log::error( 'MongoServiceAutoIncrement', '--' . $e->getMessage(), $e->getTrace() );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
@@ -404,4 +436,5 @@ abstract class factory
 
 		return $cursor->toArray();
 	}
+
 }

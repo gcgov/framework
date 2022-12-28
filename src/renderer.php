@@ -96,11 +96,11 @@ final class renderer {
 
 
 	/**
-	 * @param \gcgov\framework\models\controllerDataResponse $controllerDataResponse
+	 * @param \gcgov\framework\interfaces\_controllerDataResponse $controllerDataResponse
 	 *
 	 * @return string
 	 */
-	private function processControllerDataResponse( controllerDataResponse $controllerDataResponse ): string {
+	private function processControllerDataResponse( \gcgov\framework\interfaces\_controllerDataResponse $controllerDataResponse ): string {
 		if( !headers_sent( $filename, $lineNumber ) ) {
 			header( 'Content-Type:' . $controllerDataResponse->getContentType() );
 			foreach( $controllerDataResponse->getHeaders() as $header ) {

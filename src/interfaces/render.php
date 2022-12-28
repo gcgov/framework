@@ -16,32 +16,32 @@ interface render extends lifecycle\before, lifecycle\after {
 	 *
 	 * @param  \gcgov\framework\exceptions\modelException  $e
 	 *
-	 * @return controllerDataResponse|controllerViewResponse
+	 * @return \gcgov\framework\interfaces\_controllerDataResponse|controllerViewResponse
 	 */
-	public static function processModelException( \gcgov\framework\exceptions\modelException $e ) : controllerDataResponse|controllerViewResponse;
+	public static function processModelException( \gcgov\framework\exceptions\modelException $e ) : \gcgov\framework\interfaces\_controllerDataResponse|controllerViewResponse;
 
 
 	/**
 	 * @param  \gcgov\framework\exceptions\controllerException  $e
 	 *
-	 * @return \gcgov\framework\models\controllerDataResponse|\gcgov\framework\models\controllerViewResponse
+	 * @return \gcgov\framework\interfaces\_controllerDataResponse|\gcgov\framework\models\controllerViewResponse
 	 */
-	public static function processControllerException( \gcgov\framework\exceptions\controllerException $e ) : controllerDataResponse|controllerViewResponse;
+	public static function processControllerException( \gcgov\framework\exceptions\controllerException $e ) : \gcgov\framework\interfaces\_controllerDataResponse|controllerViewResponse;
 
 
 	/**
 	 * @param  \gcgov\framework\exceptions\routeException  $e
 	 *
-	 * @return \gcgov\framework\models\controllerDataResponse|\gcgov\framework\models\controllerViewResponse
+	 * @return \gcgov\framework\interfaces\_controllerDataResponse|\gcgov\framework\models\controllerViewResponse
 	 */
-	public static function processRouteException( \gcgov\framework\exceptions\routeException $e ) : controllerDataResponse|controllerViewResponse;
+	public static function processRouteException( \gcgov\framework\exceptions\routeException $e ) : \gcgov\framework\interfaces\_controllerDataResponse|controllerViewResponse;
 
 
 	/**
 	 * @param  \Exception|\Error|\ErrorException  $e
 	 *
-	 * @return \gcgov\framework\models\controllerDataResponse|\gcgov\framework\models\controllerViewResponse
+	 * @return \gcgov\framework\interfaces\_controllerDataResponse|\gcgov\framework\models\controllerViewResponse
 	 */
-	public static function processSystemErrorException( \Exception | \Error | \ErrorException $e ) : controllerDataResponse|controllerViewResponse;
+	public static function processSystemErrorException( \Exception | \Error | \ErrorException $e ) : \gcgov\framework\interfaces\_controllerDataResponse|controllerViewResponse;
 
 }
