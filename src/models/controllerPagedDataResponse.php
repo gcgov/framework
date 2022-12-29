@@ -13,7 +13,7 @@ class controllerPagedDataResponse extends controllerDataResponse implements _con
 	 * @throws \gcgov\framework\exceptions\controllerException
 	 */
 	public function __construct( \gcgov\framework\interfaces\dbGetResult $result ) {
-		if($result->getPage()<1 || $result->getPage()>$result->getTotalPageCount()) {
+		if( $result->getTotalPageCount()>0 && ($result->getPage()<1 || $result->getPage()>$result->getTotalPageCount())) {
 			throw new controllerException('Page '.$result->getPage().' not found. Select a page between 1 and '.$result->getTotalPageCount(), 404);
 		}
 
