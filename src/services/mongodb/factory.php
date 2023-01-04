@@ -7,19 +7,16 @@ use gcgov\framework\services\mongodb\models\_meta;
 use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\autoIncrement;
 use gcgov\framework\services\mongodb\models\audit;
+use gcgov\framework\services\mongodb\tools\sys;
 
 /**
  * Standard factory methods provided for all models
  * @package gcgov\framework\services\mongodb
  */
 abstract class factory
-	extends
-	dispatcher {
+	extends dispatcher {
 
 	abstract static function _getCollectionName(): string;
-
-
-	abstract static function _getTypeMap(): array;
 
 
 	abstract static function _getHumanName( bool $capitalize = false, bool $plural = false ): string;
@@ -56,7 +53,7 @@ abstract class factory
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$options = array_merge( $options, [
-			'typeMap' => static::_getTypeMap()
+			'typeMap' => typeMapFactory::get( get_called_class() )->toArray()
 		] );
 		if( count( $sort )>0 ) {
 			$options[ 'sort' ] = $sort;
@@ -88,7 +85,7 @@ abstract class factory
 		$result = new getResult( $limit, $page );
 
 		$options            = array_merge( $options, [
-			'typeMap' => static::_getTypeMap()
+			'typeMap' => static::getBsonOptionsTypeMap()
 		] );
 		$options[ 'limit' ] = $result->getLimit();
 		$options[ 'skip' ]  = ( $result->getPage() - 1 ) * $result->getLimit();
@@ -123,7 +120,7 @@ abstract class factory
 		];
 
 		$options = [
-			'typeMap' => static::_getTypeMap(),
+			'typeMap' => static::getBsonOptionsTypeMap(),
 		];
 
 		try {
@@ -152,7 +149,7 @@ abstract class factory
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$options = array_merge( $options, [
-			'typeMap' => static::_getTypeMap()
+			'typeMap' => static::getBsonOptionsTypeMap()
 		] );
 
 		try {
@@ -171,13 +168,154 @@ abstract class factory
 
 
 	/**
-	 * @param        $object
-	 * @param bool   $upsert
+	 * @param array                        $objects
+	 * @param bool                         $upsert
+	 * @param bool                         $callBeforeAfterHooks
+	 * @param \MongoDB\Driver\Session|null $mongoDbSession
+	 *
+	 * @return \gcgov\framework\services\mongodb\updateDeleteResult[]
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function saveMany( array &$objects, bool $upsert = true, bool $callBeforeAfterHooks = true, ?\MongoDB\Driver\Session $mongoDbSession = null ): array {
+		$calledClass = get_called_class();
+
+		log::info( 'MongoService', 'Save '.count($objects).' ' . $calledClass );
+
+		$mdb         = new tools\mdb( collection: static::_getCollectionName() );
+
+		//call _beforeSave for each item
+		if( $callBeforeAfterHooks && method_exists( $calledClass, '_beforeSave' ) ) {
+			log::info( 'MongoService', '--call _beforeSave' );
+			foreach( $objects as &$object ) {
+				static::_beforeSave( $object );
+			}
+		}
+		unset( $object );
+
+		//open database session if one is not already open
+		log::info( 'MongoService', '--do save' );
+		$sessionParent = false;
+		if( !isset( $mongoDbSession ) ) {
+			$sessionParent  = true;
+			$mongoDbSession = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
+			$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 60000 ] );
+		}
+
+		//AUDIT CHANGE STREAM
+		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
+			$auditChangeStream = new audit();
+			$auditChangeStream->startChangeStreamWatch( $mdb->collection );
+		}
+
+		/** @var \gcgov\framework\services\mongodb\updateDeleteResult[] $saveResults */
+		$saveResults = [];
+
+		$mongoActions = [];
+
+		try {
+			foreach( $objects as $objectIndex => &$object ) {
+				$saveResults[ $objectIndex ] = self::_saveItem( $object, $upsert, $mdb, $mongoDbSession );
+
+				//auto increment fields on insert
+				if( $saveResults[ $objectIndex ]->getUpsertedCount()>0 ) {
+					static::autoIncrementProperties( $object, $mongoDbSession );
+				}
+
+				//dispatch inserts for all embedded versions
+				$insertEmbeddedActions = static::_getInsertEmbeddedMongoActions( $object );
+				$mongoActions = array_merge_recursive($mongoActions, $insertEmbeddedActions );
+
+				//dispatch updates for all embedded versions
+				$updateEmbeddedActions = static::_getUpdateEmbeddedMongoActions( $object );
+				$mongoActions = array_merge_recursive($mongoActions, $updateEmbeddedActions );
+
+				$object->_meta->setDb( new updateDeleteResult($saveResults[ $objectIndex ]) );
+			}
+			unset( $object );
+
+			$embeddedResults = self::_runMongoActions( $mongoActions, 'save many embedded', $mongoDbSession );
+
+			//commit session
+			if( $sessionParent ) {
+				$mongoDbSession->commitTransaction();
+			}
+		}
+		catch( modelException|\MongoDB\Driver\Exception\RuntimeException|\MongoDB\Driver\Exception\CommandException $e ) {
+			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
+				$mongoDbSession->abortTransaction();
+			}
+
+			//call _afterSave for each item with an unsuccessful save
+			if( $callBeforeAfterHooks && sys::methodExists( $calledClass, '_afterSave' ) ) {
+				log::info( 'MongoService', '--call _afterSave' );
+				foreach( $objects as &$object ) {
+					static::_afterSave( $object, false );
+				}
+			}
+
+			log::error( 'MongoService', '--Save many commit transaction failed: ' . $e->getMessage());
+			throw new \gcgov\framework\exceptions\modelException( 'Storing ' . static::_getCollectionName() . ' in the database failed', 500, $e );
+		}
+
+		//AUDIT CHANGE STREAM
+		//TODO: FIX AUDIT SAVE
+//		if( static::_getCollectionName()!='audit' && $mdb->audit && isset( $auditChangeStream ) && ( $combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0 || $combinedResult->getDeletedCount()>0 ) ) {
+//			$auditChangeStream->processChangeStream( $combinedResult );
+//			audit::save( $auditChangeStream );
+//		}
+
+		//call _afterSave for each item with a successful save
+		if( $callBeforeAfterHooks && sys::methodExists( $calledClass, '_afterSave' ) ) {
+			foreach( $objects as $objectIndex => &$object ) {
+				static::_afterSave( $object, true, new updateDeleteResult($saveResults[ $objectIndex ]) );
+			}
+			unset( $object );
+		}
+
+		return array_values( $saveResults );
+	}
+
+
+	/**
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	private static function _saveItem( object &$object, bool $upsert, tools\mdb $mdb, \MongoDB\Driver\Session $mongoDbSession  ): \MongoDB\UpdateResult {
+
+		//ACTUAL UPDATE
+		$filter = [
+			'_id' => $object->_id
+		];
+
+		$update = [
+			'$set' => $object
+		];
+
+		$options = [
+			'upsert'  => $upsert,
+			'session' => $mongoDbSession
+		];
+
+		try {
+			return $mdb->collection->updateOne( $filter, $update, $options );
+		}
+		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+			log::error( 'MongoService', '--_saveItem failed: ' . $e->getMessage(), $e->getTrace() );
+			throw new \gcgov\framework\exceptions\modelException( 'Storing ' . $object::class . ' in the database failed', 500, $e );
+		}
+
+	}
+
+
+	/**
+	 * @param object                       $object
+	 * @param bool                         $upsert
+	 * @param bool                         $callBeforeAfterHooks
+	 * @param \MongoDB\Driver\Session|null $mongoDbSession
 	 *
 	 * @return \gcgov\framework\services\mongodb\updateDeleteResult
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function save( &$object, bool $upsert = true, bool $callBeforeAfterHooks = true ): updateDeleteResult {
+	public static function save( object &$object, bool $upsert = true, bool $callBeforeAfterHooks = true, ?\MongoDB\Driver\Session $mongoDbSession = null ): updateDeleteResult {
 		if( $callBeforeAfterHooks && method_exists( get_called_class(), '_beforeSave' ) ) {
 			static::_beforeSave( $object );
 		}
@@ -190,49 +328,51 @@ abstract class factory
 			$auditChangeStream->startChangeStreamWatch( $mdb->collection );
 		}
 
-		//ACTUAL UPDATE
-		$filter = [
-			'_id' => $object->_id
-		];
-
-		$update = [
-			'$set' => $object
-		];
-
-		$options = [
-			'upsert'       => $upsert,
-			'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' )
-		];
-
-		try {
-			$updateResult = $mdb->collection->updateOne( $filter, $update, $options );
-			log::info( 'MongoService', 'Save ' . $object::class );
-			log::info( 'MongoService', '--Matched:  ' . $updateResult->getMatchedCount() );
-			log::info( 'MongoService', '--Modified: ' . $updateResult->getModifiedCount() );
-			log::info( 'MongoService', '--Upserted: ' . $updateResult->getUpsertedCount() );
+		//open database session if one is not already open
+		$sessionParent = false;
+		if( !isset( $mongoDbSession ) ) {
+			$sessionParent  = true;
+			$mongoDbSession = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
+			$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 5000 ] );
 		}
-		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			if( $callBeforeAfterHooks && method_exists( get_called_class(), '_afterSave' ) ) {
+
+		//ACTUAL UPDATE
+		try {
+			$updateResult = static::_saveItem( $object, $upsert, $mdb, $mongoDbSession );
+
+			//auto increment fields on insert
+			if( $updateResult->getUpsertedCount()>0 ) {
+				$autoIncrementUpdateResult = static::autoIncrementProperties( $object, $mongoDbSession );
+			}
+
+			//dispatch inserts for all embedded versions
+			$embeddedInserts = static::_insertEmbedded( $object, $mongoDbSession );
+
+			//dispatch updates for all embedded versions
+			$embeddedUpdates = static::_updateEmbedded( $object, $mongoDbSession );
+
+			//commit session
+			if( $sessionParent ) {
+				$mongoDbSession->commitTransaction();
+			}
+		}
+		catch( \MongoDB\Driver\Exception\RuntimeException|modelException $e ) {
+			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
+				$mongoDbSession->abortTransaction();
+			}
+
+			if( $callBeforeAfterHooks && sys::methodExists( get_called_class(), '_afterSave' ) ) {
 				static::_afterSave( $object, false );
 			}
-			throw new \gcgov\framework\exceptions\modelException( 'Database error. ' . $e->getMessage(), 500, $e );
+
+			log::error( 'MongoService', '--Commit transaction failed: ' . $e->getMessage(), $e->getTrace() );
+			throw new \gcgov\framework\exceptions\modelException( 'Storing ' . $object::class . ' in the database failed', 500, $e );
 		}
 
-		//auto increment fields on insert
-		if( $updateResult->getUpsertedCount()>0 ) {
-			$autoIncrementUpdateResult = static::autoIncrementProperties( $object );
-		}
-
-		//dispatch inserts for all embedded versions
-		$embeddedInserts = static::_insertEmbedded( $object );
-
-		//dispatch updates for all embedded versions
-		$embeddedUpdates = static::_updateEmbedded( $object );
-
-		$combinedResult = new updateDeleteResult( $updateResult, array_merge( $embeddedUpdates, $embeddedInserts ?? [] ) );
+		$combinedResult = new updateDeleteResult( $updateResult, array_merge( isset( $autoIncrementUpdateResult ) ? [ $autoIncrementUpdateResult ] : [], $embeddedUpdates, $embeddedInserts ?? [] ) );
 
 		//update _meta property of object to show results
-		if( property_exists( $object, '_meta' ) ) {
+		if( sys::propertyExists( get_called_class(), '_meta' ) ) {
 			if( !isset( $object->_meta ) ) {
 				$object->_meta = new _meta( get_called_class() );
 			}
@@ -240,12 +380,12 @@ abstract class factory
 		}
 
 		//AUDIT CHANGE STREAM
-		if( $mdb->audit && static::_getCollectionName()!='audit' && ( $combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0 ) ) {
+		if( static::_getCollectionName()!='audit' && $mdb->audit && isset( $auditChangeStream ) && ( $combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0 || $combinedResult->getDeletedCount()>0 ) ) {
 			$auditChangeStream->processChangeStream( $combinedResult );
 			audit::save( $auditChangeStream );
 		}
 
-		if( $callBeforeAfterHooks && method_exists( get_called_class(), '_afterSave' ) ) {
+		if( $callBeforeAfterHooks && sys::methodExists( get_called_class(), '_afterSave' ) ) {
 			static::_afterSave( $object, true, $combinedResult );
 		}
 		return $combinedResult;
@@ -290,7 +430,7 @@ abstract class factory
 		}
 
 		//dispatch delete for all embedded versions
-		$embeddedDeletes = self::_deleteEmbedded( static::_typeMap()->root, $_id );
+		$embeddedDeletes = self::_deleteEmbedded( typeMapFactory::get( get_called_class() )->root, $_id );
 
 		//combine primary delete with embedded
 		$combinedResult = new updateDeleteResult( $deleteResult, $embeddedDeletes );
@@ -315,13 +455,13 @@ abstract class factory
 	 * @return \gcgov\framework\services\mongodb\updateDeleteResult
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	private static function autoIncrementProperties( model $object ): updateDeleteResult {
+	private static function autoIncrementProperties( model $object, ?\MongoDB\Driver\Session $mongoDbSession = null ): updateDeleteResult {
 		log::info( 'MongoServiceAutoIncrement', 'Start auto increment ' . $object::class );
 
 		/** @var attributes\autoIncrement[] $autoIncrementAttributes */
 		$autoIncrementAttributes = [];
 
-		//find fields marked with autoIncrement attribute on $object (must be of type _model)
+		//find fields marked with autoIncrement attribute on $object
 		try {
 			$reflectionClass = new \ReflectionClass( $object );
 
@@ -338,7 +478,6 @@ abstract class factory
 		catch( \ReflectionException $e ) {
 			log::error( 'MongoServiceAutoIncrement', 'Auto increment reflection error ' . $object::class );
 			error_log( $e );
-
 			return new updateDeleteResult();
 		}
 
@@ -348,13 +487,16 @@ abstract class factory
 		}
 
 		//do the auto incrementing
-
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
-		$session = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
+		//open database session if one is not already open
+		$sessionParent = false;
+		if( !isset( $mongoDbSession ) ) {
+			$sessionParent  = true;
+			$mongoDbSession = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
+			$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 2000 ] );
+		}
 
-		$updateResult = null;
-		$session->startTransaction( [ 'maxCommitTimeMS' => 2000 ] );
 		try {
 			$mongodbSet = [];
 
@@ -370,7 +512,7 @@ abstract class factory
 				log::info( 'MongoServiceAutoIncrement', '--' . $key );
 
 				//get and increment internalCounter
-				$internalCounter = \gcgov\framework\services\mongodb\models\internalCounter::getAndIncrement( $key, $session );
+				$internalCounter = \gcgov\framework\services\mongodb\models\internalCounter::getAndIncrement( $key, $mongoDbSession );
 
 				//set the new count on the object (by ref)
 				//if the value is supposed to be formatted
@@ -396,20 +538,26 @@ abstract class factory
 
 			$options      = [
 				'upsert'  => true,
-				'session' => $session
+				'session' => $mongoDbSession
 			];
 			$updateResult = $mdb->collection->updateOne( $filter, $update, $options );
 
-			$session->commitTransaction();
+			//$session->commitTransaction();
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException|\MongoDB\Driver\Exception\CommandException $e ) {
-			$session->abortTransaction();
-			log::error( 'MongoServiceAutoIncrement', '--' . $e->getMessage(), $e->getTrace() );
-			throw new \gcgov\framework\exceptions\modelException( 'Database error: ' . $e->getMessage(), 500, $e );
+			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
+				$mongoDbSession->abortTransaction();
+			}
+			$message = 'Error incrementing values for collection ' . static::_getCollectionName() . ' properties ' . implode( ', ', array_keys( $mongodbSet ) ) . ': ' . $e->getMessage();
+			log::error( 'MongoServiceAutoIncrement', '--' . $message, $e->getTrace() );
+			if( isset( $filter ) ) {
+				log::error( 'MongoServiceAutoIncrement', '--Filter', $filter );
+			}
+			if( isset( $update ) ) {
+				log::error( 'MongoServiceAutoIncrement', '--Update', $update );
+			}
+			throw new \gcgov\framework\exceptions\modelException( $message, 500, $e );
 		}
-
-		//close the session
-		$session->endSession();
 
 		log::info( 'MongoServiceAutoIncrement', '--Matched: ' . $updateResult->getMatchedCount() );
 		log::info( 'MongoServiceAutoIncrement', '--Modified: ' . $updateResult->getModifiedCount() );
@@ -421,7 +569,7 @@ abstract class factory
 
 	/**
 	 * Run a Mongo db aggregation on the collection
-	 * @return \app\models\project[]
+	 * @return array
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function aggregation( array $pipeline = [], $options = [] ): array {

@@ -2,96 +2,27 @@
 
 namespace gcgov\framework\services\mongodb;
 
-
-use gcgov\framework\services\mongodb\exceptions\databaseException;
-use gcgov\framework\services\mongodb\models\_meta;
-use JetBrains\PhpStorm\ArrayShape;
-use JetBrains\PhpStorm\Pure;
-
-
 /**
  * Base class for all models to extend
  * @package gcgov\framework\services\mongodb
  */
 abstract class model
-	extends
-	\gcgov\framework\services\mongodb\factory {
+	extends \gcgov\framework\services\mongodb\factory {
 
+	private static bool $_collectionIndexesFetched = false;
 
-
-
-	public function __clone() {
-		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
-
-		try {
-			$rClass = new \ReflectionClass( $calledClassFqn );
-		}
-		catch( \ReflectionException $e ) {
-			throw new databaseException( 'Failed to clone ' . $calledClassFqn, 500, $e );
-		}
-
-		$rProperties = $rClass->getProperties();
-		foreach( $rProperties as $rProperty ) {
-			$propertyName     = $rProperty->getName();
-			$rPropertyType    = $rProperty->getType();
-			$propertyTypeName = $rPropertyType->getName();
-
-			$propertyIsTypedArray = false;
-			if( $propertyTypeName == 'array' ) {
-				$propertyTypeName = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
-				if( $propertyTypeName != 'array' ) {
-					$propertyIsTypedArray = true;
-				}
-			}
-
-			//try to instantiate to see if it is a type that needs dealt with
-			$cloneable = false;
-			try {
-				$rPropertyClass = new \ReflectionClass( $propertyTypeName );
-				$cloneable      = $rPropertyClass->isCloneable();
-			}
-			catch( \ReflectionException $e ) {
-				//base type
-				continue;
-			}
-
-			//if the item(s) can be cloned, clone them
-			if( $cloneable && isset( $this->$propertyName ) ) {
-				if( $propertyIsTypedArray ) {
-					foreach( $this->$propertyName as $i => $v ) {
-						$this->$propertyName[ $i ] = clone $v;
-					}
-				}
-				else {
-					$this->$propertyName = clone $this->$propertyName;
-				}
-			}
-		}
-	}
-
-
-	/**
-	 * @return array
-	 */
-	#[ArrayShape( [
-		'root'       => "string",
-		'fieldPaths' => "string[]"
-	] )]
-	public static function _getTypeMap() : array {
-		return self::_typeMap()->toArray();
-	}
-
+	/** @var \MongoDB\Model\IndexInfo[] */
+	private static array $_collectionIndexes = [];
 
 	/**
 	 * @return string
 	 */
-	#[Pure]
-	public static function _getCollectionName() : string {
+	public static function _getCollectionName(): string {
 		$classFqn = get_called_class();
 		if( defined( $classFqn . '::_COLLECTION' ) ) {
 			return $classFqn::_COLLECTION;
 		}
-		elseif( strrpos( $classFqn, '\\' ) !== false ) {
+		elseif( strrpos( $classFqn, '\\' )!==false ) {
 			return substr( $classFqn, strrpos( $classFqn, '\\' ) + 1 );
 		}
 
@@ -100,13 +31,12 @@ abstract class model
 
 
 	/**
-	 * @param  bool  $capitalize  (optional) Capitalize the first letter of the response? Default: false
-	 * @param  bool  $plural      (optional) Return the plural form? Default: false
+	 * @param bool $capitalize (optional) Capitalize the first letter of the response? Default: false
+	 * @param bool $plural     (optional) Return the plural form? Default: false
 	 *
 	 * @return string
 	 */
-	#[Pure]
-	public static function _getHumanName( bool $capitalize = false, bool $plural = false ) : string {
+	public static function _getHumanName( bool $capitalize = false, bool $plural = false ): string {
 		$classFqn = get_called_class();
 
 		$name = $classFqn;
@@ -117,7 +47,7 @@ abstract class model
 		elseif( !$plural && defined( $classFqn . '::_HUMAN' ) ) {
 			$name = $classFqn::_HUMAN;
 		}
-		elseif( strrpos( $classFqn, '\\' ) !== false ) {
+		elseif( strrpos( $classFqn, '\\' )!==false ) {
 			$name = substr( $classFqn, strrpos( $classFqn, '\\' ) + 1 );
 		}
 
@@ -126,6 +56,25 @@ abstract class model
 		}
 
 		return $name;
+	}
+
+
+	/**
+	 * @return \MongoDB\Model\IndexInfo[]
+	 */
+	public static function getIndexes(): array {
+		if( !self::$_collectionIndexesFetched ) {
+			$collectionName = static::_getCollectionName();
+			$mdb     = new \gcgov\framework\services\mongodb\tools\mdb( collection: static::_getCollectionName() );
+
+			$indexesIterator = $mdb->db->$collectionName->listIndexes();
+
+			for( $indexesIterator->rewind(); true; $indexesIterator->next() ) {
+				self::$_collectionIndexesFetched[] = $indexesIterator->current();
+			}
+		}
+
+		return self::$_collectionIndexes;
 	}
 
 }

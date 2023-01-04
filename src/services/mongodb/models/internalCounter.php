@@ -35,12 +35,12 @@ final class internalCounter
 	 * If the _id does not exist, it will be created and the count will start at 1
 	 *
 	 * @param  string                   $_id
-	 * @param  \MongoDB\Driver\Session  $session  Transaction session
+	 * @param  \MongoDB\Driver\Session  $mongoDbSession  Transaction session
 	 *
 	 * @return self
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getAndIncrement( string $_id, \MongoDB\Driver\Session $session ) : self {
+	public static function getAndIncrement( string $_id, \MongoDB\Driver\Session $mongoDbSession ) : self {
 		$mdb = new mdb( collection: self::_getCollectionName() );
 
 		try {
@@ -57,8 +57,8 @@ final class internalCounter
 
 			$options = [
 				'upsert'  => true,
-				'typeMap' => self::_getTypeMap(),
-				'session' => $session,
+				'typeMap' => internalCounter::getBsonOptionsTypeMap(),
+				'session' => $mongoDbSession,
 				'returnDocument' => \MongoDB\Operation\FindOneAndUpdate::RETURN_DOCUMENT_AFTER
 			];
 
@@ -66,7 +66,6 @@ final class internalCounter
 			return $mdb->collection->findOneAndUpdate( $filter, $update, $options );
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException | \MongoDB\Driver\Exception\CommandException $e ) {
-			$session->abortTransaction();
 			throw new modelException( 'Database error: ' . $e->getMessage(), 500, $e );
 		}
 	}

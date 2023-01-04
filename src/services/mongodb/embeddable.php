@@ -8,26 +8,74 @@ use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
 use gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize;
 use gcgov\framework\services\mongodb\attributes\excludeJsonDeserialize;
-use gcgov\framework\services\mongodb\attributes\foreignKey;
 use gcgov\framework\services\mongodb\attributes\redact;
 use gcgov\framework\services\mongodb\exceptions\databaseException;
 use gcgov\framework\services\mongodb\models\_meta;
-use gcgov\framework\services\mongodb\tools\typeMapCache;
-
+use JetBrains\PhpStorm\ArrayShape;
+use JetBrains\PhpStorm\Deprecated;
 
 abstract class embeddable
-	extends
-	\andrewsauder\jsonDeserialize\jsonDeserialize
-	implements
-	\MongoDB\BSON\Persistable {
+	extends \andrewsauder\jsonDeserialize\jsonDeserialize
+	implements \MongoDB\BSON\Persistable {
 
 	#[excludeBsonSerialize]
 	#[excludeBsonUnserialize]
 	#[excludeJsonDeserialize]
 	public _meta $_meta;
 
+
 	public function __construct() {
 		$this->_meta = new _meta( get_called_class() );
+	}
+
+
+	public function __clone() {
+		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
+
+		try {
+			$rClass = new \ReflectionClass( $calledClassFqn );
+		}
+		catch( \ReflectionException $e ) {
+			throw new databaseException( 'Failed to clone ' . $calledClassFqn, 500, $e );
+		}
+
+		$rProperties = $rClass->getProperties();
+		foreach( $rProperties as $rProperty ) {
+			$propertyName     = $rProperty->getName();
+			$rPropertyType    = $rProperty->getType();
+			$propertyTypeName = $rPropertyType->getName();
+
+			$propertyIsTypedArray = false;
+			if( $propertyTypeName=='array' ) {
+				$propertyTypeName = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
+				if( $propertyTypeName!='array' ) {
+					$propertyIsTypedArray = true;
+				}
+			}
+
+			//try to instantiate to see if it is a type that needs dealt with
+			$cloneable = false;
+			try {
+				$rPropertyClass = new \ReflectionClass( $propertyTypeName );
+				$cloneable      = $rPropertyClass->isCloneable();
+			}
+			catch( \ReflectionException $e ) {
+				//base type
+				continue;
+			}
+
+			//if the item(s) can be cloned, clone them
+			if( $cloneable && isset( $this->$propertyName ) ) {
+				if( $propertyIsTypedArray ) {
+					foreach( $this->$propertyName as $i => $v ) {
+						$this->$propertyName[ $i ] = clone $v;
+					}
+				}
+				else {
+					$this->$propertyName = clone $this->$propertyName;
+				}
+			}
+		}
 	}
 
 
@@ -41,7 +89,6 @@ abstract class embeddable
 	protected function _afterJsonSerialize( array $export ): array {
 		//get the called class name
 		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
-
 
 		try {
 			$reflectionClass = new \ReflectionClass( $calledClassFqn );
@@ -86,7 +133,6 @@ abstract class embeddable
 		//get the called class name
 		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
 
-
 		try {
 			$reflectionClass = new \ReflectionClass( $calledClassFqn );
 
@@ -127,114 +173,29 @@ abstract class embeddable
 	}
 
 
-	/**
-	 * @param string[] $chainClass
-	 *
-	 * @return \gcgov\framework\services\mongodb\typeMap
-	 */
-	public static function _typeMap( $chainClass = [] ): typeMap {
-		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
-		$chainClass[]   = $calledClassFqn;
-
-		$typeMap = typeMapCache::get( $calledClassFqn );
-		if( isset( $typeMap ) ) {
-			return $typeMap;
-		}
-
-		$typeMap = new \gcgov\framework\services\mongodb\typeMap( $calledClassFqn );
-
-		try {
-			$rClass = new \ReflectionClass( $calledClassFqn );
-		}
-		catch( \ReflectionException $e ) {
-			throw new databaseException( 'Failed to load ' . $calledClassFqn . ' to generate typemap', 500, $e );
-		}
-
-		if( $rClass->isSubclassOf( \gcgov\framework\services\mongodb\model::class ) ) {
-			try {
-				$instance = $rClass->newInstanceWithoutConstructor();
-			}
-			catch( \ReflectionException $e ) {
-				throw new databaseException( 'Failed to instantiate ' . $calledClassFqn . ' to generate typemap', 500, $e );
-			}
-			$typeMap->model      = true;
-			$typeMap->collection = $instance->_getCollectionName();
-		}
-
-		$rProperties = $rClass->getProperties();
-		foreach( $rProperties as $rProperty ) {
-			//skip type mapping this if property is
-			//  - excluded from serialization
-			//  - not typed
-			//  - starts with _
-			$excludeBsonSerializeAttributes = $rProperty->getAttributes( excludeBsonSerialize::class );
-			if( count( $excludeBsonSerializeAttributes )>0 || !$rProperty->hasType() || str_starts_with( $rProperty->getName(), '_' ) ) {
-				continue;
-			}
-
-			//get property type
-			$rPropertyType = $rProperty->getType();
-			$typeName      = '';
-			$typeIsArray   = false;
-			if( !( $rPropertyType instanceof \ReflectionUnionType ) ) {
-				$typeName = $rPropertyType->getName();
-			}
-
-			//handle typed arrays
-			if( $typeName=='array' ) {
-				//get type  from @var doc block
-				$typeName    = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
-				$typeIsArray = true;
-			}
-
-			//TODO: is this the best way to capture \app\models
-			if( str_starts_with( $typeName, 'app' ) || str_starts_with( $typeName, '\app' ) ) {
-				//create mongo field path key
-				$baseFieldPathKey = $rProperty->getName();
-				if( $typeIsArray ) {
-					$baseFieldPathKey .= '.$';
-				}
-
-				//add foreign field mapping for upserting embedded objects
-				$foreignKeyAttributes = $rProperty->getAttributes( foreignKey::class );
-				if( $foreignKeyAttributes>0 ) {
-					foreach( $foreignKeyAttributes as $foreignKeyAttribute ) {
-						/** @var \gcgov\framework\services\mongodb\attributes\foreignKey $fkAttribute */
-						$fkAttribute                                                = $foreignKeyAttribute->newInstance();
-						$typeMap->foreignKeyMap[ $baseFieldPathKey ]                = $fkAttribute->propertyName;
-						$typeMap->foreignKeyMapEmbeddedFilters[ $baseFieldPathKey ] = $fkAttribute->embeddedObjectFilter;
-					}
-				}
-
-				//add the primary property type
-				$typeMap->fieldPaths[ $baseFieldPathKey ] = typeHelpers::classNameToFqn( $typeName );
-
-				//add the field paths for the property type so that we get a full chain of types
-				try {
-					$rPropertyClass = new \ReflectionClass( $typeName );
-					if( $rPropertyClass->isSubclassOf( embeddable::class ) ) {
-						$instance = $rPropertyClass->newInstanceWithoutConstructor();
-						/** @var \gcgov\framework\services\mongodb\typeMap $propertyTypeMap */
-						$propertyTypeMap = $rPropertyClass->getMethod( '_typeMap' )->invoke( $instance, $chainClass );
-						foreach( $propertyTypeMap->fieldPaths as $subFieldPathKey => $class ) {
-							$typeMap->fieldPaths[ $baseFieldPathKey . '.' . $subFieldPathKey ] = typeHelpers::classNameToFqn( $class );
-						}
-						foreach( $propertyTypeMap->foreignKeyMap as $subFieldPathKey => $fkPropertyName ) {
-							$typeMap->foreignKeyMap[ $baseFieldPathKey . '.' . $subFieldPathKey ]                = $fkPropertyName;
-							$typeMap->foreignKeyMapEmbeddedFilters[ $baseFieldPathKey . '.' . $subFieldPathKey ] = $propertyTypeMap->foreignKeyMapEmbeddedFilters[ $subFieldPathKey ];
-						}
-					}
-				}
-				catch( \ReflectionException $e ) {
-					throw new databaseException( 'Failed to generate type map for ' . $typeName, 500, $e );
-				}
-			}
-		}
-
-		typeMapCache::set( $calledClassFqn, $typeMap );
+	public static function getTypeMap(): typeMap {
+		return typeMapFactory::get( get_called_class() );
+	}
 
 
-		return $typeMap;
+	#[Deprecated]
+	public static function _typeMap(): typeMap {
+		return self::getTypeMap();
+	}
+
+
+	#[ArrayShape( [
+		'root'       => "string",
+		'fieldPaths' => "string[]"
+	] )]
+	public static function getBsonOptionsTypeMap(): array {
+		return typeMapFactory::get( get_called_class() )->toArray();
+	}
+
+
+	#[Deprecated]
+	public static function _getTypeMap(): array {
+		return self::getBsonOptionsTypeMap();
 	}
 
 
@@ -383,8 +344,8 @@ abstract class embeddable
 				try {
 					$this->$propertyName = $this->bsonUnserializeDataItem( $rProperty, $propertyType, $propertyTypeName, $value );
 				}
-				catch(\Exception|\TypeError $e) {
-					error_log($e);
+				catch( \Exception|\TypeError $e ) {
+					error_log( $e );
 				}
 			}
 		}
@@ -448,11 +409,11 @@ abstract class embeddable
 
 		//$data[ $propertyName ] exists and has value
 		else {
-			if( $propertyTypeName==='array' && $value instanceof \stdClass) {
-				return (array) $value;
+			if( $propertyTypeName==='array' && $value instanceof \stdClass ) {
+				return (array)$value;
 			}
-			if( $propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONArray) {
-				return (array) $value;
+			if( $propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONArray ) {
+				return (array)$value;
 			}
 			else {
 				try {
