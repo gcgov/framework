@@ -412,7 +412,7 @@ abstract class dispatcher
 				foreach( $mongoActions as $collectionName => $queries ) {
 					log::info( $logChannel, '---touch collection ' . $collectionName );
 
-					$result = $mdb->db->$collectionName->bulkWrite( $queries, [ 'session' => $mongoDbSession, 'ordered' => false ] );
+					$result = $mdb->db->$collectionName->bulkWrite( $queries, [ 'session' => $mongoDbSession ] );
 
 					log::info( $logChannel, '----Matched: ' . $result->getMatchedCount() );
 					log::info( $logChannel, '----Mod: ' . $result->getModifiedCount() );
@@ -601,7 +601,9 @@ abstract class dispatcher
 			]
 		];
 
-		$options[ 'arrayFilters' ] = $complex[ 'arrayFilters' ];
+		if(count($complex[ 'arrayFilters' ])>0) {
+			$options[ 'arrayFilters' ] = $complex[ 'arrayFilters' ];
+		}
 
 		return [ 'updateMany' => [ $filter, $update, $options ] ];
 
@@ -616,10 +618,16 @@ abstract class dispatcher
 	#[ArrayShape( [ 'complexPath'  => "string",
 	                'arrayFilters' => "array"
 	] )]
-	private static function buildUpdateKeyArrayFilters( string $fieldPath, bool $arrayFilter = true, mixed $arrayFilterValue = null ): array {
+	private static function buildUpdateKeyArrayFilters( string $fieldPath, bool $useArrayFilter = true, mixed $arrayFilterValue = null ): array {
 		//convert $fieldPath  `
 		// from     `inspections.$.scheduleRequests.$.comments.$`
 		// to       `inspections.$[arrayFilter2].scheduleRequests.$[arrayFilter1].comments.$[arrayFilter0]`
+		if(!str_contains($fieldPath, '$')) {
+			return [
+				'complexPath'  => $fieldPath,
+				'arrayFilters' => []//array_reverse( $arrayFilters )
+			];
+		}
 		$pathParts         = explode( '.', $fieldPath );
 		$reversedPathParts = array_reverse( $pathParts );
 
@@ -633,7 +641,7 @@ abstract class dispatcher
 			//on the first dollar sign, convert `$`=>`$[arrayFilter]`
 			if( !$foundPrimaryTarget && $part==='$' ) {
 				$foundPrimaryTarget = true;
-				if( $arrayFilter ) {
+				if( $useArrayFilter ) {
 					$reversedPathParts[ $i ]           = '$[arrayFilter' . $arrayFilterIndex . ']';
 					$arrayFilters[ $arrayFilterIndex ] = $previousParts;
 				}
@@ -650,7 +658,8 @@ abstract class dispatcher
 			}
 
 		}
-		$complexPathParts = array_reverse( $reversedPathParts );
+		$oldcomplexPathParts = array_reverse( $reversedPathParts );
+		$complexPathParts = self::convertFieldPathToComplexUpdate( $fieldPath, $useArrayFilter );
 
 		foreach( $arrayFilters as $i => $arrayFilter ) {
 			$arrayFilter[]      = 'arrayFilter' . $i;
@@ -660,8 +669,8 @@ abstract class dispatcher
 		}
 
 		return [
-			'complexPath'  => implode( '.', $complexPathParts ),
-			'arrayFilters' => array_reverse( $arrayFilters )
+			'complexPath'  => $complexPathParts,//implode( '.', $complexPathParts ),
+			'arrayFilters' => [ ['arrayFilter._id'=>$arrayFilterValue] ]//array_reverse( $arrayFilters )
 		];
 
 	}
