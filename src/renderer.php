@@ -102,7 +102,6 @@ final class renderer {
 	 */
 	private function processControllerDataResponse( \gcgov\framework\interfaces\_controllerDataResponse $controllerDataResponse ): string {
 		if( !headers_sent( $filename, $lineNumber ) ) {
-			header( 'Content-Type:' . $controllerDataResponse->getContentType() );
 			foreach( $controllerDataResponse->getHeaders() as $header ) {
 				$header->output();
 			}
@@ -113,10 +112,17 @@ final class renderer {
 
 		if( $controllerDataResponse->getHttpStatus()!=200 ) {
 			http_response_code( $controllerDataResponse->getHttpStatus() );
+			if($controllerDataResponse->getHttpStatus()==204) {
+				header( 'Content-Length: 0' );
+				return '';
+			}
 			if( $controllerDataResponse->getData()===null ) {
 				return '';
 			}
 		}
+
+		header( 'Content-Type:' . $controllerDataResponse->getContentType() );
+
 
 		if( $controllerDataResponse->getContentType()==='application/json' ) {
 			$encodedResponse = json_encode( $controllerDataResponse->getData() );
