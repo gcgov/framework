@@ -280,7 +280,7 @@ abstract class embeddable
 	 *
 	 * @param array $data Properties within the BSON document
 	 */
-	public function bsonUnserialize( array $data ) {
+	public function bsonUnserialize( array $data ): void {
 		//get the called class name
 		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
 
