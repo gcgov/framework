@@ -128,6 +128,7 @@ abstract class embeddable
 
 
 	protected function _afterJsonDeserialize(): void {
+		//reset meta fields
 		$this->_meta = new _meta( get_called_class() );
 
 		//get the called class name
