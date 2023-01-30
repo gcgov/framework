@@ -411,8 +411,22 @@ abstract class factory
 
 		log::info( 'MongoService', 'Delete ' . static::_getCollectionName() );
 
-		$objectToDelete       = static::getOne( $_id );
-		$deleteCascadeResults = self::_deleteCascade( $objectToDelete );
+		try {
+			$objectToDelete = static::getOne( $_id );
+		}
+		catch( modelException $e ) {
+			log::info( 'MongoService', '--object '.$_id.' does not exist in collection ' . static::_getCollectionName() );
+		}
+
+		//
+		if(isset($objectToDelete)) {
+			try {
+				$deleteCascadeResults = self::_deleteCascade( $objectToDelete );
+			}
+			catch( modelException $e ) {
+				log::info( 'MongoService', '--_deleteCascade failed for object '.$_id.' ' . static::_getCollectionName() );
+			}
+		}
 
 		$filter = [
 			'_id' => $_id
