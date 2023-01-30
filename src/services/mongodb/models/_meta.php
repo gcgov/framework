@@ -1,7 +1,6 @@
 <?php
 namespace gcgov\framework\services\mongodb\models;
 
-
 use gcgov\framework\config;
 use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\label;
@@ -9,8 +8,8 @@ use gcgov\framework\services\mongodb\models\_meta\db;
 use gcgov\framework\services\mongodb\models\_meta\ui;
 use gcgov\framework\services\mongodb\models\_meta\uiField;
 use gcgov\framework\services\mongodb\tools\metaAttributeCache;
+use gcgov\framework\services\mongodb\tools\reflectionCache;
 use JetBrains\PhpStorm\ArrayShape;
-
 
 class _meta
 	extends
@@ -105,20 +104,15 @@ class _meta
 		$this->fields = [];
 
 		try {
-			$reflectionClass = new \ReflectionClass( $className );
-
-			foreach( $reflectionClass->getProperties() as $property ) {
-				$this->fields[ $property->getName() ] = new uiField();
-
-				//get all attributes for this property
-				$propertyAttributes = $property->getAttributes();
-				foreach( $propertyAttributes as $propertyAttribute ) {
-					if( $propertyAttribute->getName()==label::class ) {
-						$labelAttributeInstance                      = $propertyAttribute->newInstance();
-						$this->fields[ $property->getName() ]->label = $labelAttributeInstance->label;
-						$this->labels[ $property->getName() ]        = $labelAttributeInstance->label;
-					}
+			$reflectionCacheClass = reflectionCache::getReflectionClass( $className );
+			foreach( $reflectionCacheClass->properties as $reflectionCacheProperty ) {
+				$this->fields[ $reflectionCacheProperty->propertyName ] = new uiField();
+				if( $reflectionCacheProperty->hasAttribute( label::class ) ) {
+					$labelAttributeInstance                                        = $reflectionCacheProperty->getAttributeInstance( label::class );
+					$this->fields[ $reflectionCacheProperty->propertyName ]->label = $labelAttributeInstance->label;
+					$this->labels[ $reflectionCacheProperty->propertyName ]        = $labelAttributeInstance->label;
 				}
+
 			}
 
 			metaAttributeCache::set( $className, $this->labels, $this->fields );

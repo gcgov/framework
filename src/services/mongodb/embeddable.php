@@ -11,6 +11,7 @@ use gcgov\framework\services\mongodb\attributes\excludeJsonDeserialize;
 use gcgov\framework\services\mongodb\attributes\redact;
 use gcgov\framework\services\mongodb\exceptions\databaseException;
 use gcgov\framework\services\mongodb\models\_meta;
+use gcgov\framework\services\mongodb\tools\reflectionCache;
 use JetBrains\PhpStorm\ArrayShape;
 use JetBrains\PhpStorm\Deprecated;
 
@@ -30,49 +31,41 @@ abstract class embeddable
 
 
 	public function __clone() {
-		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
-
 		try {
-			$rClass = new \ReflectionClass( $calledClassFqn );
+			$reflectionCacheClass = reflectionCache::getReflectionClass( get_called_class() );
 		}
 		catch( \ReflectionException $e ) {
-			throw new databaseException( 'Failed to clone ' . $calledClassFqn, 500, $e );
+			throw new databaseException( 'Failed to clone ' . get_called_class(), 500, $e );
 		}
 
-		$rProperties = $rClass->getProperties();
-		foreach( $rProperties as $rProperty ) {
-			$propertyName     = $rProperty->getName();
-			$rPropertyType    = $rProperty->getType();
-			$propertyTypeName = $rPropertyType->getName();
-
-			$propertyIsTypedArray = false;
-			if( $propertyTypeName=='array' ) {
-				$propertyTypeName = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
-				if( $propertyTypeName!='array' ) {
-					$propertyIsTypedArray = true;
-				}
-			}
-
-			//try to instantiate to see if it is a type that needs dealt with
-			$cloneable = false;
-			try {
-				$rPropertyClass = new \ReflectionClass( $propertyTypeName );
-				$cloneable      = $rPropertyClass->isCloneable();
-			}
-			catch( \ReflectionException $e ) {
-				//base type
+		foreach( $reflectionCacheClass->properties as $reflectionCacheProperty ) {
+			//if there is no type we assume we do not need to clone
+			if( !$reflectionCacheProperty->propertyHasType ) {
 				continue;
 			}
 
-			//if the item(s) can be cloned, clone them
-			if( $cloneable && isset( $this->$propertyName ) ) {
-				if( $propertyIsTypedArray ) {
-					foreach( $this->$propertyName as $i => $v ) {
-						$this->$propertyName[ $i ] = clone $v;
+			//get the reflection class for the property's type so we can check if it is clonable
+			try {
+				$propertyTypeReflectionCacheClass = reflectionCache::getReflectionClass( $reflectionCacheProperty->propertyTypeNameFQN );
+				//if this class is not cloneable, skip to next
+				if( !$propertyTypeReflectionCacheClass->reflectionClass->isCloneable()) {
+					continue;
+				}
+			}
+			catch( \ReflectionException $e ) {
+				//if reflection fails, assume it is a base type
+				continue;
+			}
+
+			//if this property has a value, clone it
+			if(isset( $this->{$reflectionCacheProperty->propertyName} ) ) {
+				if( $reflectionCacheProperty->propertyIsTypedArray ) {
+					foreach( $this->{$reflectionCacheProperty->propertyName} as $i => $v ) {
+						$this->{$reflectionCacheProperty->propertyName}[ $i ] = clone $v;
 					}
 				}
 				else {
-					$this->$propertyName = clone $this->$propertyName;
+					$this->{$reflectionCacheProperty->propertyName} = clone $this->{$reflectionCacheProperty->propertyName};
 				}
 			}
 		}
@@ -88,34 +81,30 @@ abstract class embeddable
 
 	protected function _afterJsonSerialize( array $export ): array {
 		//get the called class name
-		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
+		//$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
 
 		try {
-			$reflectionClass = new \ReflectionClass( $calledClassFqn );
-
-			$classIncludeMetaAttributes = $reflectionClass->getAttributes( includeMeta::class );
-			foreach( $classIncludeMetaAttributes as $classIncludeMetaAttribute ) {
-				$includeMetaAttributeInstance = $classIncludeMetaAttribute->newInstance();
+			$reflectionCacheClass = reflectionCache::getReflectionClass( get_called_class() );
+			if( $reflectionCacheClass->hasAttribute( includeMeta::class ) ) {
+				/** @var attributes\includeMeta $includeMetaAttributeInstance */
+				$includeMetaAttributeInstance = $reflectionCacheClass->getAttributeInstance( includeMeta::class );
 				if( !$includeMetaAttributeInstance->includeMeta ) {
 					unset( $export[ '_meta' ] );
 				}
 			}
 
-			foreach( $reflectionClass->getProperties() as $property ) {
-
-				//get all attributes for this property
-				$propertyAttributes = $property->getAttributes( redact::class );
-				foreach( $propertyAttributes as $propertyAttribute ) {
-					$authUser                = authUser::getInstance();
-					$redactAttributeInstance = $propertyAttribute->newInstance();
+			$redactAttributeInstances = $reflectionCacheClass->getAttributeInstancesByPropertyName( redact::class );
+			if(count($redactAttributeInstances)>0){
+				$authUser                = authUser::getInstance();
+				foreach( $redactAttributeInstances as $propertyName=>$redactAttributeInstance) {
 					if( count( $redactAttributeInstance->redactIfUserHasAnyRoles )===0 && count( $redactAttributeInstance->redactIfUserHasAllRoles )===0 ) {
-						unset( $export[ $property->getName() ] );
+						unset( $export[ $propertyName ] );
 					}
 					elseif( count( $redactAttributeInstance->redactIfUserHasAnyRoles )>0 && count( array_intersect( $redactAttributeInstance->redactIfUserHasAnyRoles, $authUser->roles ) )>0 ) {
-						unset( $export[ $property->getName() ] );
+						unset( $export[ $propertyName ] );
 					}
 					elseif( count( $redactAttributeInstance->redactIfUserHasAllRoles )>0 && count( array_diff( $redactAttributeInstance->redactIfUserHasAllRoles, $authUser->roles ) )===0 ) {
-						unset( $export[ $property->getName() ] );
+						unset( $export[ $propertyName ] );
 					}
 				}
 			}
@@ -210,66 +199,37 @@ abstract class embeddable
 
 		$save = [];
 
-		//get the called class name
-		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
-
 		try {
-			$rClass = new \ReflectionClass( $calledClassFqn );
+			$reflectionCacheClass = reflectionCache::getReflectionClass( get_called_class() );
 		}
 		catch( \ReflectionException $e ) {
-			throw new databaseException( 'Failed to serialize data to bson for ' . $calledClassFqn, 500, $e );
+			throw new databaseException( 'Failed to serialize data to bson for ' . get_called_class(), 500, $e );
 		}
 
-		//get properties of the class and add them to the export
-		$rProperties = $rClass->getProperties();
-		foreach( $rProperties as $rProperty ) {
-
-			//if property is not meant to be serialized, exclude it
-			$attributes = $rProperty->getAttributes( excludeBsonSerialize::class );
-			if( count( $attributes )>0 ) {
+		//generate save key, values in $save
+		foreach( $reflectionCacheClass->properties as $reflectionCacheProperty ) {
+			if($reflectionCacheProperty->hasAttribute(excludeBsonSerialize::class)) {
 				continue;
 			}
 
-			//if property has been removed from the object, do not touch it
-			if( !$rProperty->isInitialized( $this ) ) {
+			if( !$reflectionCacheProperty->reflectionProperty->isInitialized( $this ) ) {
 				continue;
-			}
-
-			$propertyName = $rProperty->getName();
-
-			$rPropertyType     = null;
-			$rPropertyTypeName = '';
-
-			if( $rProperty->hasType() ) {
-				$rPropertyType = $rProperty->getType();
-
-				if( !( $rPropertyType instanceof \ReflectionUnionType ) ) {
-					$rPropertyTypeName = $rPropertyType->getName();
-				}
-			}
-
-			//if the property is an array, check if the doc comment defines the type
-			$propertyIsTypedArray = false;
-			if( $rPropertyTypeName=='array' ) {
-				$arrayType = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
-				if( $arrayType!='array' ) {
-					$propertyIsTypedArray = true;
-				}
 			}
 
 			//load the data from json into the instance of our class
-			if( $propertyIsTypedArray ) {
-				if( !isset( $save[ $propertyName ] ) ) {
-					$save[ $propertyName ] = $rProperty->getDefaultValue();
+			if( $reflectionCacheProperty->propertyIsTypedArray ) {
+				if( !isset( $save[ $reflectionCacheProperty->propertyName ] ) ) {
+					$save[ $reflectionCacheProperty->propertyName ] = $reflectionCacheProperty->defaultValue;
 				}
-				foreach( $rProperty->getValue( $this ) as $key => $value ) {
-					$save[ $propertyName ][ $key ] = $this->bsonSerializeDataItem( $rProperty, $value );
+				foreach( $reflectionCacheProperty->reflectionProperty->getValue( $this ) as $key => $value ) {
+					$save[ $reflectionCacheProperty->propertyName ][ $key ] = $this->bsonSerializeDataItem( $value );
 				}
 			}
 			else {
-				$value                 = $rProperty->getValue( $this );
-				$save[ $propertyName ] = $this->bsonSerializeDataItem( $rProperty, $value );
+				$value                 = $reflectionCacheProperty->reflectionProperty->getValue( $this );
+				$save[ $reflectionCacheProperty->propertyName ] = $this->bsonSerializeDataItem( $value );
 			}
+
 		}
 
 		return $save;
@@ -363,12 +323,11 @@ abstract class embeddable
 
 
 	/**
-	 * @param \ReflectionProperty $rProperty
 	 * @param mixed               $value
 	 *
 	 * @return mixed
 	 */
-	private function bsonSerializeDataItem( \ReflectionProperty $rProperty, mixed $value ): mixed {
+	private function bsonSerializeDataItem( mixed $value ): mixed {
 		if( $value instanceof \DateTimeInterface ) {
 			return new \MongoDB\BSON\UTCDateTime( $value );
 		}

@@ -5,6 +5,7 @@ namespace gcgov\framework\services\mongodb;
 use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
 use gcgov\framework\services\mongodb\attributes\foreignKey;
 use gcgov\framework\services\mongodb\exceptions\databaseException;
+use gcgov\framework\services\mongodb\tools\reflectionCache;
 use JetBrains\PhpStorm\ArrayShape;
 
 /**
@@ -43,92 +44,71 @@ class typeMap {
 	 */
 	private function generate(): void {
 		try {
-			$reflectionClass = new \ReflectionClass( $this->root );
+			$reflectionCacheClass = reflectionCache::getReflectionClass( $this->root );
 		}
 		catch( \ReflectionException $e ) {
 			throw new databaseException( 'Failed to load ' . $this->root . ' to generate typemap', 500, $e );
 		}
 
-		if( !$reflectionClass->isSubclassOf( \gcgov\framework\services\mongodb\embeddable::class ) ) {
+		if( !$reflectionCacheClass->reflectionClass->isSubclassOf( \gcgov\framework\services\mongodb\embeddable::class ) ) {
 			return;
 		}
 
-		if( $reflectionClass->isSubclassOf( \gcgov\framework\services\mongodb\model::class ) ) {
+		if( $reflectionCacheClass->reflectionClass->isSubclassOf( \gcgov\framework\services\mongodb\model::class ) ) {
 			$this->model = true;
 			try {
-				$reflectionMethod = $reflectionClass->getMethod( '_getCollectionName' );
+				$reflectionMethod = $reflectionCacheClass->reflectionClass->getMethod( '_getCollectionName' );
 				$this->collection = $reflectionMethod->invoke( null );
 			}
 			catch( \ReflectionException $e ) {
 				error_log( $e );
-				$this->collection = $reflectionClass->getStaticPropertyValue( 'COLLECTION', $reflectionClass->getName() );
+				$this->collection = $reflectionCacheClass->reflectionClass->getStaticPropertyValue( 'COLLECTION', $reflectionCacheClass->name );
 			}
 		}
 
-		$reflectionProperties = $reflectionClass->getProperties();
-		foreach( $reflectionProperties as $reflectionProperty ) {
+		foreach( $reflectionCacheClass->properties as $reflectionCacheProperty ) {
 			//skip type mapping this if property is
 			//  - excluded from serialization
 			//  - not typed
 			//  - starts with _
-			$excludeBsonSerializeAttributes = $reflectionProperty->getAttributes( excludeBsonSerialize::class );
-			if( count( $excludeBsonSerializeAttributes )>0 || !$reflectionProperty->hasType() || str_starts_with( $reflectionProperty->getName(), '_' ) ) {
+			if( $reflectionCacheProperty->hasAttribute( excludeBsonSerialize::class ) || !$reflectionCacheProperty->propertyHasType || str_starts_with( $reflectionCacheProperty->propertyName, '_' ) ) {
 				continue;
 			}
 
-			//determine property type - including array type
-			//get property type
-			$reflectionPropertyType = $reflectionProperty->getType();
-			$typeName               = '';
-			$typeIsArray            = false;
-			if( !( $reflectionPropertyType instanceof \ReflectionUnionType ) ) {
-				$typeName = $reflectionPropertyType->getName();
-			}
-
-			//handle typed arrays
-			if( $typeName=='array' ) {
-				//get type  from @var doc block
-				$typeName    = typeHelpers::getVarTypeFromDocComment( $reflectionProperty->getDocComment() );
-				$typeIsArray = true;
-			}
-			$typeClassFqn                          = typeHelpers::classNameToFqn( $typeName );
-
-			if( !str_starts_with( $typeClassFqn, '\app' ) && !str_starts_with( $typeClassFqn, '\gcgov\framework\services\mongodb\models' ) ) {
+			//only map \app classes and \gcgov\framework\services\mongodb\models classes
+			if( !str_starts_with( $reflectionCacheProperty->propertyTypeNameFQN, '\app' ) && !str_starts_with( $reflectionCacheProperty->propertyTypeNameFQN, '\gcgov\framework\services\mongodb\models' ) ) {
 				continue;
 			}
 
 			try {
-				$rPropertyClass = new \ReflectionClass( $typeClassFqn );
-				if( !$rPropertyClass->isSubclassOf( embeddable::class ) ) {
+				$propertyTypeReflectionCacheClass = reflectionCache::getReflectionClass( $reflectionCacheProperty->propertyTypeNameFQN );
+				if( !$propertyTypeReflectionCacheClass->reflectionClass->isSubclassOf( \gcgov\framework\services\mongodb\embeddable::class )) {
 					continue;
 				}
 			}
 			catch( \ReflectionException $e ) {
-				throw new databaseException( 'Failed to generate type map for ' . $typeName, 500, $e );
+				throw new databaseException( 'Failed to generate type map for ' . $reflectionCacheProperty->propertyTypeName, 500, $e );
 			}
 
 			//create mongo field path key
-			$baseFieldPathKey = $reflectionProperty->getName();
-			if( $typeIsArray ) {
+			$baseFieldPathKey = $reflectionCacheProperty->propertyName;
+			if( $reflectionCacheProperty->propertyIsArray ) {
 				$baseFieldPathKey .= '.$';
 			}
 
 			//add the primary property type
-			$this->fieldPaths[ $baseFieldPathKey ] = $typeClassFqn;
+			$this->fieldPaths[ $baseFieldPathKey ] = $reflectionCacheProperty->propertyTypeNameFQN;
 
 			//add foreign field mapping for upserting embedded objects
-			$foreignKeyAttributes = $reflectionProperty->getAttributes( foreignKey::class );
-			if( $foreignKeyAttributes>0 ) {
-				foreach( $foreignKeyAttributes as $foreignKeyAttribute ) {
-					/** @var \gcgov\framework\services\mongodb\attributes\foreignKey $fkAttribute */
-					$fkAttribute                                             = $foreignKeyAttribute->newInstance();
-					$this->foreignKeyMap[ $baseFieldPathKey ]                = $fkAttribute->propertyName;
-					$this->foreignKeyMapEmbeddedFilters[ $baseFieldPathKey ] = $fkAttribute->embeddedObjectFilter;
-				}
+			if( $reflectionCacheProperty->hasAttribute(foreignKey::class) ) {
+				/** @var \gcgov\framework\services\mongodb\attributes\foreignKey $foreignKeyAttributeInstance */
+				$foreignKeyAttributeInstance = $reflectionCacheProperty->getAttributeInstance( foreignKey::class );
+				$this->foreignKeyMap[ $baseFieldPathKey ]                = $foreignKeyAttributeInstance->propertyName;
+				$this->foreignKeyMapEmbeddedFilters[ $baseFieldPathKey ] = $foreignKeyAttributeInstance->embeddedObjectFilter;
 			}
 
 			//add the field paths for the property type so that we get a full chain of types
-			$propertyTypeMap = typeMapFactory::get( $typeClassFqn );
+			$propertyTypeMap = typeMapFactory::get( $reflectionCacheProperty->propertyTypeNameFQN );
 			foreach( $propertyTypeMap->fieldPaths as $subFieldPathKey => $subFieldTypeClass ) {
 				$this->fieldPaths[ $baseFieldPathKey . '.' . $subFieldPathKey ] = $subFieldTypeClass;
 			}

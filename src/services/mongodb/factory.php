@@ -7,6 +7,7 @@ use gcgov\framework\services\mongodb\models\_meta;
 use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\autoIncrement;
 use gcgov\framework\services\mongodb\models\audit;
+use gcgov\framework\services\mongodb\tools\reflectionCache;
 use gcgov\framework\services\mongodb\tools\sys;
 
 /**
@@ -470,27 +471,18 @@ abstract class factory
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	private static function autoIncrementProperties( model $object, ?\MongoDB\Driver\Session $mongoDbSession = null ): updateDeleteResult {
-		log::info( 'MongoServiceAutoIncrement', 'Start auto increment ' . $object::class );
+		$className = $object::class;
 
-		/** @var attributes\autoIncrement[] $autoIncrementAttributes */
-		$autoIncrementAttributes = [];
+		log::info( 'MongoServiceAutoIncrement', 'Start auto increment ' . $className );
 
 		//find fields marked with autoIncrement attribute on $object
 		try {
-			$reflectionClass = new \ReflectionClass( $object );
-
-			foreach( $reflectionClass->getProperties() as $property ) {
-				$attributes = $property->getAttributes( autoIncrement::class );
-
-				//this is an auto increment field
-				if( count( $attributes )>0 ) {
-					/** @var attributes\autoIncrement $autoIncrement */
-					$autoIncrementAttributes[ $property->getName() ] = $attributes[ 0 ]->newInstance();
-				}
-			}
+			$reflectionCacheClass = reflectionCache::getReflectionClass( $className );
+			/** @var attributes\autoIncrement[] $autoIncrementAttributes */
+			$autoIncrementAttributes = $reflectionCacheClass->getAttributeInstancesByPropertyName( autoIncrement::class );
 		}
 		catch( \ReflectionException $e ) {
-			log::error( 'MongoServiceAutoIncrement', 'Auto increment reflection error ' . $object::class );
+			log::error( 'MongoServiceAutoIncrement', 'Auto increment reflection error ' . $className );
 			error_log( $e );
 			return new updateDeleteResult();
 		}

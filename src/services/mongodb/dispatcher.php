@@ -6,6 +6,8 @@ use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\deleteCascade;
+use gcgov\framework\services\mongodb\tools\reflectionCache;
+use gcgov\framework\services\mongodb\tools\reflectionCache\reflectionCacheClass;
 use JetBrains\PhpStorm\ArrayShape;
 
 abstract class dispatcher
@@ -180,32 +182,20 @@ abstract class dispatcher
 
 		log::info( 'Dispatch_deleteCascade', 'Start cascade deletes for ' . $deleteType );
 
-		/** @var attributes\deleteCascade[] $deleteCascadeAttributes */
-		$deleteCascadeAttributes = [];
-
 		$deleteResponses = [];
 
 		//find fields marked with deleteCascade attribute on $object (must be of type _model)
 		try {
-			$reflectionClass = new \ReflectionClass( $deleteType );
-
-			foreach( $reflectionClass->getProperties() as $property ) {
-				$attributes = $property->getAttributes( deleteCascade::class );
-
-				//this is a delete cascade field
-				if( count( $attributes )>0 ) {
-					$deleteCascadeAttributes[ $property->getName() ] = $attributes[ 0 ]->newInstance();
-				}
-			}
+			$reflectionCacheClass = reflectionCache::getReflectionClass( $deleteType );
+			$propertiesWithDeleteCascadeAttribute = $reflectionCacheClass->getPropertiesWithAttribute( deleteCascade::class );
 		}
 		catch( \ReflectionException $e ) {
 			log::error( 'Dispatch_deleteCascade', $e->getMessage(), $e->getTrace() );
 			throw new modelException( 'Reflection failed on class ' . $deleteType, 500, $e );
 		}
 
-		foreach( $deleteCascadeAttributes as $propertyName => $deleteCascadeAttribute ) {
-
-			if( gettype( $object->$propertyName )==='array' ) {
+		foreach( $propertiesWithDeleteCascadeAttribute as $propertyName=>$reflectionCacheProperty ) {
+			if($reflectionCacheProperty->propertyIsArray) {
 				log::info( 'Dispatch_deleteCascade', '-- ' . count( $object->$propertyName ) . ' objects to cascade' );
 				foreach( $object->$propertyName as $objectToDelete ) {
 					self::_doCascadeDeleteItem( $objectToDelete );
@@ -426,6 +416,9 @@ abstract class dispatcher
 								$index     = [];
 								$indexName = 'gcgov';
 								foreach( $filterUpdateOptions[ 0 ] as $field => $value ) {
+									if($field=='_id') {
+										continue;
+									}
 									$key = $field;
 									if( is_array( $value ) && !str_ends_with( $key, '_id' ) ) {
 										$key .= '._id';
@@ -436,10 +429,10 @@ abstract class dispatcher
 								}
 
 								//get keys to make sure we have a unique set
-								if( !isset( self::$_indexesToCreate[ $indexName ] ) ) {
-									log::info( 'index', 'Create: ' . $indexName );
+								if( !isset( self::$_indexesToCreate[ $collectionName.$indexName ] ) ) {
+									log::info( 'index', 'Create on ' . $collectionName.': '.$indexName );
 
-									self::$_indexesToCreate[ $indexName ] = [
+									self::$_indexesToCreate[ $collectionName.$indexName ] = [
 										'collection' => $collectionName,
 										'index'      => $index,
 										'options'    => [ 'name' => $indexName, 'sparse' => 1 ]
@@ -455,9 +448,9 @@ abstract class dispatcher
 
 				if( \gcgov\framework\config::getEnvironmentConfig()->isLocal() ) {
 					if( count( self::$_indexesToCreate )>0 ) {
-						$filename = \gcgov\framework\config::getTempDir() . '/create-indexes-' . microtime() . '.json';
+						$filename = \gcgov\framework\config::getTempDir() . '/create-indexes-' . microtime() . '.js';
 
-						file_put_contents( $filename, json_encode( array_values(self::$_indexesToCreate) ) );
+						file_put_contents( $filename, 'var indexes=' . json_encode( array_values(self::$_indexesToCreate) ) );
 
 						self::$_indexesToCreate = [];
 					}
