@@ -37,7 +37,7 @@ final class mdb {
 	 *
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public function __construct( string $collection, string $database = '' ) {
+	public function __construct( string $collection='', string $database = '' ) {
 		$connector = $this->getConnector( $database );
 
 		try {
@@ -45,7 +45,9 @@ final class mdb {
 
 			$this->db = $this->client->{$connector->database};
 
-			$this->collection = $this->db->{$collection};
+			if(!empty($collection)) {
+				$this->collection = $this->db->{$collection};
+			}
 
 			$this->audit              = $connector->audit;
 			$this->include_meta       = $connector->include_meta;
@@ -77,6 +79,18 @@ final class mdb {
 		}
 
 		throw new modelException( 'No suitable Mongo Database connector found in environment config', 500 );
+	}
+
+
+	/**
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function startSessionTransaction( string $database = '' ): \MongoDB\Driver\Session {
+		$mdb = new mdb( '', $database );
+		$mongoDbSession = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
+		$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 60000 ] );
+
+		return $mongoDbSession;
 	}
 
 
