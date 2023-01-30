@@ -419,7 +419,7 @@ abstract class dispatcher
 
 					$updateInsertDeleteResults[] = new updateDeleteResult( $result );
 
-					//create index example
+					//create index files in local environment
 					if( \gcgov\framework\config::getEnvironmentConfig()->isLocal() ) {
 						foreach( $queries as $operations ) {
 							foreach( $operations as $operationType => $filterUpdateOptions ) {
@@ -436,14 +436,10 @@ abstract class dispatcher
 								}
 
 								//get keys to make sure we have a unique set
-								$indexKeys = array_keys( $index );
-								sort( $indexKeys, SORT_STRING|SORT_FLAG_CASE );
+								if( !isset( self::$_indexesToCreate[ $indexName ] ) ) {
+									log::info( 'index', 'Create: ' . $indexName );
 
-								$indexUniqueKey = $collectionName . '-' . json_encode( $indexKeys );
-								if( !isset( self::$_indexesToCreate[ $indexUniqueKey ] ) ) {
-									log::info( 'index', 'Create: ' . $indexUniqueKey );
-
-									self::$_indexesToCreate[ $indexUniqueKey ] = [
+									self::$_indexesToCreate[ $indexName ] = [
 										'collection' => $collectionName,
 										'index'      => $index,
 										'options'    => [ 'name' => $indexName, 'sparse' => 1 ]
@@ -459,9 +455,9 @@ abstract class dispatcher
 
 				if( \gcgov\framework\config::getEnvironmentConfig()->isLocal() ) {
 					if( count( self::$_indexesToCreate )>0 ) {
-						$filename = \gcgov\framework\config::getTempDir() . '/create-indexes-' . microtime() . '.js';
+						$filename = \gcgov\framework\config::getTempDir() . '/create-indexes-' . microtime() . '.json';
 
-						file_put_contents( $filename, 'var indexes=' . json_encode( self::$_indexesToCreate ) );
+						file_put_contents( $filename, json_encode( array_values(self::$_indexesToCreate) ) );
 
 						self::$_indexesToCreate = [];
 					}
