@@ -72,19 +72,6 @@ class typeMapFactory {
 				$classFqn  = typeHelpers::classNameToFqn( str_replace( '/', '\\', '\\' . $namespace . '\\' . $className ) );
 
 				self::get( $classFqn );
-				//			try {
-				//				//load the class via reflection
-				//				$classReflection = new \ReflectionClass( $classFqn );
-				//
-				//				//check if this class is an instance of our model \gcgov\framework\services\mongodb\model
-				//				if( $classReflection->isSubclassOf( \gcgov\framework\services\mongodb\model::class ) ) {
-				//					$instance                                       = $classReflection->newInstanceWithoutConstructor();
-				//					$allTypeMaps[ $instance->_getCollectionName() ] = typeMapFactory::get( $classFqn );
-				//				}
-				//			}
-				//			catch( \ReflectionException $e ) {
-				//				throw new \gcgov\framework\services\mongodb\exceptions\dispatchException( 'Reflection failed on class ' . $classFqn, 500, $e );
-				//			}
 			}
 
 			self::$allModelTypeMapsFetched = true;
