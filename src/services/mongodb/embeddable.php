@@ -369,9 +369,15 @@ abstract class embeddable
 
 		//$data[ $propertyName ] exists and has value
 		else {
+
+			if( $propertyTypeName==='MongoDB\BSON\ObjectId' && is_string($value) ) {
+				return new \MongoDB\BSON\ObjectId($value);
+			}
+
 			if( $propertyTypeName==='array' && $value instanceof \stdClass ) {
 				return (array)$value;
 			}
+
 			if( $propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONArray ) {
 				return (array)$value;
 			}
