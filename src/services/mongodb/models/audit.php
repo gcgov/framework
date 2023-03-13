@@ -166,8 +166,6 @@ final class audit
 	}
 
 
-
-	/** @var \MongoDB\Collection */
 	public function startChangeStreamWatch( \MongoDB\Collection $collection ) {
 		$this->collection = $collection->getCollectionName();
 		$this->changeStream = $collection->watch([],  ['typeMap'=>[ 'array'=>'array' ]]);
