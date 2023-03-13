@@ -165,7 +165,7 @@ class updateDeleteResult
 	}
 
 
-	public function jsonSerialize() {
+	public function jsonSerialize(): array {
 		$export = [
 			'acknowledged'          => $this->isAcknowledged(),
 			'deletedCount'          => $this->getDeletedCount(),

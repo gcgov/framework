@@ -109,7 +109,7 @@ class jwtAuth {
 
 
 	/**
-	 * @param \gcgov\framework\models\authUser
+	 * @param \gcgov\framework\models\authUser $authUser
 	 * @param \DateInterval|null $duration Defaults to 1 hour. Pass a date interval to create a different length token. BE RESPONSIBLE!
 	 *
 	 * @return \Lcobucci\JWT\Token\Plain
@@ -151,7 +151,7 @@ class jwtAuth {
 
 
 	/**
-	 * @param \gcgov\framework\models\authUser
+	 * @param \gcgov\framework\models\authUser $authUser
 	 * @param \DateInterval|null $duration Defaults to 1 month. Pass a date interval to create a different length token. BE RESPONSIBLE!
 	 *
 	 * @return \Lcobucci\JWT\Token\Plain
