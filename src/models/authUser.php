@@ -37,7 +37,11 @@ class authUser {
 	private function __construct() {
 	}
 
-	final public static function getInstance() {
+
+	/**
+	 * @return $this
+	 */
+	final public static function getInstance(): static {
 		$calledClass = get_called_class();
 
 		if( !isset( self::$instance ) ) {

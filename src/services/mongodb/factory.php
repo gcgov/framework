@@ -47,7 +47,7 @@ abstract class factory
 	 * @param array $sort    optional
 	 * @param array $options optional
 	 *
-	 * @return array
+	 * @return $this[]
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function getAll( array $filter = [], array $sort = [], array $options = [] ): array {
@@ -108,7 +108,7 @@ abstract class factory
 	/**
 	 * @param \MongoDB\BSON\ObjectId|string $_id
 	 *
-	 * @return object
+	 * @return $this
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function getOne( \MongoDB\BSON\ObjectId|string $_id ): object {
@@ -143,7 +143,7 @@ abstract class factory
 	 * @param array $filter  optional
 	 * @param array $options optional
 	 *
-	 * @return object
+	 * @return $this
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function getOneBy( array $filter = [], array $options = [] ): object {
