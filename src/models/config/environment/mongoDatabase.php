@@ -24,10 +24,26 @@ class mongoDatabase extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	public bool  $logging            = false;
 
-	public bool  $audit              = false;
+	public bool   $audit             = false;
+
+	public string $auditDatabaseName = '';
+
+	public string $auditDatabaseUri  = '';
 
 
 	public function __construct() {
+	}
+
+
+	protected function _afterJsonDeserialize(): void {
+		if( $this->audit ) {
+			if( empty( $this->auditDatabaseName ) ) {
+				$this->auditDatabaseName = $this->database;
+			}
+			if( empty( $this->auditDatabaseUri ) ) {
+				$this->auditDatabaseUri = $this->uri;
+			}
+		}
 	}
 
 }

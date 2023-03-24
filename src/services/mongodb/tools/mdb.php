@@ -37,22 +37,33 @@ final class mdb {
 	 *
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public function __construct( string $collection='', string $database = '' ) {
+	public function __construct( string $collection = '', string $database = '' ) {
 		$connector = $this->getConnector( $database );
 
 		try {
-			$this->client = new \MongoDB\Client( $connector->uri, $connector->clientParams );
+			if( $connector->audit && $collection=='audit' ) {
+				$this->client = new \MongoDB\Client( $connector->auditDatabaseUri, $connector->clientParams );
+				$this->db = $this->client->{$connector->auditDatabaseName};
 
-			$this->db = $this->client->{$connector->database};
+				$this->audit              = false;
+				$this->include_meta       = false;
+				$this->include_metaLabels = false;
+				$this->include_metaFields = false;
+			}
+			else {
+				$this->client = new \MongoDB\Client( $connector->uri, $connector->clientParams );
+				$this->db = $this->client->{$connector->database};
 
-			if(!empty($collection)) {
+				$this->audit              = $connector->audit;
+				$this->include_meta       = $connector->include_meta;
+				$this->include_metaLabels = $connector->include_metaLabels;
+				$this->include_metaFields = $connector->include_metaFields;
+			}
+
+			if( !empty( $collection ) ) {
 				$this->collection = $this->db->{$collection};
 			}
 
-			$this->audit              = $connector->audit;
-			$this->include_meta       = $connector->include_meta;
-			$this->include_metaLabels = $connector->include_metaLabels;
-			$this->include_metaFields = $connector->include_metaFields;
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
 			throw new modelException( 'Database connection issue: ' . $e->getMessage(), 503, $e );
