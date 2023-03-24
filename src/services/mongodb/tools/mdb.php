@@ -1,11 +1,9 @@
 <?php
 namespace gcgov\framework\services\mongodb\tools;
 
-
 use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\models\config\environment\mongoDatabase;
-
 
 final class mdb {
 
@@ -19,9 +17,9 @@ final class mdb {
 	public \MongoDB\Collection $collection;
 
 	/** @var bool */
-	public bool $audit              = false;
+	public bool $audit = false;
 
-	public bool $include_meta       = true;
+	public bool $include_meta = true;
 
 	public bool $include_metaLabels = true;
 
@@ -31,8 +29,8 @@ final class mdb {
 	/**
 	 * mdb constructor.
 	 *
-	 * @param  string  $collection
-	 * @param  string  $database  Optional - if you want to use a database other than the one marked as default:true in
+	 * @param string $collection
+	 * @param string $database    Optional - if you want to use a database other than the one marked as default:true in
 	 *                            app/config/environment.json
 	 *
 	 * @throws \gcgov\framework\exceptions\modelException
@@ -72,19 +70,19 @@ final class mdb {
 
 
 	/**
-	 * @param  string  $database
+	 * @param string $database
 	 *
 	 * @return \gcgov\framework\models\config\environment\mongoDatabase
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	private function getConnector( string $database = '' ) : mongoDatabase {
+	private function getConnector( string $database = '' ): mongoDatabase {
 		$environmentConfig = config::getEnvironmentConfig();
 
 		foreach( $environmentConfig->mongoDatabases as $mongoDatabase ) {
-			if( $mongoDatabase->default && $database === '' ) {
+			if( $mongoDatabase->default && $database==='' ) {
 				return $mongoDatabase;
 			}
-			elseif( $database !== '' && $mongoDatabase->database === $database ) {
+			elseif( $database!=='' && $mongoDatabase->database===$database ) {
 				return $mongoDatabase;
 			}
 		}
@@ -97,7 +95,7 @@ final class mdb {
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function startSessionTransaction( string $database = '' ): \MongoDB\Driver\Session {
-		$mdb = new mdb( '', $database );
+		$mdb            = new mdb( '', $database );
 		$mongoDbSession = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
 		$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 60000 ] );
 
@@ -105,7 +103,8 @@ final class mdb {
 	}
 
 
-	public function getCollectionCount( $filter ) : int {
+	public function getCollectionCount( $filter ): int {
 		return $this->collection->countDocuments( $filter );
 	}
+
 }
