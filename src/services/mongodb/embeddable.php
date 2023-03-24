@@ -184,6 +184,7 @@ abstract class embeddable
 
 
 	#[Deprecated]
+	/** use static::getBsonOptionsTypeMap instead */
 	public static function _getTypeMap(): array {
 		return self::getBsonOptionsTypeMap();
 	}
