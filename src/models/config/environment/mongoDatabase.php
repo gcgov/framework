@@ -42,7 +42,7 @@ class mongoDatabase extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 			if( empty( $this->auditDatabaseUri ) ) {
 				$this->auditDatabaseUri = $this->uri;
 			}
-			if( empty( $this->auditDatabaseClientParams ) ) {
+			if( empty( $this->auditDatabaseName ) || empty( $this->auditDatabaseUri ) ) {
 				$this->auditDatabaseClientParams = $this->clientParams;
 			}
 		}
