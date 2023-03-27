@@ -40,7 +40,7 @@ final class mdb {
 
 		try {
 			if( $connector->audit && $collection=='audit' ) {
-				$this->client = new \MongoDB\Client( $connector->auditDatabaseUri, $connector->clientParams );
+				$this->client = new \MongoDB\Client( $connector->auditDatabaseUri, $connector->auditDatabaseClientParams );
 				$this->db = $this->client->{$connector->auditDatabaseName};
 
 				$this->audit              = false;

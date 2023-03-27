@@ -21,11 +21,13 @@ class mongoDatabase extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	public bool $logging = false;
 
-	public bool   $audit             = false;
+	public bool $audit = false;
 
 	public string $auditDatabaseName = '';
 
-	public string $auditDatabaseUri  = '';
+	public string $auditDatabaseUri = '';
+
+	public array $auditDatabaseClientParams = [];
 
 
 	public function __construct() {
@@ -39,6 +41,9 @@ class mongoDatabase extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 			}
 			if( empty( $this->auditDatabaseUri ) ) {
 				$this->auditDatabaseUri = $this->uri;
+			}
+			if( empty( $this->auditDatabaseClientParams ) ) {
+				$this->auditDatabaseClientParams = $this->clientParams;
 			}
 		}
 	}
