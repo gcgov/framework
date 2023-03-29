@@ -115,6 +115,62 @@ class files {
 	}
 
 
+	public function moveItem( string $itemIdToMove, string $newParentDirItemId ) : \Microsoft\Graph\Model\DriveItem {
+		//get application access token
+		$accessToken = $this->getMicrosoftAccessToken();
+
+		//get file list
+		try {
+			$graph = new \Microsoft\Graph\Graph();
+			$graph->setAccessToken( $accessToken );
+
+			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
+			$driveItem = $graph->createRequest( "PATCH", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . "/items/" . $itemIdToMove )
+				->attachBody( [ 'parentReference'=>[ 'id'=>$newParentDirItemId ]] )
+				->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+
+			return $driveItem;
+		}
+		catch( ClientException $e ) {
+			throw new serviceException( $e->getMessage(), $e->getCode(), $e );
+		}
+		catch( GuzzleException $e ) {
+			throw new serviceException( 'Error communicating with storage provider', 500, $e );
+		}
+		catch( GraphException $e ) {
+			throw new serviceException( $e->getMessage(), 500, $e );
+		}
+	}
+
+
+	public function renameItem( string $itemIdToRename, string $newName ) : \Microsoft\Graph\Model\DriveItem {
+		//get application access token
+		$accessToken = $this->getMicrosoftAccessToken();
+
+		//get file list
+		try {
+			$graph = new \Microsoft\Graph\Graph();
+			$graph->setAccessToken( $accessToken );
+
+			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
+			$driveItem = $graph->createRequest( "PATCH", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . "/items/" . $itemIdToRename )
+				->attachBody( [ 'name'=>$newName ] )
+				->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+
+			return $driveItem;
+		}
+		catch( ClientException $e ) {
+			throw new serviceException( $e->getMessage(), $e->getCode(), $e );
+		}
+		catch( GuzzleException $e ) {
+			throw new serviceException( 'Error communicating with storage provider', 500, $e );
+		}
+		catch( GraphException $e ) {
+			throw new serviceException( $e->getMessage(), 500, $e );
+		}
+	}
+
+
 	/**
 	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
