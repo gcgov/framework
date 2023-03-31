@@ -2,6 +2,7 @@
 namespace gcgov\framework\services\mongodb\models;
 
 use gcgov\framework\config;
+use gcgov\framework\services\mongodb\attributes\visibility;
 use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\label;
 use gcgov\framework\services\mongodb\models\_meta\db;
@@ -32,6 +33,12 @@ class _meta
 	 */
 	public array $labels;
 
+	/**
+	 * @OA\Property()
+	 * @var string[]
+	 */
+	public array $activeVisibilityGroups = [];
+
 	/** @OA\Property() */
 	public ?db $db = null;
 
@@ -57,6 +64,7 @@ class _meta
 
 	#[ArrayShape( [ 'ui'     => "\gcgov\framework\services\mongodb\models\ui",
 	                'labels' => "array",
+	                'activeVisibilityGroups' => "array",
 	                'fields' => "\gcgov\framework\services\mongodb\models\uiField[]",
 	                'db'     => "\gcgov\framework\services\mongodb\models\db|null",
 	                'score'  => "float|int"
@@ -74,6 +82,7 @@ class _meta
 			}
 			if( $mdbConfig->include_metaFields ) {
 				$export[ 'fields' ] = $this->fields;
+				$export[ 'activeVisibilityGroups' ] = $this->activeVisibilityGroups;
 			}
 		}
 
@@ -111,6 +120,13 @@ class _meta
 					$labelAttributeInstance                                        = $reflectionCacheProperty->getAttributeInstance( label::class );
 					$this->fields[ $reflectionCacheProperty->propertyName ]->label = $labelAttributeInstance->label;
 					$this->labels[ $reflectionCacheProperty->propertyName ]        = $labelAttributeInstance->label;
+				}
+				if( $reflectionCacheProperty->hasAttribute( visibility::class ) ) {
+					/** @var visibility $visibilityAttributeInstance */
+					$visibilityAttributeInstance                                                    = $reflectionCacheProperty->getAttributeInstance( visibility::class );
+					$this->fields[ $reflectionCacheProperty->propertyName ]->visible                = $visibilityAttributeInstance->visible;
+					$this->fields[ $reflectionCacheProperty->propertyName ]->visibilityGroups        = $visibilityAttributeInstance->visibilityGroups;
+					$this->fields[ $reflectionCacheProperty->propertyName ]->valueIsVisibilityGroup = $visibilityAttributeInstance->valueIsVisibilityGroup;
 				}
 
 			}

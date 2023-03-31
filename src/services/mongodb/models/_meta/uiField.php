@@ -2,7 +2,6 @@
 
 namespace gcgov\framework\services\mongodb\models\_meta;
 
-
 class uiField
 	extends
 	\andrewsauder\jsonDeserialize\jsonDeserialize {
@@ -39,5 +38,20 @@ class uiField
 	 * @var string
 	 */
 	public string $state = '';
+
+	/** @OA\Property() */
+	public bool $required = false;
+
+	/** @OA\Property() */
+	public bool $visible = true;
+
+	/** @OA\Property() */
+	public bool $valueIsVisibilityGroup = false;
+
+	/**
+	 * @OA\Property()
+	 * @var string[]
+	 */
+	public array $visibilityGroups = [];
 
 }

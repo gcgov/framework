@@ -489,4 +489,71 @@ abstract class embeddable
 		return $query;
 	}
 
+
+	/**
+	 * Run Symfony validation against object's #[Assert\...] attributes. Method updates _meta->fields->error and _meta->fields->errorMessages[] with violations and returns the constraint violations to the caller
+	 *
+	 * @param string[]|null $validationGroups
+	 * @param bool     $includeDefaultGroup
+	 *
+	 * @return \Symfony\Component\Validator\ConstraintViolationListInterface
+	 */
+	public function validate( ?array $validationGroups=null, bool $includeDefaultGroup=true ): \Symfony\Component\Validator\ConstraintViolationListInterface  {
+		$validator = \Symfony\Component\Validator\Validation::createValidatorBuilder() ->enableAnnotationMapping()->getValidator();
+
+		$x = $validator->getMetadataFor( $this);
+
+		if( $validationGroups===null  && method_exists( $this, '_defineValidationGroups' ) ) {
+			$validationGroups = $this->_defineValidationGroups();
+			if( !is_array( $validationGroups) ) {
+				throw new \LogicException('_defineValidationGroups must return an array of strings');
+			}
+		}
+		if( !is_array( $validationGroups) ) {
+			$validationGroups = [];
+		}
+
+		if( count($validationGroups)>0 ) {
+			if( !in_array('Default', $validationGroups) && $includeDefaultGroup) {
+				$validationGroups[] = 'Default';
+			}
+			$violations = $validator->validate( value: $this, groups: $validationGroups );
+		}
+		else {
+			$violations = $validator->validate( value: $this );
+		}
+
+		if( count( $violations )>0 ) {
+			$propertyAccessor = \Symfony\Component\PropertyAccess\PropertyAccess::createPropertyAccessor();
+
+			foreach($violations as $violation) {
+				$propertyPath = $violation->getPropertyPath();
+				if(str_contains($propertyPath, '.')) {
+					$parentObjPath = substr( $propertyPath, 0, strrpos($propertyPath, '.'));
+					$fieldPath = substr( $propertyPath, strrpos($propertyPath, '.')+1);
+					$metaPath = $parentObjPath.'._meta.fields['.$fieldPath.']';
+				}
+				else {
+					$fieldPath = $propertyPath;
+					$metaPath = '_meta.fields['.$fieldPath.']';
+				}
+
+				/** @var \gcgov\framework\services\mongodb\models\_meta\uiField $metaVal */
+				$uiField = $propertyAccessor->getValue($this, $metaPath);
+
+				if( $uiField instanceof \gcgov\framework\services\mongodb\models\_meta\uiField ) {
+					$uiField->error           = true;
+					$uiField->errorMessages[] = $violation->getMessage();
+				}
+				else {
+					log::error('MongoService', 'Validation violation not recorded in _meta for '.get_called_class().' property path '.$propertyPath.'. The meta field path (computed to be '.$metaPath.') did was not an instance of a \gcgov\framework\services\mongodb\models\_meta\uiField');
+				}
+
+			}
+
+		}
+
+		return $violations;
+
+	}
 }
