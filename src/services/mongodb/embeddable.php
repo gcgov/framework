@@ -501,8 +501,6 @@ abstract class embeddable
 	public function validate( ?array $validationGroups=null, bool $includeDefaultGroup=true ): \Symfony\Component\Validator\ConstraintViolationListInterface  {
 		$validator = \Symfony\Component\Validator\Validation::createValidatorBuilder() ->enableAnnotationMapping()->getValidator();
 
-		$x = $validator->getMetadataFor( $this);
-
 		if( $validationGroups===null  && method_exists( $this, '_defineValidationGroups' ) ) {
 			$validationGroups = $this->_defineValidationGroups();
 			if( !is_array( $validationGroups) ) {
