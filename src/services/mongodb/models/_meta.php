@@ -98,13 +98,16 @@ class _meta
 	}
 
 
-	private function generateAttributes( string $className ) {
+	private function generateAttributes( string $className ): void {
 		$labels = metaAttributeCache::getLabels( $className );
 		$fields = metaAttributeCache::getFields( $className );
 
 		if( isset( $labels ) && isset( $fields ) ) {
 			$this->labels = $labels;
-			$this->fields = $fields;
+			$this->fields = [];
+			foreach($fields as $fieldName=>$field ) {
+				$this->fields[ $fieldName ] = clone $field;
+			}
 			return;
 		}
 
