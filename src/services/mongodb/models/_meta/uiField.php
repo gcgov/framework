@@ -54,4 +54,7 @@ class uiField
 	 */
 	public array $visibilityGroups = [];
 
+	/** @OA\Property() */
+	public bool $validating = false;
+
 }
