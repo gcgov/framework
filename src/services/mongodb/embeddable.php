@@ -498,7 +498,7 @@ abstract class embeddable
 	 *
 	 * @return \Symfony\Component\Validator\ConstraintViolationListInterface
 	 */
-	public function validate( ?array $validationGroups=null, bool $includeDefaultGroup=true ): \Symfony\Component\Validator\ConstraintViolationListInterface  {
+	public function updateValidationState( ?array $validationGroups=null, bool $includeDefaultGroup=true ): \Symfony\Component\Validator\ConstraintViolationListInterface  {
 		$validator = \Symfony\Component\Validator\Validation::createValidatorBuilder() ->enableAnnotationMapping()->getValidator();
 
 		if( $validationGroups===null  && method_exists( $this, '_defineValidationGroups' ) ) {
@@ -541,7 +541,7 @@ abstract class embeddable
 
 				if( $uiField instanceof \gcgov\framework\services\mongodb\models\_meta\uiField ) {
 					$uiField->error           = true;
-					$uiField->errorMessages[] = $violation->getMessage();
+					$uiField->errorMessages[] = $violation->getMessage();//.' - field '.$propertyPath.' meta '.$metaPath;
 				}
 				else {
 					log::error('MongoService', 'Validation violation not recorded in _meta for '.get_called_class().' property path '.$propertyPath.'. The meta field path (computed to be '.$metaPath.') did was not an instance of a \gcgov\framework\services\mongodb\models\_meta\uiField');
