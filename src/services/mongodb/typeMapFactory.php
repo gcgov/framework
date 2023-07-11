@@ -24,26 +24,44 @@ class typeMapFactory {
 
 	/**
 	 * @param string $className
+	 * @param string[]  $parentContexts
 	 *
 	 * @return \gcgov\framework\services\mongodb\typeMap
 	 */
-	public static function get( string $className ): \gcgov\framework\services\mongodb\typeMap {
+	public static function get( string $className, array $parentContexts=[] ): \gcgov\framework\services\mongodb\typeMap {
 		$calledClassFqn = typeHelpers::classNameToFqn( $className );
-		if( !isset( self::$typeMaps[ $calledClassFqn ] ) ) {
-			$typeMap =  new \gcgov\framework\services\mongodb\typeMap( $calledClassFqn );
-			self::set( $calledClassFqn, $typeMap );
+
+		//cache key allows a typemap to be cached for an embeddable property for each location in a call tree it exists in
+		// this allows us to respect the #[excludeFromTypemapWhenThisClassNotRoot] attribute to limit the potential for
+		// an infinite loop from circular references while generating typemaps
+		$cacheKey = $calledClassFqn;
+		if(count($parentContexts)>0) {
+			$cacheKey = implode('.',$parentContexts).'.'.$calledClassFqn;
 		}
-		return self::$typeMaps[ $calledClassFqn ];
+
+		//generate typemap if it does not exist
+		if( !isset( self::$typeMaps[ $cacheKey ] ) ) {
+			$typeMap =  new \gcgov\framework\services\mongodb\typeMap( $calledClassFqn, [], $parentContexts );
+			//store typemap
+			self::$typeMaps[ $cacheKey ] = $typeMap;
+			//store root model typemaps in model typemaps
+			if( $typeMap->model && count($parentContexts)==0 ) {
+				self::$modelTypeMaps[ $cacheKey ] = $typeMap;
+			}
+		}
+
+		//return typemap from mem cache
+		return self::$typeMaps[ $cacheKey ];
 	}
 
 
-	private static function set( string $className, \gcgov\framework\services\mongodb\typeMap $typeMap ): void {
-		$calledClassFqn = typeHelpers::classNameToFqn( $className );
-		self::$typeMaps[ $calledClassFqn ] = $typeMap;
-		if( $typeMap->model ) {
-			self::$modelTypeMaps[ $calledClassFqn ] = $typeMap;
-		}
-	}
+//	private static function set( string $className, \gcgov\framework\services\mongodb\typeMap $typeMap ): void {
+//		$calledClassFqn = typeHelpers::classNameToFqn( $className );
+//		self::$typeMaps[ $calledClassFqn ] = $typeMap;
+//		if( $typeMap->model ) {
+//			self::$modelTypeMaps[ $calledClassFqn ] = $typeMap;
+//		}
+//	}
 
 
 	public static function getAllModelTypeMaps(): array {
