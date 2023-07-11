@@ -288,14 +288,17 @@ abstract class embeddable
 
 			if( $propertyIsTypedArray ) {
 				if( !isset( $data[ $propertyName ] ) ) {
+					log::info( 'MongoUnserialize', $calledClassFqn.'.'.$propertyName.' of type '.$propertyType.' set to default value'  );
 					$data[ $propertyName ] = $rProperty->getDefaultValue();
 				}
 				foreach( $data[ $propertyName ] as $key => $value ) {
+					log::info( 'MongoUnserialize', $calledClassFqn.'.'.$propertyName.' key '.$key.' of type '.$propertyType.' set'  );
 					$this->$propertyName[ $key ] = $this->bsonUnserializeDataItem( $rProperty, $propertyType, $arrayType, $value );
 				}
 			}
 			else {
 				if( !array_key_exists( $propertyName, $data ) ) {
+					log::info( 'MongoUnserialize', $calledClassFqn.'.'.$propertyName.' value not in provided data' );
 					$value = null;
 				}
 				else {
@@ -304,6 +307,7 @@ abstract class embeddable
 
 				//set the class property = the parsed value from the database
 				try {
+					log::info( 'MongoUnserialize', $calledClassFqn.'.'.$propertyName.' of type '.$propertyType.' set'  );
 					$this->$propertyName = $this->bsonUnserializeDataItem( $rProperty, $propertyType, $propertyTypeName, $value );
 				}
 				catch( \Exception|\TypeError $e ) {
@@ -395,8 +399,7 @@ abstract class embeddable
 								return new \DateTimeImmutable( $value );
 							}
 							catch( \Exception $e ) {
-								log::warning( 'MongoService', 'Invalid date is stored in database. ' . $e->getMessage(), $e->getTrace() );
-
+								log::warning( 'MongoUnserialize', 'Invalid date is stored in database. ' . $e->getMessage(), $e->getTrace() );
 								return new \DateTimeImmutable();
 							}
 						}
@@ -404,6 +407,7 @@ abstract class embeddable
 				}
 					//regular non class types
 				catch( \ReflectionException $e ) {
+					log::info( 'MongoUnserialize', $rProperty->getName().' error '.$e->getMessage() );
 				}
 			}
 
