@@ -163,8 +163,8 @@ abstract class embeddable
 	}
 
 
-	public static function getTypeMap(): typeMap {
-		return typeMapFactory::get( get_called_class() );
+	public static function getTypeMap( typeMapType $type=typeMapType::serialize ): typeMap {
+		return typeMapFactory::get( get_called_class(), $type );
 	}
 
 
@@ -178,8 +178,8 @@ abstract class embeddable
 		'root'       => "string",
 		'fieldPaths' => "string[]"
 	] )]
-	public static function getBsonOptionsTypeMap(): array {
-		return typeMapFactory::get( get_called_class() )->toArray();
+	public static function getBsonOptionsTypeMap( typeMapType $type=typeMapType::serialize ): array {
+		return typeMapFactory::get( get_called_class(), $type )->toArray();
 	}
 
 

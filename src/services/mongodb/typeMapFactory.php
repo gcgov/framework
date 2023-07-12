@@ -28,20 +28,20 @@ class typeMapFactory {
 	 *
 	 * @return \gcgov\framework\services\mongodb\typeMap
 	 */
-	public static function get( string $className, array $parentContexts=[] ): \gcgov\framework\services\mongodb\typeMap {
+	public static function get( string $className, typeMapType $type=typeMapType::serialize, array $parentContexts=[] ): \gcgov\framework\services\mongodb\typeMap {
 		$calledClassFqn = typeHelpers::classNameToFqn( $className );
 
 		//cache key allows a typemap to be cached for an embeddable property for each location in a call tree it exists in
 		// this allows us to respect the #[excludeFromTypemapWhenThisClassNotRoot] attribute to limit the potential for
 		// an infinite loop from circular references while generating typemaps
-		$cacheKey = $calledClassFqn;
+		$cacheKey = $calledClassFqn.'.'.$type->value;
 		if(count($parentContexts)>0) {
-			$cacheKey = implode('.',$parentContexts).'.'.$calledClassFqn;
+			$cacheKey = implode('.',$parentContexts).'.'.$calledClassFqn.'.'.$type->value;
 		}
 
 		//generate typemap if it does not exist
 		if( !isset( self::$typeMaps[ $cacheKey ] ) ) {
-			$typeMap =  new \gcgov\framework\services\mongodb\typeMap( $calledClassFqn, [], $parentContexts );
+			$typeMap =  new \gcgov\framework\services\mongodb\typeMap( $calledClassFqn, $type, [], $parentContexts );
 			//store typemap
 			self::$typeMaps[ $cacheKey ] = $typeMap;
 			//store root model typemaps in model typemaps
@@ -64,7 +64,7 @@ class typeMapFactory {
 //	}
 
 
-	public static function getAllModelTypeMaps(): array {
+	public static function getAllModelTypeMaps(typeMapType $type=typeMapType::serialize): array {
 		if( !self::$allModelTypeMapsFetched ) {
 			$appDir = config::getAppDir();
 
@@ -89,7 +89,7 @@ class typeMapFactory {
 				$className = $file->getBasename( '.' . $file->getExtension() );
 				$classFqn  = typeHelpers::classNameToFqn( str_replace( '/', '\\', '\\' . $namespace . '\\' . $className ) );
 
-				self::get( $classFqn );
+				self::get( $classFqn, $type );
 			}
 
 			self::$allModelTypeMapsFetched = true;

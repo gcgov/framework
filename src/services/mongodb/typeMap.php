@@ -23,6 +23,8 @@ class typeMap {
 	/** @var string[] */
 	public array $fieldPaths = [];
 
+	public typeMapType $type = typeMapType::serialize;
+
 	public bool   $model      = false;
 	public string $collection = '';
 
@@ -31,16 +33,17 @@ class typeMap {
 
 	public array $foreignKeyMapEmbeddedFilters = [];
 
-	/** @var string[] $parentContexts  */
+	/** @var string[] $parentContexts */
 	private array $parentContexts = [];
 
 
 	/**
 	 * @throws \gcgov\framework\services\mongodb\exceptions\databaseException
 	 */
-	public function __construct( string $rootClassFqn, array $knownFieldPaths = [], array $parentContexts=[] ) {
-		$this->root       = $rootClassFqn;
-		$this->fieldPaths = $knownFieldPaths;
+	public function __construct( string $rootClassFqn, typeMapType $type=typeMapType::serialize, array $knownFieldPaths = [], array $parentContexts = [] ) {
+		$this->root           = $rootClassFqn;
+		$this->type           = $type;
+		$this->fieldPaths     = $knownFieldPaths;
 		$this->parentContexts = $parentContexts;
 		$this->generate();
 	}
@@ -77,7 +80,15 @@ class typeMap {
 			//skip type mapping this if property is
 			//  - excluded from serialization and unserialization
 			//  - not typed
-			if( ($reflectionCacheProperty->hasAttribute( excludeBsonSerialize::class ) && $reflectionCacheProperty->hasAttribute( excludeBsonUnserialize::class )) || !$reflectionCacheProperty->propertyHasType ) {
+			if( !$reflectionCacheProperty->propertyHasType ) {
+				continue;
+			}
+
+			if( $this->type==typeMapType::serialize && $reflectionCacheProperty->hasAttribute( excludeBsonSerialize::class ) ) {
+				continue;
+			}
+
+			if( $this->type==typeMapType::unserialize && $reflectionCacheProperty->hasAttribute( excludeBsonUnserialize::class ) ) {
 				continue;
 			}
 
@@ -88,7 +99,7 @@ class typeMap {
 
 			try {
 				$propertyTypeReflectionCacheClass = reflectionCache::getReflectionClass( $reflectionCacheProperty->propertyTypeNameFQN );
-				if( !$propertyTypeReflectionCacheClass->reflectionClass->isSubclassOf( \gcgov\framework\services\mongodb\embeddable::class )) {
+				if( !$propertyTypeReflectionCacheClass->reflectionClass->isSubclassOf( \gcgov\framework\services\mongodb\embeddable::class ) ) {
 					continue;
 				}
 			}
@@ -106,24 +117,24 @@ class typeMap {
 			$this->fieldPaths[ $baseFieldPathKey ] = $reflectionCacheProperty->propertyTypeNameFQN;
 
 			//add foreign field mapping for upserting embedded objects
-			if( $reflectionCacheProperty->hasAttribute(foreignKey::class) ) {
+			if( $reflectionCacheProperty->hasAttribute( foreignKey::class ) ) {
 				/** @var \gcgov\framework\services\mongodb\attributes\foreignKey $foreignKeyAttributeInstance */
-				$foreignKeyAttributeInstance = $reflectionCacheProperty->getAttributeInstance( foreignKey::class );
+				$foreignKeyAttributeInstance                             = $reflectionCacheProperty->getAttributeInstance( foreignKey::class );
 				$this->foreignKeyMap[ $baseFieldPathKey ]                = $foreignKeyAttributeInstance->propertyName;
 				$this->foreignKeyMapEmbeddedFilters[ $baseFieldPathKey ] = $foreignKeyAttributeInstance->embeddedObjectFilter;
 			}
 
 			//add the field paths for the property type so that we get a full chain of types
 			$propertyParentContexts = [ ...$this->parentContexts, $this->root ];
-			if( count($this->parentContexts)>0 && $reflectionCacheProperty->hasAttribute( excludeFromTypemapWhenThisClassNotRoot::class ) ) {
+			if( count( $this->parentContexts )>0 && $reflectionCacheProperty->hasAttribute( excludeFromTypemapWhenThisClassNotRoot::class ) ) {
 				//log::info( 'MongoTypemap', 'Exclude mapping ' . implode(' > ', $propertyParentContexts) . '.' . $reflectionCacheProperty->propertyName . ' of type ' . $reflectionCacheProperty->propertyTypeNameFQN .' in respect of excludeFromTypemapWhenThisClassNotRoot attribute' );
 				continue;
 			}
-			if( in_array($reflectionCacheProperty->propertyTypeNameFQN, $propertyParentContexts) ) {
-				log::warning( 'MongoTypemap', 'Mapping ' . implode(' > ', $propertyParentContexts) . '.' . $reflectionCacheProperty->propertyName . ' of type ' . $reflectionCacheProperty->propertyTypeNameFQN .' may cause an infinite loop. Consider using attribute excludeFromTypemapWhenThisClassNotRoot on the property' );
+			if( in_array( $reflectionCacheProperty->propertyTypeNameFQN, $propertyParentContexts ) ) {
+				log::warning( 'MongoTypemap', 'Mapping ' . implode( ' > ', $propertyParentContexts ) . '.' . $reflectionCacheProperty->propertyName . ' of type ' . $reflectionCacheProperty->propertyTypeNameFQN . ' may cause an infinite loop. Consider using attribute excludeFromTypemapWhenThisClassNotRoot on the property' );
 			}
 
-			$propertyTypeMap = typeMapFactory::get( $reflectionCacheProperty->propertyTypeNameFQN, $propertyParentContexts );
+			$propertyTypeMap = typeMapFactory::get( $reflectionCacheProperty->propertyTypeNameFQN, $this->type, $propertyParentContexts );
 			foreach( $propertyTypeMap->fieldPaths as $subFieldPathKey => $subFieldTypeClass ) {
 				$this->fieldPaths[ $baseFieldPathKey . '.' . $subFieldPathKey ] = $subFieldTypeClass;
 			}

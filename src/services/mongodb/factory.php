@@ -54,7 +54,7 @@ abstract class factory
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$options = array_merge( $options, [
-			'typeMap' => typeMapFactory::get( get_called_class() )->toArray()
+			'typeMap' => static::getBsonOptionsTypeMap( typeMapType::unserialize )
 		] );
 		if( count( $sort )>0 ) {
 			$options[ 'sort' ] = $sort;
@@ -86,7 +86,7 @@ abstract class factory
 		$result = new getResult( $limit, $page );
 
 		$options            = array_merge( $options, [
-			'typeMap' => static::getBsonOptionsTypeMap()
+			'typeMap' => static::getBsonOptionsTypeMap( typeMapType::unserialize )
 		] );
 		$options[ 'limit' ] = $result->getLimit();
 		$options[ 'skip' ]  = ( $result->getPage() - 1 ) * $result->getLimit();
@@ -121,7 +121,7 @@ abstract class factory
 		];
 
 		$options = [
-			'typeMap' => static::getBsonOptionsTypeMap(),
+			'typeMap' => static::getBsonOptionsTypeMap( typeMapType::unserialize ),
 		];
 
 		try {
@@ -150,7 +150,7 @@ abstract class factory
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$options = array_merge( $options, [
-			'typeMap' => static::getBsonOptionsTypeMap()
+			'typeMap' => static::getBsonOptionsTypeMap( typeMapType::unserialize )
 		] );
 
 		try {
@@ -381,7 +381,7 @@ abstract class factory
 		}
 
 		//AUDIT CHANGE STREAM
-		if( static::_getCollectionName()!='audit' && $mdb->audit && isset( $auditChangeStream ) && ( $combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0 || $combinedResult->getDeletedCount()>0 ) ) {
+		if( $sessionParent && static::_getCollectionName()!='audit' && $mdb->audit && isset( $auditChangeStream ) && ( $combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0 || $combinedResult->getDeletedCount()>0 ) ) {
 			$auditChangeStream->processChangeStream( $combinedResult );
 			audit::save( $auditChangeStream );
 		}
@@ -445,7 +445,7 @@ abstract class factory
 		}
 
 		//dispatch delete for all embedded versions
-		$embeddedDeletes = self::_deleteEmbedded( typeMapFactory::get( get_called_class() )->root, $_id );
+		$embeddedDeletes = self::_deleteEmbedded( get_called_class(), $_id );
 
 		//combine primary delete with embedded
 		$combinedResult = new updateDeleteResult( $deleteResult, $embeddedDeletes );
