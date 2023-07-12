@@ -174,6 +174,7 @@ final class audit
 	public function processChangeStream( ?updateDeleteResult $updateDeleteResult=null ) {
 		for ($this->changeStream->rewind(); true; $this->changeStream->next()) {
 			if ( ! $this->changeStream->valid()) {
+				log::warning('MongoAudit', 'No valid change event on collection '.$this->collection.'. Stopping watch to move on');
 				continue;
 			}
 
@@ -186,22 +187,22 @@ final class audit
 
 			switch ($event->operationType) {
 				case 'delete':
-					log::info( 'MongoService', "Deleted document in ".$ns." with id: ".$id );
+					log::info( 'MongoAudit', "Deleted document in ".$ns." with id: ".$id );
 					break;
 
 				case 'insert':
 					$data = $event->fullDocument;
-					log::info( 'MongoService', "Inserted new document in ".$ns, [$event->fullDocument]);
+					log::info( 'MongoAudit', "Inserted new document in ".$ns, [$event->fullDocument]);
 					break;
 
 				case 'replace':
 					$data = $event->fullDocument;
-					log::info( 'MongoService', "Replaced new document in ".$ns." with _id: ".$id, [$event->fullDocument]);
+					log::info( 'MongoAudit', "Replaced new document in ".$ns." with _id: ".$id, [$event->fullDocument]);
 					break;
 
 				case 'update':
 					$data = $event->updateDescription;
-					log::info( 'MongoService',"Updated document in ".$ns." with _id: ". $id, [$event->updateDescription]);
+					log::info( 'MongoAudit',"Updated document in ".$ns." with _id: ". $id, [$event->updateDescription]);
 					break;
 			}
 
