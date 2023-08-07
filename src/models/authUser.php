@@ -87,7 +87,7 @@ class authUser {
 	 *
 	 * @return \gcgov\framework\models\authUser
 	 */
-	public function setFromJwtToken( array $tokenUser, array $tokenScopes ): authUser {
+	public function setFromJwtToken( array $tokenUser, array $tokenScopes ): self {
 		$this->userId           = $tokenUser[ 'userId' ] ?? '';
 		$this->username         = $tokenUser[ 'username' ] ?? '';
 		$this->externalId       = $tokenUser[ 'externalId' ] ?? '';
@@ -96,6 +96,22 @@ class authUser {
 		$this->email            = $tokenUser[ 'email' ] ?? '';
 		$this->roles            = $tokenScopes;
 
+		return self::getInstance();
+	}
+
+	/**
+	 * @param \gcgov\framework\interfaces\auth\user $user
+	 *
+	 * @return self
+	 */
+	public function setFromUser( \gcgov\framework\interfaces\auth\user $user ): self {
+		$this->userId           = $user->getId();
+		$this->externalId       = $user->getOauthId();
+		$this->externalProvider = $user->getOauthProvider();
+		$this->name             = $user->getName();
+		$this->username         = $user->getUsername();
+		$this->email            = $user->getEmail();
+		$this->roles            = $user->getRoles();
 		return self::getInstance();
 	}
 

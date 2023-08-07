@@ -21,11 +21,12 @@ final class framework {
 		//appConfig
 		\app\app::_before();
 		$app = new \app\app();
+		$serviceNamespaces = $app->registerFrameworkServiceNamespaces();
 
 		//router
 		\app\router::_before();
-		$router = new \gcgov\framework\router();
 		try {
+			$router = new \gcgov\framework\router( $serviceNamespaces );
 			$routeHandler  = $router->route();
 		}
 		catch( routeException $e ) {
