@@ -11,7 +11,7 @@ final class router {
 	private \gcgov\framework\interfaces\router $appRouter;
 
 	/** @var \gcgov\framework\interfaces\router[] $serviceRouters  */
-	private array $serviceRouters;
+	private array $serviceRouters = [];
 
 	/** @var string[] $serviceNamespaces  */
 	private array $serviceNamespaces = [];
