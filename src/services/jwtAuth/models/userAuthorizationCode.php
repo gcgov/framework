@@ -4,7 +4,6 @@ namespace gcgov\framework\services\jwtAuth\models;
 use gcgov\framework\services\mongodb\attributes\label;
 
 /**
- * Class userAuthorizationCode
  * @OA\Schema()
  */
 final class userAuthorizationCode

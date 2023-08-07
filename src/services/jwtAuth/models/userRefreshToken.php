@@ -5,6 +5,9 @@ use gcgov\framework\services\mongodb\attributes\label;
 use gcgov\framework\services\mongodb\updateDeleteResult;
 
 
+/**
+ * @OA\Schema()
+ */
 final class userRefreshToken
 	extends
 	\gcgov\framework\services\mongodb\model {

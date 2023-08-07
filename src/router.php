@@ -96,10 +96,10 @@ final class router {
 
 				log::debug('Framework Lifecycle', '-Router- run service routers authentication()');
 				foreach($this->serviceRouters as $serviceRouter) {
-					log::debug('Framework Lifecycle', '-Router- run framework\services\$serviceName\router authentication()');
+					log::debug('Framework Lifecycle', '-Router- run framework\services\\'.get_class($serviceRouter).'\router authentication()');
 					$serviceAllowRoute = $serviceRouter->authentication( $routeHandler );
 					if(!$serviceAllowRoute) {
-						log::debug('Framework Lifecycle', '-Router- framework\services\$serviceName\router authentication() returned false; raising route exception');
+						log::debug('Framework Lifecycle', '-Router- framework\services\\'.get_class($serviceRouter).'\router authentication() returned false; raising route exception');
 						throw new \gcgov\framework\exceptions\routeException ( 'Authentication failed', 401 );
 					}
 				}
