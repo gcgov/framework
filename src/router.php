@@ -65,7 +65,7 @@ final class router {
 		//map routes to \FastRoute dispatcher
 		$routeDispatcher = \FastRoute\simpleDispatcher( function( \FastRoute\RouteCollector $r ) use ( $routes ) {
 			foreach( $routes as $route ) {
-				$r->addRoute( $route->httpMethod, $route->route, new \gcgov\framework\models\routeHandler( $route->class, $route->method, $route->authentication, $route->requiredRoles ) );
+				$r->addRoute( $route->httpMethod, $route->route, new \gcgov\framework\models\routeHandler( $route->class, $route->method, $route->authentication, $route->requiredRoles, $route->allowShortLivedUrlTokens ) );
 			}
 		} );
 

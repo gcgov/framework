@@ -2,7 +2,6 @@
 
 namespace gcgov\framework\models;
 
-
 /**
  * Model for \appConfig\router to define URL routes
  * Utilized by \gcgov\framework\router and \appConfig\router
@@ -27,28 +26,32 @@ class route {
 
 	/** @var bool Authentication is required */
 	public bool $authentication = false;
-
 	/** @var string[] If authentication is required, the user must have all of these roles to get to route */
 	public array $requiredRoles = [];
+
+
+	/** @var bool Authentication token can be provided in url */
+	public bool $allowShortLivedUrlTokens = false;
 
 
 	/**
 	 * Create a route
 	 *
-	 * @param  string|array  $httpMethod      GET, POST, PUT, DELETE
-	 * @param  string        $route           URL to capture. Ie: '/widgets/{_id}'. See https://github.com/nikic/FastRoute/ for route pattern matching details
-	 * @param  string        $class           Fully qualified class name to initialize when this url is triggered. Ie: '\app\controllers\widget'
-	 * @param  string        $method          Method inside the $class to call when this URL is triggered. Ie: 'getOne'. Method must have paramters that match the route pattern placeholders. In this example, getOne method must accept one parameter. Ie: getOne( string  $_id )
-	 * @param  bool          $authentication  Whether authentication is required to access this route. Functionality to respond to this must be implemented in \app\router\authentication()
-	 * @param  array         $requiredRoles   If authentication is required, the roles required of the use to access this route. Functionality to respond to this must be implemented in \app\router\authentication(). If not using roles for a route or at all, just skip including this parameter.
+	 * @param string|array $httpMethod     GET, POST, PUT, DELETE
+	 * @param string       $route          URL to capture. Ie: '/widgets/{_id}'. See https://github.com/nikic/FastRoute/ for route pattern matching details
+	 * @param string       $class          Fully qualified class name to initialize when this url is triggered. Ie: '\app\controllers\widget'
+	 * @param string       $method         Method inside the $class to call when this URL is triggered. Ie: 'getOne'. Method must have paramters that match the route pattern placeholders. In this example, getOne method must accept one parameter. Ie: getOne( string  $_id )
+	 * @param bool         $authentication Whether authentication is required to access this route. Functionality to respond to this must be implemented in \app\router\authentication()
+	 * @param array        $requiredRoles  If authentication is required, the roles required of the use to access this route. Functionality to respond to this must be implemented in \app\router\authentication(). If not using roles for a route or at all, just skip including this parameter.
 	 */
-	public function __construct( string|array $httpMethod = '', string $route = '', string $class = '', string $method = '', bool $authentication = false, array $requiredRoles = [] ) {
-		$this->httpMethod     = $httpMethod;
-		$this->route          = $route;
-		$this->class          = $class;
-		$this->method         = $method;
-		$this->authentication = $authentication;
-		$this->requiredRoles  = $requiredRoles;
+	public function __construct( string|array $httpMethod = '', string $route = '', string $class = '', string $method = '', bool $authentication = false, array $requiredRoles = [], bool $allowShortLivedUrlTokens=false ) {
+		$this->httpMethod               = $httpMethod;
+		$this->route                    = $route;
+		$this->class                    = $class;
+		$this->method                   = $method;
+		$this->authentication           = $authentication;
+		$this->requiredRoles            = $requiredRoles;
+		$this->allowShortLivedUrlTokens = $allowShortLivedUrlTokens;
 	}
 
 }
