@@ -22,3 +22,6 @@ The easiest way to start is to use the [scaffolding project](https://github.com/
 * **Oauth Server Service** `gcgov/framework-service-auth-oauth-server`
     * Require using Composer https://packagist.org/packages/gcgov/framework-service-auth-oauth-server
     * Add namespace `\gcgov\framework\services\authoauth` to `\app\app->registerFrameworkServiceNamespaces()`
+* **User CRUD** `gcgov/framework-service-user-crud`
+    * Require using Composer https://packagist.org/packages/gcgov/framework-service-user-crud
+    * Add namespace `\gcgov\framework\services\usercrud` to `\app\app->registerFrameworkServiceNamespaces()`
