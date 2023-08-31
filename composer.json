@@ -18,7 +18,7 @@
 		"lcobucci/clock": "^2.0",
 		"thenetworg/oauth2-azure": "^2.1",
 		"guzzlehttp/guzzle": "^7.0",
-		"andrewsauder/json-deserialize": "^2.4.2",
+		"andrewsauder/json-deserialize": "^2.5",
 		"symfony/validator": "^6.2",
 		"symfony/expression-language": "^6.2",
 		"symfony/property-access": "^6.2",

@@ -361,6 +361,17 @@ abstract class embeddable
 						$instantiateArguments[] = get_called_class();
 					}
 
+					if($rPropertyClass->isEnum()) {
+						$rEnum = new \ReflectionEnum( $propertyTypeName );
+
+						if($rEnum->isBacked()) {
+							return $propertyTypeName::from($value);
+						}
+						else {
+							return $rEnum->getCase( $value );
+						}
+					}
+
 					return $rPropertyClass->newInstance( ...$instantiateArguments );
 				}
 					//regular non class types
@@ -389,6 +400,17 @@ abstract class embeddable
 			else {
 				try {
 					$rPropertyClass = new \ReflectionClass( $propertyTypeName );
+
+					if($rPropertyClass->isEnum()) {
+						$rEnum = new \ReflectionEnum( $propertyTypeName );
+
+						if($rEnum->isBacked()) {
+							return $propertyTypeName::from($value);
+						}
+						else {
+							return $rEnum->getCase( $value );
+						}
+					}
 
 					if( $rPropertyClass->implementsInterface( \DateTimeInterface::class ) ) {
 						if( $value instanceof \MongoDB\BSON\UTCDateTime ) {
