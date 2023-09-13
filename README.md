@@ -25,3 +25,5 @@ The easiest way to start is to use the [scaffolding project](https://github.com/
 * **User CRUD** `gcgov/framework-service-user-crud`
     * Require using Composer https://packagist.org/packages/gcgov/framework-service-user-crud
     * Add namespace `\gcgov\framework\services\usercrud` to `\app\app->registerFrameworkServiceNamespaces()`
+* **Cron Monitor** `gcgov/framework-service-gcgov-cron-monitor`
+    * Documentation https://github.com/gcgov/framework-service-gcgov-cron-monitor/blob/main/README.md
