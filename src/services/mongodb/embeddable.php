@@ -456,7 +456,7 @@ abstract class embeddable
 			//  - excluded from serialization
 			//  - starts with _
 			$excludeBsonSerializeAttributes = $rProperty->getAttributes( excludeBsonSerialize::class );
-			if( count( $excludeBsonSerializeAttributes )>0 || str_starts_with( $rProperty->getName(), '_' ) ) {
+			if( count( $excludeBsonSerializeAttributes )>0 ) {
 				continue;
 			}
 
