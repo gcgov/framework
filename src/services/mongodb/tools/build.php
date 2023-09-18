@@ -49,8 +49,17 @@ class build {
 					error_log('Standardize '.$classFqn.' ('.round((($classIndex+1) / $classCount)*100, 2 ).'%)');
 					$queryOrs = $classFqn::mongoFieldsExistsQuery();
 					$dbObjects = $classFqn::getAll( [ '$or'=>$queryOrs ]);
-					foreach($dbObjects as &$dbObject) {
-						$updates[] = $classFqn::save( $dbObject );
+					error_log('--'.count($dbObjects));
+					foreach($dbObjects as $dbObjectIndex=>&$dbObject) {
+						try {
+							$item = $classFqn::getOne( $dbObject->_id );
+							$updates[] = $classFqn::save( $item );
+							error_log('-- '.$classFqn.'::save ('.($dbObjectIndex+1).'/ '.count($dbObjects) . ' - '.round((($dbObjectIndex+1) / count($dbObjects))*100, 2 ).'%)');
+						}
+						catch( \Exception $e ) {
+							error_log($e);
+							error_log('-- Failed to save '.$classFqn.' ('.$dbObject->_id.')');
+						}
 					}
 				}
 			}
