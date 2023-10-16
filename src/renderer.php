@@ -3,6 +3,7 @@
 namespace gcgov\framework;
 
 use gcgov\framework\exceptions\controllerException;
+use gcgov\framework\models\controllerPdfResponse;
 use gcgov\framework\models\routeHandler;
 use gcgov\framework\interfaces\controller;
 use gcgov\framework\models\controllerDataResponse;
@@ -35,6 +36,9 @@ final class renderer {
 		}
 		elseif( $controllerResponse instanceof controllerViewResponse ) {
 			return $this->processControllerViewResponse( $controllerResponse );
+		}
+		elseif( $controllerResponse instanceof controllerPdfResponse ) {
+			return $this->processControllerPdfResponse( $controllerResponse );
 		}
 
 		return '';
@@ -132,6 +136,60 @@ final class renderer {
 		}
 		elseif( $controllerDataResponse->getContentType()==='text/plain' ) {
 			$encodedResponse = (string)$controllerDataResponse->getData();
+		}
+		else {
+			return \app\renderer::processSystemErrorException( new \LogicException( 'Unsupported content-type provided in controller response', 500 ) );
+		}
+
+		return $encodedResponse;
+	}
+
+
+
+	/**
+	 * @param \gcgov\framework\interfaces\_controllerDataResponse $controllerDataResponse
+	 *
+	 * @return string
+	 */
+	private function processControllerPdfResponse( \gcgov\framework\interfaces\_controllerPdfResponse $controllerPdfResponse ): string {
+		if( !headers_sent( $fileBasename, $lineNumber ) ) {
+			foreach( $controllerPdfResponse->getHeaders() as $header ) {
+				$header->output();
+			}
+		}
+		else {
+			\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $fileBasename . ' on line ' . $lineNumber );
+		}
+
+		if( $controllerPdfResponse->getHttpStatus()!=200 ) {
+			http_response_code( $controllerPdfResponse->getHttpStatus() );
+			if($controllerPdfResponse->getHttpStatus()==204) {
+				header( 'Content-Length: 0' );
+				return '';
+			}
+			if( $controllerPdfResponse->getFilePathname()==='' ) {
+				return '';
+			}
+		}
+
+		header( 'Content-Type:' . $controllerPdfResponse->getContentType() );
+
+		$fileBasename = basename($controllerPdfResponse->getFilePathname());
+		header( 'x-filename: ' . $fileBasename );
+		header( 'Content-Description: File Transfer' );
+		if( isset( $_GET[ 'download' ] ) ) {
+			header( 'Content-Disposition: attachment; filename=' . $fileBasename );
+		}
+		else {
+			header( 'Content-Disposition: inline; filename=' . $fileBasename );
+		}
+		header( 'Content-Transfer-Encoding: binary' );
+		header( 'Expires: 0' );
+		header( 'Cache-Control: must-revalidate, post-check=0, pre-check=0' );
+		header( 'Pragma: public' );
+
+		if( $controllerPdfResponse->getContentType()==='application/pdf' ) {
+			$encodedResponse = file_get_contents( $controllerPdfResponse->getFilePathname() );
 		}
 		else {
 			return \app\renderer::processSystemErrorException( new \LogicException( 'Unsupported content-type provided in controller response', 500 ) );
