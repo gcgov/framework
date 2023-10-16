@@ -4,6 +4,7 @@ namespace gcgov\framework;
 
 use gcgov\framework\exceptions\controllerException;
 use gcgov\framework\models\controllerPdfResponse;
+use gcgov\framework\models\controllerResponse;
 use gcgov\framework\models\routeHandler;
 use gcgov\framework\interfaces\controller;
 use gcgov\framework\models\controllerDataResponse;
@@ -45,7 +46,7 @@ final class renderer {
 	}
 
 
-	private function getContentFromController( routeHandler $routeHandler ): controllerDataResponse|controllerViewResponse {
+	private function getContentFromController( routeHandler $routeHandler ): controllerResponse {
 		//exceptions raised here are all logic exceptions: a route is defined that points to a controllerClass or method that does not exist
 		try {
 			$controllerClass = new \ReflectionClass( $routeHandler->class );
