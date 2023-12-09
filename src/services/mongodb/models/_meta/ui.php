@@ -44,6 +44,12 @@ class ui {
 	/** @OA\Property() */
 	public string $errorMessage = '';
 
+	/** @OA\Property() */
+	public bool $success = false;
+
+	/** @OA\Property() */
+	public string $successMessage = '';
+
 	public function __construct() {
 	}
 
