@@ -394,6 +394,10 @@ abstract class embeddable
 				return (array)$value;
 			}
 
+			if( $propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONDocument ) {
+				return (array)$value;
+			}
+
 			if( $propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONArray ) {
 				return (array)$value;
 			}
