@@ -2,18 +2,15 @@
 
 namespace gcgov\framework\models;
 
-use gcgov\framework\exceptions\controllerException;
 use gcgov\framework\interfaces\_controllerPdfResponse;
+use JetBrains\PhpStorm\Deprecated;
 
-class controllerPdfResponse extends controllerResponse implements _controllerPdfResponse {
+#[Deprecated('Use controllerFileResponse instead')]
+class controllerPdfResponse extends controllerFileResponse implements _controllerPdfResponse {
 
 	public const SupportedContentTypes = [
 		'application/pdf'
 	];
-
-	private string $contentType = 'application/pdf';
-	private string  $filePathname        = '';
-
 
 	/**
 	 * @param string                                             $filePathname
@@ -22,38 +19,7 @@ class controllerPdfResponse extends controllerResponse implements _controllerPdf
 	 * @throws \gcgov\framework\exceptions\controllerException
 	 */
 	public function __construct( string $filePathname = '', array $headers = [] ) {
-		parent::__construct( $headers );
-		$this->setFilePathname( $filePathname );
-	}
-
-
-	/**
-	 * @return mixed
-	 */
-	public function getFilePathname(): string {
-
-		return $this->filePathname;
-	}
-
-
-	/**
-	 * @param string $filePathname
-	 *
-	 * @throws \gcgov\framework\exceptions\controllerException
-	 */
-	public function setFilePathname( string $filePathname ): void {
-		if(!file_exists($filePathname)) {
-			throw new controllerException($filePathname.' not found', 400);
-		}
-		$this->filePathname = $filePathname;
-	}
-
-
-	/**
-	 * @return string
-	 */
-	public function getContentType(): string {
-		return $this->contentType;
+		parent::__construct( $filePathname, $headers );
 	}
 
 

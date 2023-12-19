@@ -3,6 +3,7 @@
 namespace gcgov\framework;
 
 use gcgov\framework\exceptions\controllerException;
+use gcgov\framework\models\controllerFileResponse;
 use gcgov\framework\models\controllerPdfResponse;
 use gcgov\framework\models\controllerResponse;
 use gcgov\framework\models\routeHandler;
@@ -38,8 +39,8 @@ final class renderer {
 		elseif( $controllerResponse instanceof controllerViewResponse ) {
 			return $this->processControllerViewResponse( $controllerResponse );
 		}
-		elseif( $controllerResponse instanceof controllerPdfResponse ) {
-			return $this->processControllerPdfResponse( $controllerResponse );
+		elseif( $controllerResponse instanceof controllerFileResponse ) {
+			return $this->processControllerFileResponse( $controllerResponse );
 		}
 
 		return '';
@@ -152,9 +153,9 @@ final class renderer {
 	 *
 	 * @return string
 	 */
-	private function processControllerPdfResponse( \gcgov\framework\interfaces\_controllerPdfResponse $controllerPdfResponse ): string {
+	private function processControllerFileResponse( \gcgov\framework\interfaces\_controllerFileResponse $controllerFileResponse ): string {
 		if( !headers_sent( $fileBasename, $lineNumber ) ) {
-			foreach( $controllerPdfResponse->getHeaders() as $header ) {
+			foreach( $controllerFileResponse->getHeaders() as $header ) {
 				$header->output();
 			}
 		}
@@ -162,20 +163,20 @@ final class renderer {
 			\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $fileBasename . ' on line ' . $lineNumber );
 		}
 
-		if( $controllerPdfResponse->getHttpStatus()!=200 ) {
-			http_response_code( $controllerPdfResponse->getHttpStatus() );
-			if($controllerPdfResponse->getHttpStatus()==204) {
+		if( $controllerFileResponse->getHttpStatus()!=200 ) {
+			http_response_code( $controllerFileResponse->getHttpStatus() );
+			if($controllerFileResponse->getHttpStatus()==204) {
 				header( 'Content-Length: 0' );
 				return '';
 			}
-			if( $controllerPdfResponse->getFilePathname()==='' ) {
+			if( $controllerFileResponse->getFilePathname()==='' ) {
 				return '';
 			}
 		}
 
-		header( 'Content-Type:' . $controllerPdfResponse->getContentType() );
+		header( 'Content-Type:' . $controllerFileResponse->getContentType() );
 
-		$fileBasename = basename($controllerPdfResponse->getFilePathname());
+		$fileBasename = basename($controllerFileResponse->getFilePathname());
 		header( 'x-filename: ' . $fileBasename );
 		header( 'Content-Description: File Transfer' );
 		if( isset( $_GET[ 'download' ] ) ) {
@@ -189,12 +190,7 @@ final class renderer {
 		header( 'Cache-Control: must-revalidate, post-check=0, pre-check=0' );
 		header( 'Pragma: public' );
 
-		if( $controllerPdfResponse->getContentType()==='application/pdf' ) {
-			$encodedResponse = file_get_contents( $controllerPdfResponse->getFilePathname() );
-		}
-		else {
-			return \app\renderer::processSystemErrorException( new \LogicException( 'Unsupported content-type provided in controller response', 500 ) );
-		}
+		$encodedResponse = file_get_contents( $controllerFileResponse->getFilePathname() );
 
 		return $encodedResponse;
 	}

@@ -2,16 +2,10 @@
 
 namespace gcgov\framework\interfaces;
 
-interface _controllerPdfResponse extends _controllerResponse {
+use JetBrains\PhpStorm\Deprecated;
 
-	public function getFilePathname(): string;
-
-
-	public function setFilePathname( string $filePathname ): void;
-
-
-	public function getContentType(): string;
-
+#[Deprecated('Use _controllerFileResponse instead')]
+interface _controllerPdfResponse extends _controllerFileResponse {
 
 	public function setContentType( string $contentType ): void;
 
