@@ -13,6 +13,8 @@ final class config {
 
 	private static string $appDir = '';
 
+	private static string $configDir = '';
+
 	private static string $modelsDir = '';
 
 	private static string $servicesDir = '';
@@ -76,6 +78,21 @@ final class config {
 
 	private static function setModelsDir(): void {
 		self::$modelsDir = self::getAppDir() . '/models/';
+	}
+
+
+
+	public static function getConfigDir(): string {
+		if( self::$configDir==='' ) {
+			self::setConfigDir();
+		}
+
+		return self::$configDir;
+	}
+
+
+	private static function setConfigDir(): void {
+		self::$configDir = self::getAppDir() . '/config/';
 	}
 
 
