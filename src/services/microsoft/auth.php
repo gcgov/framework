@@ -6,8 +6,9 @@ namespace gcgov\framework\services\microsoft;
 use gcgov\framework\config;
 use gcgov\framework\exceptions\serviceException;
 use GuzzleHttp\Exception\GuzzleException;
+use JetBrains\PhpStorm\Deprecated;
 
-
+#[Deprecated('Use \andrewsauder\microsoftServices instead')]
 class auth {
 
 	private \TheNetworg\OAuth2\Client\Provider\Azure $provider;

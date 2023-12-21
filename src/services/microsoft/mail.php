@@ -6,9 +6,11 @@ namespace gcgov\framework\services\microsoft;
 use gcgov\framework\config;
 use gcgov\framework\exceptions\serviceException;
 use GuzzleHttp\Exception\GuzzleException;
+use JetBrains\PhpStorm\Deprecated;
 use Microsoft\Graph\Exception\GraphException;
 
 
+#[Deprecated('Use \andrewsauder\microsoftServices instead')]
 class mail {
 
 	private array $attachments = [];

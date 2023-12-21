@@ -3,6 +3,9 @@
 namespace gcgov\framework\services\microsoft\components;
 
 
+use JetBrains\PhpStorm\Deprecated;
+
+#[Deprecated('Use \andrewsauder\microsoftServices instead')]
 class tokenInfomation {
 
 	public string $aud = '';

@@ -6,9 +6,11 @@ use gcgov\framework\config;
 use gcgov\framework\exceptions\serviceException;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\GuzzleException;
+use JetBrains\PhpStorm\Deprecated;
 use Microsoft\Graph\Exception\GraphException;
 
 
+#[Deprecated('Use \andrewsauder\microsoftServices instead')]
 class files {
 
 	public string $rootBasePath         = '';
