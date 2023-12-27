@@ -4,20 +4,22 @@ namespace gcgov\framework\services\microsoft\components;
 
 
 use JetBrains\PhpStorm\Deprecated;
+use OpenApi\Attributes as OA;
 
 #[Deprecated('Use \andrewsauder\microsoftServices instead')]
+#[OA\Schema]
 class envelope {
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public bool   $error   = false;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public string $message = '';
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public int    $status  = 0;
 
-	/** @OA\Property() */
+	#[OA\Property(type:'array', items: new OA\Items())]
 	public array  $data    = [];
 
 

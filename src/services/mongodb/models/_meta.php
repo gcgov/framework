@@ -11,38 +11,34 @@ use gcgov\framework\services\mongodb\models\_meta\uiField;
 use gcgov\framework\services\mongodb\tools\metaAttributeCache;
 use gcgov\framework\services\mongodb\tools\reflectionCache;
 use JetBrains\PhpStorm\ArrayShape;
+use OpenApi\Attributes as OA;
 
+#[OA\Schema]
 class _meta
 	extends
 	\andrewsauder\jsonDeserialize\jsonDeserialize
 	implements
 	\JsonSerializable {
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public ui $ui;
 
-	/**
-	 * @OA\Property()
-	 * @var \gcgov\framework\services\mongodb\models\_meta\uiField[] $fields
-	 */
+	#[OA\Property]
+	/** @var \gcgov\framework\services\mongodb\models\_meta\uiField[] $fields */
 	public array $fields = [];
 
-	/**
-	 * @OA\Property()
-	 * @var string[]
-	 */
+	#[OA\Property]
+	/** @var string[] $labels */
 	public array $labels;
 
-	/**
-	 * @OA\Property()
-	 * @var string[]
-	 */
+	#[OA\Property]
+	/** @var string[] $activeVisibilityGroups */
 	public array $activeVisibilityGroups = [];
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public ?db $db = null;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public float $score = 0;
 
 	private bool $exportDb = false;

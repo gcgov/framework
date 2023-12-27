@@ -6,6 +6,7 @@ use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\attributes\label;
 use OpenApi\Attributes as OA;
 
+#[OA\Schema]
 class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	#[label( 'File Id' )]

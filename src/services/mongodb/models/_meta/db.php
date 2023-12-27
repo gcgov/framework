@@ -2,45 +2,45 @@
 
 namespace gcgov\framework\services\mongodb\models\_meta;
 
+use OpenApi\Attributes as OA;
 
+#[OA\Schema]
 class db
 	extends
 	\andrewsauder\jsonDeserialize\jsonDeserialize {
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public float $score = 0;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public int $matched = 0;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public int $embeddedMatched = 0;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public int $modified = 0;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public int $embeddedModified = 0;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public int $upserted = 0;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public int $embeddedUpserted = 0;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public int $deleted = 0;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public int $embeddedDeleted = 0;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public string $upsertedId = '';
 
-	/**
-	 * @OA\Property()
-	 * @var string[]
-	 */
+	#[OA\Property]
+	/** @var string[] $embeddedUpsertedIds */
 	public array $embeddedUpsertedIds = [];
 
 

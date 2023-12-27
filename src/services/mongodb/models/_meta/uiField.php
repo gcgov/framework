@@ -2,59 +2,51 @@
 
 namespace gcgov\framework\services\mongodb\models\_meta;
 
+use OpenApi\Attributes as OA;
+
+#[OA\Schema]
 class uiField
 	extends
 	\andrewsauder\jsonDeserialize\jsonDeserialize {
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public string $label = '';
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public bool $error = false;
 
-	/**
-	 * @OA\Property()
-	 * @var string[]
-	 */
+	#[OA\Property]
+	/** @var string[] $errorMessages */
 	public string|array $errorMessages = [];
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public bool $success = false;
 
-	/**
-	 * @OA\Property()
-	 * @var string[]
-	 */
+	#[OA\Property]
+	/** @var string[] $successMessages */
 	public string|array $successMessages = [];
 
-	/**
-	 * @OA\Property()
-	 * @var string[]
-	 */
+	#[OA\Property]
+	/** @var string[] $hints */
 	public string|array $hints = '';
 
-	/**
-	 * @OA\Property()
-	 * @var string
-	 */
+	#[OA\Property]
 	public string $state = '';
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public bool $required = false;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public bool $visible = true;
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public bool $valueIsVisibilityGroup = false;
 
-	/**
-	 * @OA\Property()
-	 * @var string[]
-	 */
+	#[OA\Property]
+	/** @var string[] $visibilityGroups */
 	public array $visibilityGroups = [];
 
-	/** @OA\Property() */
+	#[OA\Property]
 	public bool $validating = false;
 
 }

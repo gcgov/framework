@@ -2,7 +2,7 @@
 namespace gcgov\framework\models;
 
 /**
- * Class auth
+ * Class authUser
  * Singleton to store authenticated user globally
  * @OA\Schema()
  */

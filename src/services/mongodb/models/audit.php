@@ -10,12 +10,9 @@ use gcgov\framework\services\mongodb\attributes\excludeJsonSerialize;
 use gcgov\framework\services\mongodb\attributes\label;
 use gcgov\framework\services\mongodb\updateDeleteResult;
 use MongoDB\BSON\ObjectId;
+use OpenApi\Attributes as OA;
 
-
-/**
- * Class audit
- * @OA\Schema()
- */
+#[OA\Schema]
 final class audit
 	extends
 	\gcgov\framework\services\mongodb\model {
@@ -27,75 +24,75 @@ final class audit
 	const _HUMAN_PLURAL = 'audits';
 
 	#[label( 'Id' )]
-	/** @OA\Property(type="string") */
+	#[OA\Property(type:'string')]
 	public \MongoDB\BSON\ObjectId  $_id;
 
 	#[label( 'Collection' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public string                  $collection       = '';
 
 	#[label( 'Action' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public string                  $action           = '';
 
 	#[label( 'Record Id' )]
-	/** @OA\Property(type="string") */
+	#[OA\Property(type:'string')]
 	public ?\MongoDB\BSON\ObjectId $recordId         = null;
 
 	#[label( 'User Id' )]
-	/** @OA\Property(type="string") */
+	#[OA\Property(type:'string')]
 	public ?\MongoDB\BSON\ObjectId $userId           = null;
 
 	#[label( 'User Name' )]
-	/** @OA\Property(type="string") */
+	#[OA\Property(type:'string')]
 	public string                  $userName         = '';
 
 	#[label( 'IP' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public string                  $ip               = '';
 
 	#[label( 'Message' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public string                  $message          = '';
 
 	#[label( 'Matched' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public int                     $matched          = 0;
 
 	#[label( 'Modified' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public int                     $modified         = 0;
 
 	#[label( 'Upserted' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public int                     $upserted         = 0;
 
 	#[label( 'Deleted' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public int                     $deleted          = 0;
 
 	#[label( 'Embedded Matched' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public int                     $embeddedMatched  = 0;
 
 	#[label( 'Embedded Modified' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public int                     $embeddedModified = 0;
 
 	#[label( 'Embedded Upserted' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public int                     $embeddedUpserted = 0;
 
 	#[label( 'Embedded Deleted' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public int                     $embeddedDeleted  = 0;
 
 	#[label( 'Data' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public mixed                   $data             = null;
 
 	#[label( 'Date Time Stamp' )]
-	/** @OA\Property() */
+	#[OA\Property]
 	public \DateTimeImmutable      $dateTimeStamp;
 
 	#[excludeBsonSerialize]
