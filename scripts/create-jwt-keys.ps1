@@ -4,9 +4,8 @@ if($PSScriptRoot.ToString().IndexOf("vendor") -ne -1) {
     $path = $PSScriptRoot.ToString().substring( 0, $PSScriptRoot.ToString().IndexOf("vendor") ) + 'srv\jwtCertificates'
     Write-Host "Creating certificates and config in $path dir" -ForegroundColor Green
 } else {
-    $path = $PSScriptRoot + '\jwtCertificates'
-    Write-Host 'Creating certificates and config in ' $path -ForegroundColor Yellow
-    Write-Host 'This may cause issues when running composer updates.' -ForegroundColor Red
+    Write-Host "create-jwt-keys.ps1 can only be run from `vendor/bin` "
+    exit
 }
 
 if(!(test-path $path))
