@@ -10,8 +10,13 @@ else
     exit
 }
 
-Function FormatRelativeUrl( [string]$path = '/', [string]$trailingSlash = $true, [string]$leadingSlash = $true)
+Function FormatRelativeUrl()
 {
+    param(
+        [string]$path,
+        [bool]$trailingSlash = $true,
+        [bool]$leadingSlash = $true
+    )
 
     $path = $path.Trim('/') # Remove leading/trailing spaces
     if ($trailingSlash -And $path[-1] -ne "/")
@@ -42,19 +47,21 @@ $prompts = @(
     @{ "key"="app_title"; "label"="Enter human readable title of application (ex: Timesheet API)" }
     @{ "key"="app_root_url"; "label"="DEV Root url of app (ex: https://local-app.garrettcountymd.gov/)" }
     @{ "key"="app_base_path"; "label"="DEV Base url path of app (ex: /api/, Or: / if site is at url root)" }
+    @{ "key"="app_frontend_root_url"; "label"="DEV If using this app as an API and you have a separate frontend, enter the root of the frontend app (ex: https://localhost:8080/)" }
     @{ "key"="app_redirect_after_login"; "label"="DEV If appConfig.enableAuthRoutes==true, user will be redirected to this url after successful login (ex: https://localhost:8080/auth/sign-in)" }
     @{ "key"="app_redirect_after_logout"; "label"="DEV If appConfig.enableAuthRoutes==true, user will be redirected to this url after successful login (ex: https://localhost:8080/auth/sign-out)" }
     @{ "key"="app_smtp_server"; "label"="DEV SMTP server address (ex: tenant-com.mail.protection.outlook.com)" }
     @{ "key"="app_smtp_sendmail_from_address"; "label"="DEV Default email address to send emails from (ex: noreply@tenant.com)" }
     @{ "key"="app_smtp_sendmail_from_name"; "label"="DEV Default human-readable name that will appear as the sender of emails (ex. Tenant Company)" }
-    @{ "key"="app_ssl_path"; "label"="DEV Absolute path to a current cacert.pem file for CURL and OpenSSL extensions" }
+    @{ "key"="app_ssl_path"; "label"="DEV Absolute path to a current cacert.pem file for CURL and OpenSSL extensions (path only)" }
     @{ "key"="app_php_path"; "label"="DEV Absolute path to the PHP executable root directory" }
     @{ "key"="prod_app_root_url"; "label"="PROD Root url of app (ex: https://app.garrettcountymd.gov/)" }
     @{ "key"="prod_app_base_path"; "label"="PROD base url path of app (ex: /api/, Or: / if site is at url root)" }
+    @{ "key"="prod_app_frontend_root_url"; "label"="PROD If using this app as an API and you have a separate frontend, enter the root of the frontend app (ex: https://app.garrettcountymd.gov/)" }
     @{ "key"="prod_app_redirect_after_login"; "label"="PROD If appConfig.enableAuthRoutes==true, user will be redirected to this url after successful login (ex: https://app.garrettcountymd.gov/app/auth/sign-in)" }
     @{ "key"="prod_app_redirect_after_logout"; "label"="PROD If appConfig.enableAuthRoutes==true, user will be redirected to this url after successful logout (ex: https://app.garrettcountymd.gov/app/auth/sign-out)" }
     @{ "key"="prod_app_absolute_path"; "label"="PROD Production absolute path to root directory (ex: E:\Web\api)" }
-    @{ "key"="prod_app_ssl_path"; "label"="PROD Absolute path to to a current cacert.pem file for CURL and OpenSSL extensions" }
+    @{ "key"="prod_app_ssl_path"; "label"="PROD Absolute path to to a current cacert.pem file for CURL and OpenSSL extensions (path only)" }
     @{ "key"="prod_app_php_path"; "label"="PROD Absolute path to the PHP executable root directory" }
 )
 
@@ -118,29 +125,31 @@ $replaceInExtensions = '^\.(ini|json|php|config)$'
 $replacementTable = @{
     "{app_guid}" = $app_guid;
     "{app_title}" = $inputs['app_title'];
-    "{app_root_url}" = FormatRelativeUrl( $inputs['app_root_url'], $false, $false);
-    "{app_base_path}" = FormatRelativeUrl( $inputs['app_base_path']);
-    "{app_relative_url}" = FormatRelativeUrl( $inputs['app_base_path'], $false, $true);
+    "{app_root_url}" = FormatRelativeUrl -path $inputs['app_root_url'] -trailingSlash $false -leadingSlash $false;
+    "{app_base_path}" = FormatRelativeUrl -path $inputs['app_base_path'];
+    "{app_relative_url}" = FormatRelativeUrl -path $inputs['app_base_path'] -trailingSlash $true -leadingSlash $false;
+    "{app_frontend_root_url}" = $inputs['app_frontend_root_url'].TrimEnd('/\')
     "{app_redirect_after_login}" = $inputs['app_redirect_after_login'];
     "{app_redirect_after_logout}" = $inputs['app_redirect_after_logout'];
     "{app_absolute_path}" = $app_absolute_path.TrimEnd('/\')
     "{app_smtp_server}" = $inputs['app_smtp_server'];
     "{app_smtp_sendmail_from_address}" = $inputs['app_smtp_sendmail_from_address'];
     "{app_smtp_sendmail_from_name}" = $inputs['app_smtp_sendmail_from_name'];
-    "{app_ssl_path}" = $inputs['app_ssl_path'];
+    "{app_ssl_path}" = $inputs['app_ssl_path'].TrimEnd('/\')
     "{app_php_path}" = $inputs['app_php_path'].TrimEnd('/\')
     "{app_microsoft_client_id}" = $inputs['app_microsoft_client_id'];
     "{app_microsoft_client_secret}" = $inputs['app_microsoft_client_secret'];
     "{app_microsoft_tenant}" = $inputs['app_microsoft_tenant'];
     "{app_microsoft_drive_id}" = $inputs['app_microsoft_drive_id'];
     "{app_microsoft_default_from_address}" = $inputs['app_microsoft_default_from_address'];
-    "{prod_app_root_url}" = FormatRelativeUrl( $inputs['prod_app_root_url'], $false, $false )
-    "{prod_app_base_path}" = FormatRelativeUrl( $inputs['prod_app_base_path'] )
-    "{prod_app_relative_url}" = FormatRelativeUrl( $inputs['prod_app_relative_url'], $false, $true )
+    "{prod_app_root_url}" = FormatRelativeUrl -path $inputs['prod_app_root_url'] -trailingSlash $false -leadingSlash $false
+    "{prod_app_frontend_root_url}" = $inputs['prod_app_frontend_root_url'].TrimEnd('/\')
+    "{prod_app_base_path}" = FormatRelativeUrl -path $inputs['prod_app_base_path']
+    "{prod_app_relative_url}" = FormatRelativeUrl -path $inputs['prod_app_relative_url'] -trailingSlash $true -leadingSlash $false
     "{prod_app_redirect_after_logout}" = $inputs['prod_app_redirect_after_logout']
     "{prod_app_absolute_path}" = $inputs['prod_app_absolute_path'].TrimEnd('/\')
-    "{prod_app_ssl_path}" = $inputs['prod_app_ssl_path']
-    "{prod_app_php_path}" = $inputs['prod_app_php_path']
+    "{prod_app_ssl_path}" = $inputs['prod_app_ssl_path'].TrimEnd('/\')
+    "{prod_app_php_path}" = $inputs['prod_app_php_path'].TrimEnd('/\')
     "{prod_app_microsoft_client_id}" = $inputs['prod_app_microsoft_client_id']
     "{prod_app_microsoft_client_secret}" = $inputs['prod_app_microsoft_client_secret']
     "{prod_app_microsoft_tenant}" = $inputs['prod_app_microsoft_tenant']
@@ -151,7 +160,7 @@ $replacementTable = @{
 foreach ($key in $replacementTable.Keys)
 {
     $value = $replacementTable[$key]
-    if ($value -eq '')
+    if ($value -eq '' -Or $null -eq $value)
     {
         continue;
     }
@@ -159,6 +168,10 @@ foreach ($key in $replacementTable.Keys)
     Write-Host "Replace $key in project files" -ForegroundColor Yellow
     foreach ($file in Get-ChildItem -Exclude vendor -Recurse | Where-Object { Select-String $key $_ -Quiet })
     {
+        #escape backslash in json files
+        if ($file.Extension -eq '.json') {
+            $value = $value.Replace("\", "\\")
+        }
         if ($file.Extension -match $replaceInExtensions)
         {
             Write-Host "--"$file.FullName
