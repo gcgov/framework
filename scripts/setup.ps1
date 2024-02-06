@@ -90,44 +90,37 @@ foreach ($prompt in $prompts) {
 
 }
 
-# Display the collected inputs
-Write-Host "Collected Inputs:"
-foreach ($key in $inputs.Keys) {
-    Write-Host "$key $($inputs[$key])"
-}
-
 # Ask the user if they want to edit any value in the hashtable
-$editChoice = Read-Host "Do you want to edit any value in the inputs? (y/n)"
-if ($editChoice -eq 'y') {
-    do {
-        # Prompt the user to select which value to edit
-        $editPrompt = "Select the number corresponding to the value you want to edit:`n"
-        $i = 1
-        foreach ($key in $inputs.Keys) {
-            $editPrompt += "$i. $key $($inputs[$key])`n"
-            $i++
-        }
-        $editPrompt += "0. Done editing"
+do {
+    # Prompt the user to select which value to edit
+    $editPrompt = "Select the number corresponding to the value you want to edit or 0 to confirm all:`n"
+    $i = 1
+    foreach ($key in $inputs.Keys) {
+        $editPrompt += "$i. $key ${$inputs[$key]}`n"
+        $i++
+    }
+    $editPrompt += "0. Done editing"
 
-        $editIndex = Read-Host $editPrompt
-        if ($editIndex -ne "0") {
-            $editIndex = [int]$editIndex
-            if ($editIndex -ge 1 -and $editIndex -le $inputs.Keys.Count) {
-                $editKey = $inputs.Keys[$editIndex - 1]
-                $newValue = Read-Host "Enter the new value for ${$inputs[$editKey]}:"
-                $inputs[$editKey] = $newValue
-            }
-            else {
-                Write-Host "Invalid selection. Please enter a number between 1 and $($inputs.Keys.Count) or 0 to exit editing."
-            }
+    #todo - fix this prompt
+    $editIndex = Read-Host $editPrompt
+    if ($editIndex -ne "0") {
+        $editIndex = [int]$editIndex
+        if ($editIndex -ge 1 -and $editIndex -le $inputs.Keys.Count) {
+            $editKey = $inputs.Keys[$editIndex - 1]
+            $newValue = Read-Host "Enter the new value for "$editKey
+            $inputs[$editKey] = $newValue
         }
-    } while ($editIndex -ne "0")
-}
+        else {
+            Write-Host "Invalid selection. Please enter a number between 1 and ${$inputs.Keys.Count} or 0 to exit editing." -ForegroundColor Red
+            $editIndex = $false
+        }
+    }
+} while ($editIndex -ne "0")
 
 $app_guid = [guid]::NewGuid().ToString("N");
 $app_absolute_path = $path
 
-$replaceInExtensions = '^\.(ini|json|php)$'
+$replaceInExtensions = '^\.(ini|json|php|config)$'
 $replacementTable = @{
     "{app_guid}" = $app_guid;
     "{app_title}" = $inputs['app_title'];
