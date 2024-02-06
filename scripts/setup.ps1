@@ -125,7 +125,7 @@ $replaceInExtensions = '^\.(ini|json|php|config)$'
 $replacementTable = @{
     "{app_guid}" = $app_guid;
     "{app_title}" = $inputs['app_title'];
-    "{app_root_url}" = FormatRelativeUrl -path $inputs['app_root_url'] -trailingSlash $false -leadingSlash $false;
+    "{app_root_url}" = $inputs['app_root_url'].TrimEnd('/\')
     "{app_base_path}" = FormatRelativeUrl -path $inputs['app_base_path'];
     "{app_relative_url}" = FormatRelativeUrl -path $inputs['app_base_path'] -trailingSlash $true -leadingSlash $false;
     "{app_frontend_root_url}" = $inputs['app_frontend_root_url'].TrimEnd('/\')
@@ -142,7 +142,7 @@ $replacementTable = @{
     "{app_microsoft_tenant}" = $inputs['app_microsoft_tenant'];
     "{app_microsoft_drive_id}" = $inputs['app_microsoft_drive_id'];
     "{app_microsoft_default_from_address}" = $inputs['app_microsoft_default_from_address'];
-    "{prod_app_root_url}" = FormatRelativeUrl -path $inputs['prod_app_root_url'] -trailingSlash $false -leadingSlash $false
+    "{prod_app_root_url}" = $inputs['prod_app_root_url'].TrimEnd('/\')
     "{prod_app_frontend_root_url}" = $inputs['prod_app_frontend_root_url'].TrimEnd('/\')
     "{prod_app_base_path}" = FormatRelativeUrl -path $inputs['prod_app_base_path']
     "{prod_app_relative_url}" = FormatRelativeUrl -path $inputs['prod_app_relative_url'] -trailingSlash $true -leadingSlash $false
@@ -168,14 +168,15 @@ foreach ($key in $replacementTable.Keys)
     Write-Host "Replace $key in project files" -ForegroundColor Yellow
     foreach ($file in Get-ChildItem -Exclude vendor -Recurse | Where-Object { Select-String $key $_ -Quiet })
     {
+        $tmpValue = $value
         #escape backslash in json files
         if ($file.Extension -eq '.json') {
-            $value = $value.Replace("\", "\\")
+            $tmpValue = $value.Replace("\", "\\")
         }
         if ($file.Extension -match $replaceInExtensions)
         {
             Write-Host "--"$file.FullName
-            (Get-Content $file.FullName).Replace($key, $value) | Set-Content $file.FullName
+            (Get-Content $file.FullName).Replace($key, $tmpValue) | Set-Content $file.FullName
         }
     }
 
