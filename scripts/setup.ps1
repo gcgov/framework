@@ -10,13 +10,8 @@ else
     exit
 }
 
-Function FormatRelativeUrl()
+Function FormatRelativeUrl( [string]$path = '/', [string]$trailingSlash = $true, [string]$leadingSlash = $true)
 {
-    param (
-        [string]$path = '/',
-        [string]$trailingSlash = $true,
-        [string]$leadingSlash = $true
-    )
 
     $path = $path.Trim('/') # Remove leading/trailing spaces
     if ($trailingSlash -And $path[-1] -ne "/")
@@ -95,18 +90,17 @@ do {
     # Prompt the user to select which value to edit
     $editPrompt = "Select the number corresponding to the value you want to edit or 0 to confirm all:`n"
     $i = 1
-    foreach ($key in $inputs.Keys) {
-        $editPrompt += "$i. $key ${$inputs[$key]}`n"
+    foreach ($prompt in $prompts) {
+        $editPrompt += -join( $i, ". ", $prompt.key, ": ", $inputs[$prompt.key], "`n")
         $i++
     }
     $editPrompt += "0. Done editing"
 
-    #todo - fix this prompt
     $editIndex = Read-Host $editPrompt
     if ($editIndex -ne "0") {
         $editIndex = [int]$editIndex
-        if ($editIndex -ge 1 -and $editIndex -le $inputs.Keys.Count) {
-            $editKey = $inputs.Keys[$editIndex - 1]
+        if ($editIndex -ge 1 -and $editIndex -le $prompts.Count) {
+            $editKey = $prompts[$editIndex - 1].key
             $newValue = Read-Host "Enter the new value for "$editKey
             $inputs[$editKey] = $newValue
         }
