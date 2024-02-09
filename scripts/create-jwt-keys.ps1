@@ -15,7 +15,7 @@ if(!(test-path $path))
 
 if(!(test-path "$path\.gitignore"))
 {
-    Copy-Item "jwtCertificates/.gitignore" -Destination $path | out-null
+    Copy-Item $PSScriptRoot"/../src/services/jwtAuth/jwtCertificates/.gitignore" -Destination $path | out-null
 }
 
 Remove-Item $path/*.pem | out-null
