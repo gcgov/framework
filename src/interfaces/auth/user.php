@@ -34,7 +34,7 @@ interface user {
 	public function getActive(): bool;
 
 
-	public static function getFromOauth( string $email, string $externalId, string $externalProvider, ?string $firstName = '', ?string $lastName = '', bool $addIfNotExisting = false ): self;
+	public static function getFromOauth( string $email, string $externalId, string $externalProvider, ?string $firstName = '', ?string $lastName = '', bool $addIfNotExisting = false, array $rolesForNewUser=[] ): self;
 
 
 	public static function verifyUsernamePassword( string $username, string $password ): self;

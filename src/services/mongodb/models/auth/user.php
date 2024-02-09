@@ -2,7 +2,6 @@
 
 namespace gcgov\framework\services\mongodb\models\auth;
 
-use andrewsauder\jsonDeserialize\attributes\excludeJsonSerialize;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\attributes\label;
 use gcgov\framework\services\mongodb\typeMapType;
@@ -67,7 +66,7 @@ class user
 	/**
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getFromOauth( string $email, string $externalId, string $externalProvider, ?string $firstName = '', ?string $lastName = '', bool $addIfNotExisting = false ): \gcgov\framework\interfaces\auth\user {
+	public static function getFromOauth( string $email, string $externalId, string $externalProvider, ?string $firstName = '', ?string $lastName = '', bool $addIfNotExisting = false, array $rolesForNewUser=[] ): \gcgov\framework\interfaces\auth\user {
 		try {
 			$filter = [
 				'$or' => [
@@ -84,7 +83,9 @@ class user
 			if( !$addIfNotExisting ) {
 				throw new \gcgov\framework\exceptions\modelException( $email . ' is not set up as a user. Please contact your supervisor to have this account enabled.', 401 );
 			}
-			$user = new user();
+			$user           = new user();
+			$user->username = $email;
+			$user->roles    = $rolesForNewUser;
 		}
 
 		$user->oauthId       = $externalId;
