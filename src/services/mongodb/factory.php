@@ -3,10 +3,10 @@
 namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\exceptions\modelException;
-use gcgov\framework\services\mongodb\models\_meta;
-use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\autoIncrement;
+use gcgov\framework\services\mongodb\models\_meta;
 use gcgov\framework\services\mongodb\models\audit;
+use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\tools\reflectionCache;
 use gcgov\framework\services\mongodb\tools\sys;
 
@@ -230,7 +230,12 @@ abstract class factory
 				$updateEmbeddedActions = static::_getUpdateEmbeddedMongoActions( $object );
 				$mongoActions = array_merge_recursive($mongoActions, $updateEmbeddedActions );
 
-				$object->_meta->setDb( new updateDeleteResult($saveResults[ $objectIndex ]) );
+				if( sys::propertyExists( get_called_class(), '_meta' ) ) {
+					if( !isset( $object->_meta ) ) {
+						$object->_meta = new _meta( get_called_class() );
+					}
+					$object->_meta->setDb( new updateDeleteResult( $saveResults[ $objectIndex ] ) );
+				}
 			}
 			unset( $object );
 
