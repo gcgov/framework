@@ -4,10 +4,9 @@ namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
-use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\deleteCascade;
+use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\tools\reflectionCache;
-use gcgov\framework\services\mongodb\tools\reflectionCache\reflectionCacheClass;
 use JetBrains\PhpStorm\ArrayShape;
 
 abstract class dispatcher
@@ -111,8 +110,11 @@ abstract class dispatcher
 	}
 
 
-	public static function _getDeleteEmbeddedMongoActions( string $deleteType, \MongoDB\BSON\ObjectId $_id ): array {
-		log::info( 'Dispatch_deleteEmbedded', 'Start _deleteEmbedded for ' . $deleteType . ' - ' . $_id );
+	public static function _getDeleteEmbeddedMongoActions( string $deleteType, \MongoDB\BSON\ObjectId|array $_ids ): array {
+		if(!is_array($_ids)) {
+			$_ids = [$_ids];
+		}
+		log::info( 'Dispatch_deleteEmbedded', 'Start _deleteEmbedded for ' . $deleteType . ' - ' . implode(',', $_ids) );
 
 		//the type of object we are updating
 		$deleteType = '\\' . trim( $deleteType, '/\\' );
@@ -140,7 +142,9 @@ abstract class dispatcher
 
 					log::info( 'Dispatch_deleteEmbedded', '-- generate delete for item on collection ' . $collectionName . ' root type ' . $typeMap->root . ' key ' . $fieldKey . ' type ' . $deleteType );
 
-					$mongoActions[ $collectionName ][] = self::_generateDeleteAction( $collectionName, $fieldKey, $_id );
+					foreach($_ids as $_id) {
+						$mongoActions[ $collectionName ][] = self::_generateDeleteAction( $collectionName, $fieldKey, $_id );
+					}
 				}
 			}
 		}
@@ -153,60 +157,72 @@ abstract class dispatcher
 	 * Find all models where this object type is embedded and update the embedded document with the provided object
 	 *      Matches on _id and handles "infinite" nested arrays of objects
 	 *
-	 * @param string                 $deleteType    Class FQN to remove - must be a class that extends
-	 *                                              \gcgov\framework\services\mongodb\model
-	 * @param \MongoDB\BSON\ObjectId $_id
+	 * @param string                                          $deleteType Class FQN to remove - must be a class that extends
+	 *                                                                    \gcgov\framework\services\mongodb\model
+	 * @param \MongoDB\BSON\ObjectId|\MongoDB\BSON\ObjectId[] $_ids
+	 * @param \MongoDB\Driver\Session|null                    $mongoDbSession
 	 *
 	 * @return \MongoDB\UpdateResult[]
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function _deleteEmbedded( string $deleteType, \MongoDB\BSON\ObjectId $_id ): array {
+	public static function _deleteEmbedded( string $deleteType, \MongoDB\BSON\ObjectId|array $_ids, ?\MongoDB\Driver\Session $mongoDbSession = null ): array {
+		if(!is_array($_ids)) {
+			$_ids = [$_ids];
+		}
 
-		$mongoActions = self::_getDeleteEmbeddedMongoActions( $deleteType, $_id );
+		$mongoActions = self::_getDeleteEmbeddedMongoActions( $deleteType, $_ids );
 
 		//run bulk write for all updates
-		return self::_runMongoActions( $mongoActions, 'Dispatch_deleteEmbedded' );
+		return self::_runMongoActions( $mongoActions, 'Dispatch_deleteEmbedded', $mongoDbSession );
 	}
 
 
 	/**
 	 * If this model contains a delete cascade property, run the cascade
 	 *
-	 * @param mixed $object
+	 * @param mixed                        $objects
+	 * @param \MongoDB\Driver\Session|null $mongoDbSession
 	 *
 	 * @return \MongoDB\UpdateResult[]
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function _deleteCascade( mixed $object ): array {
-		$deleteType = get_class( $object );
-
-		log::info( 'Dispatch_deleteCascade', 'Start cascade deletes for ' . $deleteType );
+	public static function _deleteCascade( mixed $objects, ?\MongoDB\Driver\Session $mongoDbSession = null  ): array {
+		if(!is_array($objects)) {
+			$objects = [$objects];
+		}
 
 		$deleteResponses = [];
 
-		//find fields marked with deleteCascade attribute on $object (must be of type _model)
-		try {
-			$reflectionCacheClass = reflectionCache::getReflectionClass( $deleteType );
-			$propertiesWithDeleteCascadeAttribute = $reflectionCacheClass->getPropertiesWithAttribute( deleteCascade::class );
-		}
-		catch( \ReflectionException $e ) {
-			log::error( 'Dispatch_deleteCascade', $e->getMessage(), $e->getTrace() );
-			throw new modelException( 'Reflection failed on class ' . $deleteType, 500, $e );
-		}
+		foreach( $objects as $object ) {
+			$deleteType = get_class( $object );
 
-		foreach( $propertiesWithDeleteCascadeAttribute as $propertyName=>$reflectionCacheProperty ) {
-			if($reflectionCacheProperty->propertyIsArray) {
-				log::info( 'Dispatch_deleteCascade', '-- ' . count( $object->$propertyName ) . ' objects to cascade' );
-				foreach( $object->$propertyName as $objectToDelete ) {
-					self::_doCascadeDeleteItem( $objectToDelete );
+			log::info( 'Dispatch_deleteCascade', 'Start cascade deletes for ' . $deleteType );
+
+
+			//find fields marked with deleteCascade attribute on $object (must be of type _model)
+			try {
+				$reflectionCacheClass = reflectionCache::getReflectionClass( $deleteType );
+				$propertiesWithDeleteCascadeAttribute = $reflectionCacheClass->getPropertiesWithAttribute( deleteCascade::class );
+			}
+			catch( \ReflectionException $e ) {
+				log::error( 'Dispatch_deleteCascade', $e->getMessage(), $e->getTrace() );
+				throw new modelException( 'Reflection failed on class ' . $deleteType, 500, $e );
+			}
+
+			foreach( $propertiesWithDeleteCascadeAttribute as $propertyName=>$reflectionCacheProperty ) {
+				if($reflectionCacheProperty->propertyIsArray) {
+					log::info( 'Dispatch_deleteCascade', '-- ' . count( $object->$propertyName ) . ' objects to cascade' );
+					foreach( $object->$propertyName as $objectToDelete ) {
+						self::_doCascadeDeleteItem( $objectToDelete, $mongoDbSession );
+					}
+				}
+				else {
+					self::_doCascadeDeleteItem( $object->$propertyName, $mongoDbSession );
 				}
 			}
-			else {
-				self::_doCascadeDeleteItem( $object->$propertyName );
-			}
-		}
 
-		log::info( 'Dispatch_deleteCascade', 'Finish cascade deletes for ' . $deleteType );
+			log::info( 'Dispatch_deleteCascade', 'Finish cascade deletes for ' . $deleteType );
+		}
 
 		return $deleteResponses;
 	}
@@ -214,13 +230,14 @@ abstract class dispatcher
 
 	/**
 	 * @return \MongoDB\UpdateResult[]
+	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	private static function _doCascadeDeleteItem( $item ): array {
+	private static function _doCascadeDeleteItem( $item, ?\MongoDB\Driver\Session $mongoDbSession = null ): array {
 		$deleteResponses = [];
 
 		if( !( $item instanceof factory ) ) {
 			log::info( 'Dispatch_deleteCascade', '-- do manual cascade of ' . get_class( $item ) );
-			$deleteResponses = self::_deleteCascade( $item );
+			$deleteResponses = self::_deleteCascade( $item, $mongoDbSession );
 		}
 		else {
 			//do delete on property
@@ -231,7 +248,7 @@ abstract class dispatcher
 				//run a cascade delete check on the item
 				//delete the item
 				//delete embedded copies of the item
-				$deleteResponses[] = $objectTypeToDelete::delete( $item->_id );
+				$deleteResponses[] = $objectTypeToDelete::delete( $item->_id, $mongoDbSession );
 			}
 			catch( modelException $e ) {
 				log::info( 'Dispatch_deleteCascade', '--- error deleting item: ' . $e->getMessage() );

@@ -404,7 +404,7 @@ abstract class factory
 	 * @return \gcgov\framework\services\mongodb\updateDeleteResult
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function delete( \MongoDB\BSON\ObjectId|string $_id ): updateDeleteResult {
+	public static function delete( \MongoDB\BSON\ObjectId|string $_id, ?\MongoDB\Driver\Session $mongoDbSession = null ): updateDeleteResult {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		//AUDIT CHANGE STREAM
@@ -417,8 +417,16 @@ abstract class factory
 
 		log::info( 'MongoService', 'Delete ' . static::_getCollectionName() );
 
+		//open database session if one is not already open
+		$sessionParent = false;
+		if( !isset( $mongoDbSession ) ) {
+			$sessionParent  = true;
+			$mongoDbSession = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
+			$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 5000 ] );
+		}
+
 		try {
-			$objectToDelete = static::getOne( $_id );
+			$objectToDelete = static::getOne( $_id, $mongoDbSession );
 		}
 		catch( modelException $e ) {
 			log::info( 'MongoService', '--object '.$_id.' does not exist in collection ' . static::_getCollectionName() );
@@ -427,7 +435,7 @@ abstract class factory
 		//
 		if(isset($objectToDelete)) {
 			try {
-				$deleteCascadeResults = self::_deleteCascade( $objectToDelete );
+				$deleteCascadeResults = self::_deleteCascade( $objectToDelete, $mongoDbSession );
 			}
 			catch( modelException $e ) {
 				log::info( 'MongoService', '--_deleteCascade failed for object '.$_id.' ' . static::_getCollectionName() );
@@ -439,18 +447,27 @@ abstract class factory
 		];
 
 		$options = [
-			'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' )
+			'session' => $mongoDbSession
 		];
 
 		try {
 			$deleteResult = $mdb->collection->deleteOne( $filter, $options );
+
+			//commit session
+			if( $sessionParent ) {
+				$mongoDbSession->commitTransaction();
+			}
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+			//commit session
+			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
+				$mongoDbSession->abortTransaction();
+			}
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
 		}
 
 		//dispatch delete for all embedded versions
-		$embeddedDeletes = self::_deleteEmbedded( get_called_class(), $_id );
+		$embeddedDeletes = self::_deleteEmbedded( get_called_class(), $_id, $mongoDbSession );
 
 		//combine primary delete with embedded
 		$combinedResult = new updateDeleteResult( $deleteResult, $embeddedDeletes );
@@ -458,6 +475,91 @@ abstract class factory
 		if( $combinedResult->getEmbeddedDeletedCount() + $combinedResult->getDeletedCount() + $combinedResult->getModifiedCount() + $combinedResult->getEmbeddedModifiedCount()==0 ) {
 			throw new modelException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found', 404 );
 		}
+
+		//AUDIT CHANGE STREAM
+		if( $mdb->audit && static::_getCollectionName()!='audit' && $combinedResult->getDeletedCount()>0 ) {
+			$auditChangeStream->processChangeStream( $combinedResult );
+			audit::save( $auditChangeStream );
+		}
+
+		return $combinedResult;
+	}
+
+
+	/**
+	 * @param static[]                     $itemsToDelete
+	 * @param \MongoDB\Driver\Session|null $mongoDbSession
+	 *
+	 * @return \gcgov\framework\services\mongodb\updateDeleteResult
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function deleteMany( array $itemsToDelete, ?\MongoDB\Driver\Session $mongoDbSession = null ): updateDeleteResult {
+		if(count($itemsToDelete)===0) {
+			return new updateDeleteResult();
+		}
+		$mdb = new tools\mdb( collection: static::_getCollectionName() );
+
+		//AUDIT CHANGE STREAM
+		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
+			$auditChangeStream = new audit();
+			$auditChangeStream->startChangeStreamWatch( $mdb->collection );
+		}
+
+		log::info( 'MongoService', 'Delete many ' . static::_getCollectionName() );
+
+		$_ids = [];
+		foreach( $itemsToDelete as $itemToDelete ) {
+			$_ids[] = $itemToDelete->_id;
+		}
+
+		//open database session if one is not already open
+		$sessionParent = false;
+		if( !isset( $mongoDbSession ) ) {
+			$sessionParent  = true;
+			$mongoDbSession = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
+			$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 5000 ] );
+		}
+
+		$filter = [
+			'_id' => [
+				'$in'=>$_ids
+			]
+		];
+
+		$options = [
+			'session' => $mongoDbSession
+		];
+
+		try {
+			$deleteResult = $mdb->collection->deleteMany( $filter, $options );
+
+			$deleteCascadeResults = self::_deleteCascade( $itemsToDelete, $mongoDbSession );
+
+			//dispatch delete for all embedded versions
+			$embeddedDeletes = self::_deleteEmbedded( get_called_class(), $_ids, $mongoDbSession );
+
+			//commit session
+			if( $sessionParent ) {
+				$mongoDbSession->commitTransaction();
+			}
+		}
+		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
+				$mongoDbSession->abortTransaction();
+			}
+			log::info( 'MongoService', 'delete many runtime exception ' . static::_getCollectionName() );
+			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
+		}
+		catch( modelException $e ) {
+			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
+				$mongoDbSession->abortTransaction();
+			}
+			log::info( 'MongoService', 'delete cascade failure ' . static::_getCollectionName() );
+			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
+		}
+
+		//combine primary delete with embedded
+		$combinedResult = new updateDeleteResult( $deleteResult, $embeddedDeletes );
 
 		//AUDIT CHANGE STREAM
 		if( $mdb->audit && static::_getCollectionName()!='audit' && $combinedResult->getDeletedCount()>0 ) {
