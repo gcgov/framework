@@ -3,15 +3,15 @@
 namespace gcgov\framework;
 
 use gcgov\framework\exceptions\controllerException;
-use gcgov\framework\models\controllerFileResponse;
-use gcgov\framework\models\controllerPdfResponse;
-use gcgov\framework\models\controllerResponse;
-use gcgov\framework\models\routeHandler;
-use gcgov\framework\interfaces\controller;
-use gcgov\framework\models\controllerDataResponse;
-use gcgov\framework\models\controllerViewResponse;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\exceptions\routeException;
+use gcgov\framework\interfaces\controller;
+use gcgov\framework\models\controllerDataResponse;
+use gcgov\framework\models\controllerFileBase64EncodedContentResponse;
+use gcgov\framework\models\controllerFileResponse;
+use gcgov\framework\models\controllerResponse;
+use gcgov\framework\models\controllerViewResponse;
+use gcgov\framework\models\routeHandler;
 
 final class renderer {
 
@@ -38,6 +38,9 @@ final class renderer {
 		}
 		elseif( $controllerResponse instanceof controllerViewResponse ) {
 			return $this->processControllerViewResponse( $controllerResponse );
+		}
+		elseif( $controllerResponse instanceof controllerFileBase64EncodedContentResponse ) {
+			return $this->processControllerFileBase64EncodedContentResponse( $controllerResponse );
 		}
 		elseif( $controllerResponse instanceof controllerFileResponse ) {
 			return $this->processControllerFileResponse( $controllerResponse );
@@ -147,9 +150,8 @@ final class renderer {
 	}
 
 
-
 	/**
-	 * @param \gcgov\framework\interfaces\_controllerDataResponse $controllerDataResponse
+	 * @param \gcgov\framework\interfaces\_controllerFileResponse $controllerFileResponse
 	 *
 	 * @return string
 	 */
@@ -191,6 +193,54 @@ final class renderer {
 		header( 'Pragma: public' );
 
 		$encodedResponse = file_get_contents( $controllerFileResponse->getFilePathname() );
+
+		return $encodedResponse;
+	}
+
+
+	/**
+	 * @param \gcgov\framework\models\controllerFileBase64EncodedContentResponse $controllerResponse
+	 *
+	 * @return string
+	 */
+	private function processControllerFileBase64EncodedContentResponse( \gcgov\framework\models\controllerFileBase64EncodedContentResponse $controllerResponse ): string {
+		if( !headers_sent( $fileBasename, $lineNumber ) ) {
+			foreach( $controllerResponse->getHeaders() as $header ) {
+				$header->output();
+			}
+		}
+		else {
+			\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $fileBasename . ' on line ' . $lineNumber );
+		}
+
+		if( $controllerResponse->getHttpStatus()!=200 ) {
+			http_response_code( $controllerResponse->getHttpStatus() );
+			if($controllerResponse->getHttpStatus()==204) {
+				header( 'Content-Length: 0' );
+				return '';
+			}
+			if( $controllerResponse->getFilePathname()==='' ) {
+				return '';
+			}
+		}
+
+		header( 'Content-Type:' . $controllerResponse->getContentType() );
+
+		$fileName = $controllerResponse->getFilePathname();
+		header( 'x-filename: ' . $fileName );
+		header( 'Content-Description: File Transfer' );
+		if( isset( $_GET[ 'download' ] ) ) {
+			header( 'Content-Disposition: attachment; filename=' . $fileName );
+		}
+		else {
+			header( 'Content-Disposition: inline; filename=' . $fileName );
+		}
+		header( 'Content-Transfer-Encoding: binary' );
+		header( 'Expires: 0' );
+		header( 'Cache-Control: must-revalidate, post-check=0, pre-check=0' );
+		header( 'Pragma: public' );
+
+		$encodedResponse = base64_decode( $controllerResponse->getBase64EncodedContent() );
 
 		return $encodedResponse;
 	}
