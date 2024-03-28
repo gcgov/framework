@@ -17,7 +17,6 @@ class controllerFileBase64EncodedContentResponse extends controllerResponse impl
 	 * @param string                                             $filename
 	 * @param \gcgov\framework\models\controllerResponseHeader[] $headers
 	 *
-	 * @throws \gcgov\framework\exceptions\controllerException
 	 */
 	public function __construct( string $contentType, string $base64EncodedContent, string $filename, array $headers = [] ) {
 		parent::__construct( $headers );
