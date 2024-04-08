@@ -4,6 +4,7 @@ namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\attributes\label;
+use JetBrains\PhpStorm\Deprecated;
 use OpenApi\Attributes as OA;
 
 #[OA\Schema]
@@ -109,10 +110,44 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 
 
+	#[Deprecated]
 	/**
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function saveFileBase64EncodedContents( \gcgov\framework\services\mongodb\gridfs $attachment ): \MongoDB\BSON\ObjectId {
+	public static function saveFileBase64EncodedContents( string $filename, string $base64EncodedContent ): \MongoDB\BSON\ObjectId {
+
+		$collectionName = static::_getCollectionName();
+		try {
+			$mdb = new \gcgov\framework\services\mongodb\tools\mdb( collection: static::_getCollectionName() );
+
+			$bucket = $mdb->db->selectGridFSBucket( [ 'bucketName' => $collectionName ] );
+
+			$_id = new \MongoDB\BSON\ObjectId();
+
+			$stream = $bucket->openUploadStream( $filename, [ '_id' => $_id ] );
+
+		}
+		catch( \Exception $e ) {
+			error_log( $e );
+			throw new modelException( $e->getMessage(), 500, $e );
+		}
+
+		$wroteSuccessfully = fwrite( $stream, base64_decode($base64EncodedContent) );
+		fclose( $stream );
+
+		if(!$wroteSuccessfully) {
+			throw new modelException( 'Failed to save contents to stream', 500 );
+		}
+
+		return $_id;
+
+	}
+
+
+	/**
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function saveFileBase64EncodedContentsByAttachment( \gcgov\framework\services\mongodb\gridfs $attachment ): \MongoDB\BSON\ObjectId {
 
 		$collectionName = static::_getCollectionName();
 		try {
