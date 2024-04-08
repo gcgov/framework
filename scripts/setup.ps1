@@ -121,7 +121,7 @@ do {
 $app_guid = [guid]::NewGuid().ToString("N");
 $app_absolute_path = $path
 
-$replaceInExtensions = '^\.(ini|json|php|config)$'
+$replaceInExtensions = '^\.(ini|json|php|config|.bat|.ps1)$'
 $replacementTable = @{
     "{app_guid}" = $app_guid;
     "{app_title}" = $inputs['app_title'];
