@@ -16,6 +16,9 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 	#[label( 'File Name' )]
 	#[OA\Property]
 	public string $filename  = '';
+	#[label( 'Content Type' )]
+	#[OA\Property]
+	public string $contentType  = '';
 
 	#[label( 'Base 64 Encoded Content' )]
 	#[OA\Property]
@@ -58,6 +61,7 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 		$fileGridFs = new gridfs();
 		$fileGridFs->filename = $metadata->filename;
+		$fileGridFs->contentType = $metadata->contentType ?? '';
 		$fileGridFs->base64EncodedContent = base64_encode($contents);
 
 
