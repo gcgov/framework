@@ -61,7 +61,7 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 		$fileGridFs = new gridfs();
 		$fileGridFs->filename = $metadata->filename;
-		$fileGridFs->contentType = $metadata->contentType ?? '';
+		$fileGridFs->contentType = $metadata->metadata?->contentType ?? '';
 		$fileGridFs->base64EncodedContent = base64_encode($contents);
 
 
@@ -84,7 +84,7 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 			$_id = new \MongoDB\BSON\ObjectId();
 
-			$stream = $bucket->openUploadStream( basename( $filePathname ), [ '_id' => $_id ] );
+			$stream = $bucket->openUploadStream( basename( $filePathname ), [ '_id' => $_id, ['metadata'=>['contentType'=>mime_content_type($filePathname)??'']] ] );
 
 		}
 		catch( \Exception $e ) {
@@ -112,7 +112,7 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 	/**
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function saveFileBase64EncodedContents( string $filename, string $base64EncodedContent ): \MongoDB\BSON\ObjectId {
+	public static function saveFileBase64EncodedContents( \gcgov\framework\services\mongodb\gridfs $attachment ): \MongoDB\BSON\ObjectId {
 
 		$collectionName = static::_getCollectionName();
 		try {
@@ -122,7 +122,7 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 			$_id = new \MongoDB\BSON\ObjectId();
 
-			$stream = $bucket->openUploadStream( $filename, [ '_id' => $_id ] );
+			$stream = $bucket->openUploadStream( $attachment->filename, [ '_id' => $_id, 'metadata'=>['contentType'=>$attachment->contentType] ] );
 
 		}
 		catch( \Exception $e ) {
@@ -130,7 +130,7 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 			throw new modelException( $e->getMessage(), 500, $e );
 		}
 
-		$wroteSuccessfully = fwrite( $stream, base64_decode($base64EncodedContent) );
+		$wroteSuccessfully = fwrite( $stream, base64_decode($attachment->base64EncodedContent) );
 		fclose( $stream );
 
 		if(!$wroteSuccessfully) {
