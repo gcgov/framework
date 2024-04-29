@@ -42,6 +42,7 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 
 	/**
+	 * @return $this
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function getFile( \MongoDB\BSON\ObjectId $_id ): gridfs {
