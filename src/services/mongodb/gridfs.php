@@ -66,10 +66,26 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 		$fileGridFs->contentType = $metadata->metadata?->contentType ?? '';
 		$fileGridFs->base64EncodedContent = base64_encode($contents);
 
-
-
-
 		return $fileGridFs;
+	}
+
+	public static function deleteMany( array $filter=[], array $options=[] ): void {
+		$collectionName = static::_getCollectionName();
+		try {
+			$mdb = new \gcgov\framework\services\mongodb\tools\mdb( collection: static::_getCollectionName() );
+
+			$bucket = $mdb->db->selectGridFSBucket( [ 'bucketName' => $collectionName ] );
+
+			$gridFsEntities = $bucket->find($filter);
+
+			foreach($gridFsEntities as $gridFsEntity) {
+				$bucket->delete( $gridFsEntity->_id );
+			}
+		}
+		catch( \Exception $e ) {
+			error_log( $e );
+			throw new modelException( $e->getMessage(), 500, $e );
+		}
 	}
 
 
