@@ -67,17 +67,17 @@ $prompts = @(
 
 if ($defineMicrosoftIds -eq 0)
 {
-    $prompts.Add( @{ "key"="app_microsoft_client_id"; "label"="DEV Microsoft Azure App client id" })
-    $prompts.Add( @{ "key"="app_microsoft_client_secret"; "label"="DEV Microsoft Azure App client secret" })
-    $prompts.Add( @{ "key"="app_microsoft_tenant"; "label"="DEV Microsoft Azure App tenant" })
-    $prompts.Add( @{ "key"="app_microsoft_drive_id"; "label"="DEV Microsoft Azure App drive id" })
-    $prompts.Add( @{ "key"="app_microsoft_default_from_address"; "label"="DEV Microsoft Azure App default from address" })
+    $prompts += @{ "key"="app_microsoft_client_id"; "label"="DEV Microsoft Azure App client id" }
+    $prompts += @{ "key"="app_microsoft_client_secret";  "label"="DEV Microsoft Azure App client secret" }
+    $prompts += @{ "key"="app_microsoft_tenant";  "label"="DEV Microsoft Azure App tenant" }
+    $prompts += @{ "key"="app_microsoft_drive_id";  "label"="DEV Microsoft Azure App drive id" }
+    $prompts += @{ "key"="app_microsoft_default_from_address";  "label"="DEV Microsoft Azure App default from address" }
 
-    $prompts.Add( @{ "key"="prod_app_microsoft_client_id"; "label"="PROD Microsoft Azure App client id" })
-    $prompts.Add( @{ "key"="prod_app_microsoft_client_secret"; "label"="PROD Microsoft Azure App client secret" })
-    $prompts.Add( @{ "key"="prod_app_microsoft_tenant"; "label"="PROD Microsoft Azure App tenant" })
-    $prompts.Add( @{ "key"="prod_app_microsoft_drive_id"; "label"="PROD Microsoft Azure App drive id" })
-    $prompts.Add( @{ "key"="prod_app_microsoft_default_from_address"; "label"="PROD Microsoft Azure App default from address" })
+    $prompts += @{ "key"="prod_app_microsoft_client_id";  "label"="PROD Microsoft Azure App client id" }
+    $prompts += @{ "key"="prod_app_microsoft_client_secret";  "label"="PROD Microsoft Azure App client secret" }
+    $prompts += @{ "key"="prod_app_microsoft_tenant";  "label"="PROD Microsoft Azure App tenant" }
+    $prompts += @{ "key"="prod_app_microsoft_drive_id";  "label"="PROD Microsoft Azure App drive id" }
+    $prompts += @{ "key"="prod_app_microsoft_default_from_address";  "label"="PROD Microsoft Azure App default from address" }
 
 }
 
