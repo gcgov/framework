@@ -179,13 +179,13 @@ final class renderer {
 		header( 'Content-Type:' . $controllerFileResponse->getContentType() );
 
 		$fileBasename = basename($controllerFileResponse->getFilePathname());
-		header( 'x-filename: ' . $fileBasename );
+		header( 'x-filename: "' . $fileBasename .'"' );
 		header( 'Content-Description: File Transfer' );
 		if( isset( $_GET[ 'download' ] ) ) {
-			header( 'Content-Disposition: attachment; filename=' . $fileBasename );
+			header( 'Content-Disposition: attachment; filename="' . $fileBasename.'"' );
 		}
 		else {
-			header( 'Content-Disposition: inline; filename=' . $fileBasename );
+			header( 'Content-Disposition: inline; filename="' . $fileBasename.'"' );
 		}
 		header( 'Content-Transfer-Encoding: binary' );
 		header( 'Expires: 0' );
@@ -227,13 +227,13 @@ final class renderer {
 		header( 'Content-Type:' . $controllerResponse->getContentType() );
 
 		$fileName = $controllerResponse->getFilePathname();
-		header( 'x-filename: ' . $fileName );
+		header( 'x-filename: "' . $fileName .'"');
 		header( 'Content-Description: File Transfer' );
 		if( isset( $_GET[ 'download' ] ) ) {
-			header( 'Content-Disposition: attachment; filename=' . $fileName );
+			header( 'Content-Disposition: attachment; filename="' . $fileName. '"' );
 		}
 		else {
-			header( 'Content-Disposition: inline; filename=' . $fileName );
+			header( 'Content-Disposition: inline; filename="' . $fileName. '"' );
 		}
 		header( 'Content-Transfer-Encoding: binary' );
 		header( 'Expires: 0' );
