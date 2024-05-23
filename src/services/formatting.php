@@ -58,6 +58,10 @@ class formatting {
 		$correction3 = preg_replace( '/(\r\n|\r|\n)+/', ' ', $correction2 );
 		$correction4  = preg_replace( '/(' . $replacementForIllegalChars . ')+/', ' ', $correction3 );
 
+		if(strlen($correction4)>31) {
+			return substr($correction4, 0, 31);
+		}
+
 		return $correction4;
 	}
 
