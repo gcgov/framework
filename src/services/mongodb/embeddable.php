@@ -3,14 +3,14 @@
 namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\models\authUser;
-use gcgov\framework\services\mongodb\attributes\includeMeta;
-use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
 use gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize;
 use gcgov\framework\services\mongodb\attributes\excludeJsonDeserialize;
+use gcgov\framework\services\mongodb\attributes\includeMeta;
 use gcgov\framework\services\mongodb\attributes\redact;
 use gcgov\framework\services\mongodb\exceptions\databaseException;
 use gcgov\framework\services\mongodb\models\_meta;
+use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\tools\reflectionCache;
 use JetBrains\PhpStorm\ArrayShape;
 use JetBrains\PhpStorm\Deprecated;
@@ -433,7 +433,7 @@ abstract class embeddable
 				}
 					//regular non class types
 				catch( \ReflectionException $e ) {
-					log::info( 'MongoUnserialize', $rProperty->getName().' error '.$e->getMessage() );
+					log::info( 'MongoUnserialize', $rProperty?->getName().' error '.$e->getMessage() );
 				}
 			}
 
@@ -468,7 +468,7 @@ abstract class embeddable
 			$rPropertyName = $rProperty->getName();
 			$rPropertyType = $rProperty->getType();
 			$typeName      = '';
-			if( !( $rPropertyType instanceof \ReflectionUnionType ) ) {
+			if( $rPropertyType!==null && method_exists($rPropertyType, 'getName') ) {
 				$typeName = $rPropertyType->getName();
 			}
 			$propertyIsArray = false;
