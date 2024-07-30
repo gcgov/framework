@@ -211,14 +211,25 @@ Get status text for HTTP code `\gcgov\framework\services\http::statusText( int $
 * Emergency `\gcgov\framework\services\log::emergency( string $channel, string $message, array $context = [] )`
 
 ### JWT Auth & Certificates
-
+`\gcgov\framework\services\jwtAuth\jwtAuth()` provides all JWT authentication mechanisms. Explore the **Oauth Server 
+Service** and **Microsoft Auth Token Exchange** extensions before rolling a new solution for authentication.
 
 ### Microsoft Services
 Deprecated - use https://github.com/andrewsauder/microsoftServices instead
 
 ### MongoDB
+Comprehensive database modeling system `\gcgov\framework\services\mongodb`
+* [MongoDB Service](readme/mongodb.md)
+
 
 ### PDODB
+Initiate PDO connections using SQL connection details in app/config/environment.json. It is only a small wrapper around 
+the native PDO class.
+
+Read user connection: `new gcgov\framework\services\pdodb\pdodb(true, $databaseName)`
+
+Write user connection: `new gcgov\framework\services\pdodb\pdodb(false, $databaseName)`
+
 
 ## Extensions
 Extensions add service or app level functionality to the app that registers them. Extensions may expose new endpoints.
