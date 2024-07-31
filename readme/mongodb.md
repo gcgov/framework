@@ -638,6 +638,8 @@ final class project extends \gcgov\framework\services\mongodb\model {
 }
 ```
 
+See Permits API/App externalWebRequests for full example in use 
+
 ## Attributes for Embedding Models
 
 These attributes are only relevant on properties that embed other top level *models*.
@@ -742,12 +744,49 @@ final class transaction extends \gcgov\framework\services\mongodb\model {
 }
 ```
 
-## extra
+## Validation Attributes
+See [Symfony Validation](https://symfony.com/doc/current/validation.html) for all Assert options and 
+[Validation Groups](https://symfony.com/doc/current/validation/groups.html) for details.
 
 ```php 
-use gcgov\framework\models\customConstraints as CustomAssert;
 use Symfony\Component\Validator\Constraints as Assert;
+use gcgov\framework\models\customConstraints as CustomAssert;
 
-#[visibility(bool $default = true, array $groups = [], bool $valueIsVisibilityGroup = false)]
+#[Assert\NotBlank]
+public ?\app\models\keyValueItem $projectType = null;
 
+#[Assert\Expression( expression: 'this.externalApplicantRequests or value', message: 'At least one applicant is required' )]
+/** @var \app\models\applicant[] $applicants */
+public array $applicants = [];
+
+```
+
+### Validation Groups
+Classes implementing validation groups must add method `public function _defineValidationGroups(): string[]`. Groups 
+allow fields to be conditionally validated. 
+
+Example: 
+```php
+
+final class project extends \gcgov\framework\services\mongodb\model {
+    ...
+    //required if any of the validation groups listed are present in _defineValidationGroups 	
+    #[CustomAssert\OptionalValid(expression:'value!=null', groups:[ constants::EXTERNAL_PROJECT_TYPE_ID_NEW_HOME, constants::EXTERNAL_PROJECT_TYPE_ID_RES_ADDITION ])]
+    public ?\app\models\component\externalContractorRequest $externalBuildingContractorRequest = null;
+
+	public function _defineValidationGroups(): array {
+		$validationGroups = [];
+		if( $this->projectType instanceof keyValueItem ) {
+			$validationGroups = [ (string)$this->projectType->_id ];
+		}
+		return $validationGroups;
+	}
+    ...
+}
+```
+
+### Update Validation Status
+To run validation, call the `updateValidationState` method on the model or embedded object.
+```php
+${modelOrEmbeddedInstance}->updateValidationState(); 
 ```
