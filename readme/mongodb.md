@@ -404,8 +404,7 @@ not be relied on.
 
 Embedded objects **cannot** be saved as top level documents in a collection. If you wish to both embed an object and
 store it in its own collection, it must be defined as a model. There are important caveats to this approach that you
-must be aware of to correctly handle saving embedded models (TODO: add section about how to manage this - save embedded
-item to update collection and embedded object vs saving the parent object won't cascade update).
+must be aware of to correctly handle saving embedded models (see 'Attributes for Embedding Models' section).
 
 ```php
 namespace \app\models\component\address;
@@ -443,45 +442,312 @@ class address extends \gcgov\framework\services\mongodb\embeddable {
 	];
 ```
 
-## Class Attributes
-### #[includeMeta]
-When serialized to JSON, model and embedded classes will automatically include a `_meta` field. To disable this for a 
-specific model or embedded class, give the class the `#[includeMeta(false)]` attribute
-
-## Property Attributes
+## Attributes
 
 Model and embedded object properties may utilize attributes to customize functionality of a property or add meta data
 about the field.
 
+### #[includeMeta]
+
+Applied to classes. When serialized to JSON, model and embedded classes will automatically include a `_meta` field. To
+disable this for a specific model or embedded class, give the class the `#[includeMeta(false)]` attribute
+
 ### #[excludeBsonSerialize]
+
 Properties tagged with `#[excludeBsonSerialize]` will not be saved in the database
 
 ### #[excludeBsonUnserialize]
-Properties tagged with `#[excludeBsonUnserialize]` will be excluded when deserializing the document from the database. 
-The resulting object will have the default value for the property regardless of what value is saved in the database for 
-the property. 
+
+Properties tagged with `#[excludeBsonUnserialize]` will be excluded when deserializing the document from the database.
+The resulting object will have the default value for the property regardless of what value is saved in the database for
+the property.
 
 ### #[excludeJsonSerialize]
-Properties tagged with `#[excludeJsonSerialize]` will be excluded from the output when serializing the object to json 
+
+Properties tagged with `#[excludeJsonSerialize]` will be excluded from the output when serializing the object to json
 
 ### #[excludeJsonDeserialize]
+
 Properties tagged with `#[excludeJsonDeserialize]` will be excluded when deserializing the object from JSON to object.
 The resulting object will have the default value for the property regardless of what value was set in the JSON string.
 
+### #[label('Human Readable Label')]
+
+Properties tagged with `#[label(string $label)]` will be added the object's `_meta` output in the labels section and the
+fields section.
+
+Example embedded class with label:
+
+```php 
+class address extends \gcgov\framework\services\mongodb\embeddable {
+
+	public \MongoDB\BSON\ObjectId          $_id;
+
+	#[label( 'Address Type' )]
+	public string                          $type        = 'mailing';
+}
+```
+
+After JSON serialization:
+
+```json
+{
+	"_id": "",
+	"type": "mailing",
+	"_meta": {
+		...
+		"fields": {
+			"type": {
+				"label": "Address Type",
+				"error": false,
+				"errorMessages": [],
+				"success": false,
+				"successMessages": [],
+				"hints": [],
+				"state": "",
+				"required": false,
+				"visible": true,
+				"valueIsVisibilityGroup": false,
+				"visibilityGroups": [],
+				"validating": false
+			}
+		}
+	}
+}
+```
+
+### #[autoIncrement()]
+
+Properties tagged with `#[autoIncrement]` will automatically increment upon insert into the database. With no parameters
+provided, the value will be set to the previous maximum value + 1.
+
+#### Basic example:
+
+```php 
+final class inspection extends \gcgov\framework\services\mongodb\model {
+	...
+	#[label( 'Inspection Number' )]
+	#[autoIncrement]
+	public int $inspectionNumber = 0;
+	
+	...
+}
+```
+
+1. The first document inserted into the `inspection` collection will have `$inspectionNumber` set to 1 (previous max of
+   0 + 1).
+1. The second document inserted into the `inspection` collection will have `$inspectionNumber` set to 2 (previous max of
+   1 + 1).
+1. The third document inserted into the `inspection` collection will have `$inspectionNumber` set to 3 (previous max of
+   2 + 1).
+
+#### Advanced Example (Grouping and Formatting)
+
+By default, one property in a collection will have an ever-increasing automatic value. You can, however, create groups
+of incrementing numbers within a collection. Grouping allows one collection to have multiple automatic incrementing
+values that increment at different rates.
+
+In addition, auto incremented values may be formatted by providing a method name to the `countFormatMethod` parameter.
+
+In this example, documents in the `project` collection will have `$projectReferenceNumber` set to a formatted increasing
+value within the group provided.
+
+```php 
+final class project extends \gcgov\framework\services\mongodb\model {
+	...
+	#[label( 'Project Reference Number' )]
+	#[autoIncrement( groupByMethodName: 'getProjectNumberGroup', countFormatMethod: 'formatProjectIncrementer' )]
+	public string $projectReferenceNumber = '';
+	
+	...
+	
+	public function getProjectNumberGroup(): string {
+		if( $this->projectType==='fireMarshal' ) {
+			return 'FM';
+		}
+		elseif( $this->projectType==='stormwater' ) {
+			return 'SW';
+		}
+
+		//default by calendar year
+		return (string)$this->applicationDate->format( 'Y' );
+	}
+	
+	public function formatProjectIncrementer( int $count ): string {
+		return $this->getProjectNumberGroup() . '-' . str_pad( $count, 4, '0', STR_PAD_LEFT );
+	}
+
+}
+```
+
+1. The first document inserted into the `project` collection with field `projectType` set to `fireMarshal` will
+   have `$projectReferenceNumber` set to FM-0001 (group FM previous max of 0 + 1).
+1. The second document inserted into the `project` collection with field `projectType` set to `fireMarshal` will
+   have `$projectReferenceNumber` set to FM-0002 (group FM previous max of 1 + 2).
+1. The first document inserted into the `project` collection with field `applicationDate` in 2024 and
+   field `projectType` set to `permits` will have `$projectReferenceNumber` set to 2024-0001 (group 2024 previous max of
+   0 + 1).
+1. The second document inserted into the `project` collection with field `applicationDate` in 2024 and
+   field `projectType` set to `permits` will have `$projectReferenceNumber` set to 2024-0002 (group 2024 previous max of
+   1 + 1).
+
+### #[redact()]
+
+Properties tagged with `#[redact( array $redactIfUserHasAnyRoles=[], array $redactIfUserHasAllRoles=[] )]` will be
+removed from the JSON output of the system when the provided conditions are met. This is useful for allowing a role to
+read from a collection but to hide certain properties from the user because of their permission roles.
+
+Example: users with the role `constants::ROLE_PUBLIC_WEB` will not see a phone property on the JSON object returned to
+them.
+
+```php
+final class project extends \gcgov\framework\services\mongodb\model {
+	...
+	#[label( 'Phone' )]
+	#[redact( [ constants::ROLE_PUBLIC_WEB ] )]
+	public \app\models\component\phone $phone
+	...
+}
+```
+
+### #[visibility()]
+
+Properties tagged with `#[visibility(bool $default = true, array $groups = [], bool $valueIsVisibilityGroup = false)]`
+will impact the output of `_meta.fields.{field-name}.visible`, `_meta.fields.{field-name}.valueIsVisibilityGroup`, and
+`_meta.fields.{field-name}.visibilityGroups`. This will only ever set the default state. Javascript must be used on the
+UI to respect the visibility of fields and to respond to changes in the `visibilityGroups` so that field visibility is
+updated as other values on the object are modified.
+
+Example:
+
+```php
+final class project extends \gcgov\framework\services\mongodb\model {
+	...
+	#[label( 'Status' )]
+	#[visibility( default: true, valueIsVisibilityGroup: true )]
+	public ?\app\models\keyValueItem $status = null;
+
+	#[label( 'Application Date' )]
+	#[visibility( default: true )]
+	public \DateTimeImmutable $applicationDate;
+
+	#[label( 'Submitted Date' )]
+	#[visibility( default: false, groups: [ constants::EXTERNAL_STATUS_ID_SUBMITTED ] )]
+	public ?\DateTimeImmutable $submittedDate = null;
+	...
+}
+```
+
+## Attributes for Embedding Models
+
+These attributes are only relevant on properties that embed other top level *models*.
+
+### #[deleteCascade]
+
+When an object with a property tagged with `#[deleteCascade]` is deleted, all instances of the child item are also
+deleted in its own collection and anywhere else it is embedded.
+
+Example:
+
+```php 
+final class project extends \gcgov\framework\services\mongodb\model {
+	...
+	#[deleteCascade]
+	public ?\app\model\inspection $inspection = null;
+	...
+}
+```
+
+When `\app\models\project::delete( $projectId )` is called, the inspection saved in `$inspection` will be removed from
+the inspection collection and removed from all other documents that it is embedded in.
+
+### #[excludeFromTypemapWhenThisClassNotRoot]
+
+It is possible to create an infinite loop by nesting models. To the extent possible, you should avoid a nesting loop of
+models.
+
+An example would be if a `project` embeds an `inspection` but `inspection` also includes `project` as a property
+that isn't saved to the database but is used for aggregation. This would cause an infinite loop because as the typemap
+is resolved for `project`, `inspection` is resolved which requires `project` to be resolved, which requires `inspection`
+to be resolved, etc.
+
+To escape this trap, tag the nested property (`inspection.project` in this example) with
+`#[excludeFromTypemapWhenThisClassNotRoot]` to exclude it from the typemap resolution. The caveat to this is that
+`$inspection->project` *may* not be typed as `project`. In these cases we are relying on `__pclass` automatic
+typecasting.
+
+### #[foreignKey()]
+
+Properties tagged with `#[foreignKey()]` must be typed arrays with a model type. The purpose is to enable insertions
+of the foreign model in the foreign collection to automatically insert into the typed array as well.
+
+**Basic Example:**
+
+The first parameter of `#[foreignKey(string $embeddedPropertyName, array $embeddedObjectFilter = [] )]` must match the
+field name in the embedded model that will match the `$_id` of the parent model.
+
+In this example, when `\app\model\transaction::save( $transaction )` is called, the transaction will be stored in the
+`transaction` collection and will also be inserted into documents in the `project` collection in the `transactions`
+field where `project._id` matches `transaction.projectId`.
+
+```php 
+final class project extends \gcgov\framework\services\mongodb\model {
+	...
+	#[label( 'Transactions' )]
+	#[foreignKey( 'projectId' )]
+	/** @var \app\models\transaction[] $transactions */
+	public array $transactions = [];
+	...
+}
+
+final class transaction extends \gcgov\framework\services\mongodb\model {
+	...
+	public \MongoDB\BSON\ObjectId $_id;
+	
+	#[label( 'Project Id' )]
+	public ?\MongoDB\BSON\ObjectId $projectId = null;
+	...
+}
+```
+
+**Advanced Example:**
+
+The second parameter of `#[foreignKey(string $embeddedPropertyName, array $embeddedObjectFilter = [] )]` is an optional
+filter to limit what documents are embedded automatically. The `$embeddedObjectFilter` should be a standard Mongo find
+array filter that is used to filter the embedded model collection to further restrict which documents will be embedded
+on insert. In this example, only documents where the `transaction.projectId` matches `project._id` and where
+`transaction.recurringTemplate` is `false` will be embedded.
+
+```php 
+final class project extends \gcgov\framework\services\mongodb\model {
+	...
+	#[label( 'Transactions' )]
+	#[foreignKey( 'projectId', [ 'recurringTemplate' => false ] )]
+	/** @var \app\models\transaction[] $transactions */
+	public array $transactions = [];
+	...
+}
+
+final class transaction extends \gcgov\framework\services\mongodb\model {
+	...
+	public \MongoDB\BSON\ObjectId $_id;
+	
+	#[label( 'Project Id' )]
+	public ?\MongoDB\BSON\ObjectId $projectId = null;
+	
+	#[label( 'Is Recurring Template' )]
+	public bool $recurringTemplate = null;
+	
+	...
+}
+```
+
+## extra
 
 ```php 
 use gcgov\framework\models\customConstraints as CustomAssert;
 use Symfony\Component\Validator\Constraints as Assert;
 
-use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
-use gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize;
-use gcgov\framework\services\mongodb\attributes\excludeJsonDeserialize;
-#[label( string $label )]
-#[autoIncrement]
-#[deleteCascade]
-#[excludeFromTypemapWhenThisClassNotRoot]
-#[foreignKey(string $embeddedPropertyName, array $embeddedObjectFilter = [] )]
-#[redact( array $redactIfUserHasAnyRoles=[], array $redactIfUserHasAllRoles=[] )]
 #[visibility(bool $default = true, array $groups = [], bool $valueIsVisibilityGroup = false)]
 
 ```
