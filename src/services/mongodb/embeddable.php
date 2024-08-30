@@ -92,6 +92,11 @@ abstract class embeddable
 					unset( $export[ '_meta' ] );
 				}
 			}
+			else {
+				if(!isset($export[ '_meta' ])) {
+					$export[ '_meta' ] = new _meta( get_called_class() );
+				}
+			}
 
 			$redactAttributeInstances = $reflectionCacheClass->getAttributeInstancesByPropertyName( redact::class );
 			if(count($redactAttributeInstances)>0){
@@ -120,22 +125,19 @@ abstract class embeddable
 		//reset meta fields
 		$this->_meta = new _meta( get_called_class() );
 
-		//get the called class name
-		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
-
 		try {
-			$reflectionClass = new \ReflectionClass( $calledClassFqn );
+			$reflectionCacheClass = reflectionCache::getReflectionClass( get_called_class() );
 
-			foreach( $reflectionClass->getProperties() as $property ) {
+			//meta
+			if($reflectionCacheClass->hasAttribute( includeMeta::class ) ) {
+				/** @var attributes\includeMeta $includeMetaAttributeInstance */
+				$includeMetaAttributeInstance = $reflectionCacheClass->getAttributeInstance( includeMeta::class );
 
-				//meta
-				$classIncludeMetaAttributes = $reflectionClass->getAttributes( includeMeta::class );
-				foreach( $classIncludeMetaAttributes as $classIncludeMetaAttribute ) {
-					$includeMetaAttributeInstance = $classIncludeMetaAttribute->newInstance();
-					if( !$includeMetaAttributeInstance->includeMeta ) {
-						unset( $this->_meta );
-					}
+				if( !$includeMetaAttributeInstance->includeMeta ) {
+					unset( $this->_meta );
 				}
+
+			}
 
 				//get all attributes for this property
 				$propertyAttributes = $property->getAttributes( redact::class );
