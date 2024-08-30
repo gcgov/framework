@@ -139,22 +139,18 @@ abstract class embeddable
 
 			}
 
-				//get all attributes for this property
-				$propertyAttributes = $property->getAttributes( redact::class );
-				foreach( $propertyAttributes as $propertyAttribute ) {
-					$authUser                = authUser::getInstance();
-					$redactAttributeInstance = $propertyAttribute->newInstance();
+			$redactAttributeInstances = $reflectionCacheClass->getAttributeInstancesByPropertyName( redact::class );
+			if(count($redactAttributeInstances)>0) {
+				$authUser = authUser::getInstance();
+				foreach( $redactAttributeInstances as $propertyName => $redactAttributeInstance ) {
 					if( count( $redactAttributeInstance->redactIfUserHasAnyRoles )===0 && count( $redactAttributeInstance->redactIfUserHasAllRoles )===0 ) {
-						$key = $property->getName();
-						unset( $this->$key );
+						unset( $this->$propertyName );
 					}
 					elseif( count( $redactAttributeInstance->redactIfUserHasAnyRoles )>0 && count( array_intersect( $redactAttributeInstance->redactIfUserHasAnyRoles, $authUser->roles ) )>0 ) {
-						$key = $property->getName();
-						unset( $this->$key );
+						unset( $this->$propertyName );
 					}
 					elseif( count( $redactAttributeInstance->redactIfUserHasAllRoles )>0 && count( array_diff( $redactAttributeInstance->redactIfUserHasAllRoles, $authUser->roles ) )===0 ) {
-						$key = $property->getName();
-						unset( $this->$key );
+						unset( $this->$propertyName );
 					}
 				}
 			}
