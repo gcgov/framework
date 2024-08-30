@@ -50,12 +50,15 @@ abstract class factory
 	 * @return $this[]
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getAll( array $filter = [], array $sort = [], array $options = [] ): array {
+	public static function getAll( array $filter = [], array $sort = [], array $options = [], ?\MongoDB\Driver\Session $mongoDbSession = null ): array {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$options = array_merge( $options, [
 			'typeMap' => static::getBsonOptionsTypeMap( typeMapType::unserialize )
 		] );
+		if(isset($mongoDbSession)) {
+			$options['session'] = $mongoDbSession;
+		}
 		if( count( $sort )>0 ) {
 			$options[ 'sort' ] = $sort;
 		}
@@ -80,7 +83,7 @@ abstract class factory
 	 * @return \gcgov\framework\services\mongodb\getResult
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getPagedResponse( int|string|null $limit, int|string|null $page, array $filter = [], array $options = [] ): getResult {
+	public static function getPagedResponse( int|string|null $limit, int|string|null $page, array $filter = [], array $options = [], ?\MongoDB\Driver\Session $mongoDbSession = null ): getResult {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$result = new getResult( $limit, $page );
@@ -90,6 +93,9 @@ abstract class factory
 		] );
 		$options[ 'limit' ] = $result->getLimit();
 		$options[ 'skip' ]  = ( $result->getPage() - 1 ) * $result->getLimit();
+		if(isset($mongoDbSession)) {
+			$options['session'] = $mongoDbSession;
+		}
 
 		try {
 			$cursor = $mdb->collection->find( $filter, $options );
@@ -107,11 +113,12 @@ abstract class factory
 
 	/**
 	 * @param \MongoDB\BSON\ObjectId|string $_id
+	 * @param \MongoDB\Driver\Session|null  $mongoDbSession
 	 *
 	 * @return $this
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getOne( \MongoDB\BSON\ObjectId|string $_id ): object {
+	public static function getOne( \MongoDB\BSON\ObjectId|string $_id, ?\MongoDB\Driver\Session $mongoDbSession = null ): object {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
@@ -123,6 +130,9 @@ abstract class factory
 		$options = [
 			'typeMap' => static::getBsonOptionsTypeMap( typeMapType::unserialize ),
 		];
+		if(isset($mongoDbSession)) {
+			$options['session'] = $mongoDbSession;
+		}
 
 		try {
 			$cursor = $mdb->collection->findOne( $filter, $options );
@@ -146,12 +156,15 @@ abstract class factory
 	 * @return $this
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getOneBy( array $filter = [], array $options = [] ): object {
+	public static function getOneBy( array $filter = [], array $options = [], ?\MongoDB\Driver\Session $mongoDbSession = null ): object {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$options = array_merge( $options, [
 			'typeMap' => static::getBsonOptionsTypeMap( typeMapType::unserialize )
 		] );
+		if(isset($mongoDbSession)) {
+			$options['session'] = $mongoDbSession;
+		}
 
 		try {
 			$cursor = $mdb->collection->findOne( $filter, $options );
