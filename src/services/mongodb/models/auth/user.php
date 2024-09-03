@@ -33,11 +33,11 @@ class user
 	}
 
 
-	public static function getOne( \MongoDB\BSON\ObjectId|string|int $_id ): self {
+	public static function getOne( \MongoDB\BSON\ObjectId|string|int $_id, ?\MongoDB\Driver\Session $mongoDbSession = null ): self {
 		if( is_int( $_id ) ) {
 			throw new modelException( 'Integer ids are not supported in Mongo' );
 		}
-		return parent::getOne( $_id );
+		return parent::getOne( $_id, $mongoDbSession );
 	}
 
 
