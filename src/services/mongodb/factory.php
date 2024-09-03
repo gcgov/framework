@@ -507,7 +507,7 @@ abstract class factory
 		$combinedResult = new updateDeleteResult( $deleteResult, $embeddedDeletes );
 
 		if( $combinedResult->getEmbeddedDeletedCount() + $combinedResult->getDeletedCount() + $combinedResult->getModifiedCount() + $combinedResult->getEmbeddedModifiedCount()==0 ) {
-			throw new modelException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found', 404 );
+			throw new modelDocumentNotFoundException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found' );
 		}
 
 		//AUDIT CHANGE STREAM
