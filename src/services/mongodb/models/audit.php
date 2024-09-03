@@ -1,8 +1,6 @@
 <?php
 namespace gcgov\framework\services\mongodb\models;
 
-
-use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\excludeBsonSerialize;
 use gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize;
 use gcgov\framework\services\mongodb\attributes\excludeJsonDeserialize;
@@ -114,21 +112,6 @@ final class audit
 
 
 	/**
-	 * @param  \gcgov\framework\services\mongodb\model                    $model
-	 * @param  string                                                     $action              CREATE, UPDATE, DELETE
-	 * @param  \gcgov\framework\services\mongodb\updateDeleteResult|null  $updateDeleteResult  optional
-	 * @param  string|string[]                                            $message             optional
-	 * @param  mixed|null                                                 $data                optional
-	 *
-	 * @return \gcgov\framework\services\mongodb\models\audit
-	 * @throws \gcgov\framework\exceptions\modelException
-	 */
-	public static function createFromModel( \gcgov\framework\services\mongodb\model $model, string $action, ?updateDeleteResult $updateDeleteResult = null, string|array $message = '', mixed $data = null ) : audit {
-		return self::create( $model::_getCollectionName(), $model->_id, $action, $updateDeleteResult, $message, $data );
-	}
-
-
-	/**
 	 * @param  string                                                     $collectionName
 	 * @param  \MongoDB\BSON\ObjectId                                     $_id
 	 * @param  string                                                     $action              CREATE, UPDATE, DELETE
@@ -137,7 +120,6 @@ final class audit
 	 * @param  mixed|null                                                 $data                optional
 	 *
 	 * @return \gcgov\framework\services\mongodb\models\audit
-	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function create( string $collectionName, ObjectId $_id, string $action, ?updateDeleteResult $updateDeleteResult = null, string|array $message = '', mixed $data = null ) : audit {
 		$audit             = new audit();
@@ -157,67 +139,8 @@ final class audit
 		}
 		$audit->data = $data;
 
-		self::save( $audit );
-
 		return $audit;
 	}
 
 
-	public function startChangeStreamWatch( \MongoDB\Collection $collection ) {
-		$this->collection = $collection->getCollectionName();
-		$this->changeStream = $collection->watch([],  ['typeMap'=>[ 'array'=>'array' ]]);
-	}
-
-	public function processChangeStream( ?updateDeleteResult $updateDeleteResult=null ) {
-		for ($this->changeStream->rewind(); true; $this->changeStream->next()) {
-			if ( ! $this->changeStream->valid()) {
-				log::warning('MongoAudit', 'No valid change event on collection '.$this->collection.'. Stopping watch to move on');
-				continue;
-			}
-
-			$event = $this->changeStream->current();
-
-			$ns = sprintf('%s.%s', $event->ns->db, $event->ns->coll);
-			$id = json_encode($event->documentKey->_id);
-
-			$data = null;
-
-			switch ($event->operationType) {
-				case 'delete':
-					log::info( 'MongoAudit', "Deleted document in ".$ns." with id: ".$id );
-					break;
-
-				case 'insert':
-					$data = $event->fullDocument;
-					log::info( 'MongoAudit', "Inserted new document in ".$ns, [$event->fullDocument]);
-					break;
-
-				case 'replace':
-					$data = $event->fullDocument;
-					log::info( 'MongoAudit', "Replaced new document in ".$ns." with _id: ".$id, [$event->fullDocument]);
-					break;
-
-				case 'update':
-					$data = $event->updateDescription;
-					log::info( 'MongoAudit',"Updated document in ".$ns." with _id: ". $id, [$event->updateDescription]);
-					break;
-			}
-
-			$this->recordId   = $event->documentKey->_id;
-			$this->action     = $event->operationType;
-			if( $updateDeleteResult != null ) {
-				$this->matched          = $updateDeleteResult->getMatchedCount();
-				$this->modified         = $updateDeleteResult->getModifiedCount();
-				$this->upserted         = $updateDeleteResult->getUpsertedCount();
-				$this->deleted          = $updateDeleteResult->getDeletedCount();
-				$this->embeddedMatched  = $updateDeleteResult->getEmbeddedMatchedCount();
-				$this->embeddedModified = $updateDeleteResult->getEmbeddedModifiedCount();
-				$this->embeddedUpserted = $updateDeleteResult->getEmbeddedUpsertedCount();
-				$this->embeddedDeleted  = $updateDeleteResult->getEmbeddedDeletedCount();
-			}
-			$this->data = $data;
-
-			break;
-		}
-	}
 }

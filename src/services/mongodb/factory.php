@@ -2,10 +2,11 @@
 
 namespace gcgov\framework\services\mongodb;
 
+use gcgov\framework\exceptions\modelDocumentNotFoundException;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\attributes\autoIncrement;
 use gcgov\framework\services\mongodb\models\_meta;
-use gcgov\framework\services\mongodb\models\audit;
+use gcgov\framework\services\mongodb\tools\auditManager;
 use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\tools\reflectionCache;
 use gcgov\framework\services\mongodb\tools\sys;
@@ -206,6 +207,12 @@ abstract class factory
 		}
 		unset( $object );
 
+		//AUDIT CHANGE STREAM
+		/*$auditManager = new auditManager($mdb);
+		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
+			$auditManager->startChangeStreamWatchOnDb();
+		}*/
+
 		//open database session if one is not already open
 		log::info( 'MongoService', '--do save' );
 		$sessionParent = false;
@@ -215,14 +222,11 @@ abstract class factory
 			$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 60000 ] );
 		}
 
-		//AUDIT CHANGE STREAM
-		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
-			$auditChangeStream = new audit();
-			$auditChangeStream->startChangeStreamWatch( $mdb->collection );
-		}
-
 		/** @var \gcgov\framework\services\mongodb\updateDeleteResult[] $saveResults */
 		$saveResults = [];
+
+		/** @var \gcgov\framework\services\mongodb\updateDeleteResult[] $autoIncrementUpdateResult */
+		$autoIncrementUpdateResults = [];
 
 		$mongoActions = [];
 
@@ -232,7 +236,7 @@ abstract class factory
 
 				//auto increment fields on insert
 				if( $saveResults[ $objectIndex ]->getUpsertedCount()>0 ) {
-					static::autoIncrementProperties( $object, $mongoDbSession );
+					$autoIncrementUpdateResults[] = static::autoIncrementProperties( $object, $mongoDbSession );
 				}
 
 				//dispatch inserts for all embedded versions
@@ -252,6 +256,7 @@ abstract class factory
 			}
 			unset( $object );
 
+			//run embedded actions
 			$embeddedResults = self::_runMongoActions( $mongoActions, 'save many embedded', $mongoDbSession );
 
 			//commit session
@@ -277,11 +282,19 @@ abstract class factory
 		}
 
 		//AUDIT CHANGE STREAM
-		//TODO: FIX AUDIT SAVE
-//		if( static::_getCollectionName()!='audit' && $mdb->audit && isset( $auditChangeStream ) && ( $combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0 || $combinedResult->getDeletedCount()>0 ) ) {
-//			$auditChangeStream->processChangeStream( $combinedResult );
-//			audit::save( $auditChangeStream );
-//		}
+		$combinedResult = new updateDeleteResult( $saveResults, array_merge( $autoIncrementUpdateResults, $embeddedResults ) );
+
+		/*if( $mdb->audit && static::_getCollectionName()!='audit' && ( $combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0 || $combinedResult->getDeletedCount()>0 ) ) {
+			$auditEntries = $auditManager->processChangeStream( $combinedResult );
+			if( count( $auditEntries )>0 ) {
+				try {
+					audit::saveMany( $auditEntries );
+				}
+				catch( modelException $e ) {
+					log::error( 'MongoService', 'Failed to save audit log entries' . $e->getMessage() );
+				}
+			}
+		}*/
 
 		//call _afterSave for each item with a successful save
 		if( $callBeforeAfterHooks && sys::methodExists( $calledClass, '_afterSave' ) ) {
@@ -342,10 +355,8 @@ abstract class factory
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		//AUDIT CHANGE STREAM
-		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
-			$auditChangeStream = new audit();
-			$auditChangeStream->startChangeStreamWatch( $mdb->collection );
-		}
+		$auditManager = new auditManager($mdb);
+		$previousObject = null;
 
 		//open database session if one is not already open
 		$sessionParent = false;
@@ -357,6 +368,10 @@ abstract class factory
 
 		//ACTUAL UPDATE
 		try {
+			if($auditManager->doAudit) {
+				$previousObject = static::getOne( $object->_id );
+			}
+
 			$updateResult = static::_saveItem( $object, $upsert, $mdb, $mongoDbSession );
 
 			//auto increment fields on insert
@@ -388,7 +403,7 @@ abstract class factory
 			throw new \gcgov\framework\exceptions\modelException( 'Storing ' . $object::class . ' in the database failed', 500, $e );
 		}
 
-		$combinedResult = new updateDeleteResult( $updateResult, array_merge( isset( $autoIncrementUpdateResult ) ? [ $autoIncrementUpdateResult ] : [], $embeddedUpdates, $embeddedInserts ?? [] ) );
+		$combinedResult = new updateDeleteResult( $updateResult, array_merge( isset( $autoIncrementUpdateResult ) ? [ $autoIncrementUpdateResult ] : [], $embeddedUpdates, $embeddedInserts ) );
 
 		//update _meta property of object to show results
 		if( sys::propertyExists( get_called_class(), '_meta' ) ) {
@@ -398,33 +413,39 @@ abstract class factory
 			$object->_meta->setDb( $combinedResult );
 		}
 
+		if( $sessionParent && $mongoDbSession->isInTransaction() ) {
+			$mongoDbSession->endSession();
+		}
+
 		//AUDIT CHANGE STREAM
-		if( $sessionParent && static::_getCollectionName()!='audit' && $mdb->audit && isset( $auditChangeStream ) && ( $combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0 || $combinedResult->getDeletedCount()>0 ) ) {
-			$auditChangeStream->processChangeStream( $combinedResult );
-			audit::save( $auditChangeStream );
+		if($auditManager->doAudit) {
+			$auditManager->recordDiff( $object, $previousObject, $combinedResult );
 		}
 
 		if( $callBeforeAfterHooks && sys::methodExists( get_called_class(), '_afterSave' ) ) {
 			static::_afterSave( $object, true, $combinedResult );
 		}
+
 		return $combinedResult;
 	}
 
 
 	/**
 	 * @param \MongoDB\BSON\ObjectId|string $_id
+	 * @param \MongoDB\Driver\Session|null  $mongoDbSession
 	 *
 	 * @return \gcgov\framework\services\mongodb\updateDeleteResult
+	 * @throws \gcgov\framework\exceptions\modelDocumentNotFoundException
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function delete( \MongoDB\BSON\ObjectId|string $_id, ?\MongoDB\Driver\Session $mongoDbSession = null ): updateDeleteResult {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		//AUDIT CHANGE STREAM
+		/*$auditManager = new auditManager($mdb);
 		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
-			$auditChangeStream = new audit();
-			$auditChangeStream->startChangeStreamWatch( $mdb->collection );
-		}
+			$auditManager->startChangeStreamWatchOnDb();
+		}*/
 
 		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
 
@@ -490,10 +511,17 @@ abstract class factory
 		}
 
 		//AUDIT CHANGE STREAM
-		if( $mdb->audit && static::_getCollectionName()!='audit' && $combinedResult->getDeletedCount()>0 ) {
-			$auditChangeStream->processChangeStream( $combinedResult );
-			audit::save( $auditChangeStream );
-		}
+		/*if( $mdb->audit && static::_getCollectionName()!='audit' ) {
+			$auditEntries = $auditManager->processChangeStream( $combinedResult );
+			if( count( $auditEntries )>0 ) {
+				try {
+					audit::saveMany( $auditEntries );
+				}
+				catch( modelException $e ) {
+					log::error( 'MongoService', 'Failed to save audit log entries' . $e->getMessage() );
+				}
+			}
+		}*/
 
 		return $combinedResult;
 	}
@@ -513,10 +541,10 @@ abstract class factory
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		//AUDIT CHANGE STREAM
+		/*$auditManager = new auditManager($mdb);
 		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
-			$auditChangeStream = new audit();
-			$auditChangeStream->startChangeStreamWatch( $mdb->collection );
-		}
+			$auditManager->startChangeStreamWatchOnDb();
+		}*/
 
 		log::info( 'MongoService', 'Delete many ' . static::_getCollectionName() );
 
@@ -572,13 +600,20 @@ abstract class factory
 		}
 
 		//combine primary delete with embedded
-		$combinedResult = new updateDeleteResult( $deleteResult, $embeddedDeletes );
+		$combinedResult = new updateDeleteResult( $deleteResult, array_merge($embeddedDeletes, $deleteCascadeResults) );
 
 		//AUDIT CHANGE STREAM
-		if( $mdb->audit && static::_getCollectionName()!='audit' && $combinedResult->getDeletedCount()>0 ) {
-			$auditChangeStream->processChangeStream( $combinedResult );
-			audit::save( $auditChangeStream );
-		}
+		/*if( $mdb->audit && static::_getCollectionName()!='audit') {
+			$auditEntries = $auditManager->processChangeStream( $combinedResult );
+			if( count( $auditEntries )>0 ) {
+				try {
+					audit::saveMany( $auditEntries );
+				}
+				catch( modelException $e ) {
+					log::error( 'MongoService', 'Failed to save audit log entries' . $e->getMessage() );
+				}
+			}
+		}*/
 
 		return $combinedResult;
 	}
