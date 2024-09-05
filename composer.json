@@ -24,6 +24,7 @@
 		"symfony/property-access": "^6.2",
 		"zircote/swagger-php": "^4.7.9",
 		"hybridauth/hybridauth": "^3.8",
+		"swaggest/json-diff": "^3.11",
 		"ext-mongodb": "*",
 		"ext-fileinfo": "*",
 		"ext-pdo": "*"
