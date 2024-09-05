@@ -48,7 +48,7 @@ class build {
 					error_log('Standardize '.$classFqn.' ('.round((($classIndex+1) / $classCount)*100, 2 ).'%)');
 					$queryOrs = $classFqn::mongoFieldsExistsQuery();
 					/** @var \gcgov\framework\services\mongodb\getResult $pagedResponse */
-					$pagedResponse = $classFqn::getPagedResponse( 10, 1, [ '$or'=>$queryOrs ]);
+					$pagedResponse = $classFqn::getPagedResponse( 200, 1, [ '$or'=>$queryOrs ]);
 					$totalDocumentCount = $pagedResponse->getTotalDocumentCount();
 					$totalPageCount = $pagedResponse->getTotalPageCount();
 					error_log('--'.$totalDocumentCount.' documents');
@@ -56,9 +56,10 @@ class build {
 
 					$currentDocumentCount = 1;
 					for($page=1;$page<=$totalPageCount;$page++) {
-						error_log('-- Page '.$page);
+						error_log('-- Page '.$page.'/'.$totalPageCount);
 						if($page>1) {
-							$pagedResponse = $classFqn::getPagedResponse( 10, $page, [ '$or'=>$queryOrs ]);
+							$pagedResponse = $classFqn::getPagedResponse( 200, $page, [ '$or'=>$queryOrs ]);
+							error_log('-- Page Documents '.count($pagedResponse->getData()));
 						}
 						$dbObjects = $pagedResponse->getData();
 
@@ -82,12 +83,7 @@ class build {
 									error_log('-- Failed to save '.$classFqn.' ('.$dbObject->_id.'). Attempt '.($currentRetryAttempt+1).'/'.($maxRetryAttempts+1));
 								}
 							}
-
 							$currentDocumentCount++;
-
-							/*if($currentDocumentCount>2) {
-								break 3;
-							}*/
 						}
 					}
 
