@@ -638,7 +638,7 @@ final class project extends \gcgov\framework\services\mongodb\model {
 }
 ```
 
-See Permits API/App externalWebRequests for full example in use 
+See Permits API/App externalWebRequests for full example in use
 
 ## Attributes for Embedding Models
 
@@ -745,7 +745,8 @@ final class transaction extends \gcgov\framework\services\mongodb\model {
 ```
 
 ## Validation Attributes
-See [Symfony Validation](https://symfony.com/doc/current/validation.html) for all Assert options and 
+
+See [Symfony Validation](https://symfony.com/doc/current/validation.html) for all Assert options and
 [Validation Groups](https://symfony.com/doc/current/validation/groups.html) for details.
 
 ```php 
@@ -762,10 +763,12 @@ public array $applicants = [];
 ```
 
 ### Validation Groups
-Classes implementing validation groups must add method `public function _defineValidationGroups(): string[]`. Groups 
-allow fields to be conditionally validated. 
 
-Example: 
+Classes implementing validation groups must add method `public function _defineValidationGroups(): string[]`. Groups
+allow fields to be conditionally validated.
+
+Example:
+
 ```php
 
 final class project extends \gcgov\framework\services\mongodb\model {
@@ -786,7 +789,15 @@ final class project extends \gcgov\framework\services\mongodb\model {
 ```
 
 ### Update Validation Status
+
 To run validation, call the `updateValidationState` method on the model or embedded object.
+
 ```php
 ${modelOrEmbeddedInstance}->updateValidationState(); 
 ```
+
+### Audit
+
+Enable auditing for the database with config options.
+By default, auditing will create json patches that move from the current state of the object to the state of the object
+prior to the update. Enable `auditForward` to generate a patch from the object prior to save to the object after save.  
