@@ -37,17 +37,30 @@ final class auditManager {
 		$afterSaveObjectClone = clone $afterSaveObject;
 		$beforeSaveObjectClone = clone $beforeSaveObject;
 
-		$after = json_decode(json_encode($afterSaveObjectClone->doBsonSerialize( true )));
-		$before = json_decode(json_encode($beforeSaveObjectClone->doBsonSerialize( true )));
+		$after = json_decode(json_encode($afterSaveObjectClone->doBsonSerialize( true, true )));
+		$before = json_decode(json_encode($beforeSaveObjectClone->doBsonSerialize( true, true )));
 
 		//create the patch from new to old (this allows us to work backwards from the current version that is saved in the main table)
-		$r = new JsonDiff($after, $before, JsonDiff::REARRANGE_ARRAYS);
-		$patch = $r->getPatch();
-		$patchArray = $patch->jsonSerialize();
+		if( $this->mdb->auditForward ) {
+			$diff = new JsonDiff($before, $after, JsonDiff::REARRANGE_ARRAYS);
+		}
+		else {
+			$diff = new JsonDiff($after, $before, JsonDiff::REARRANGE_ARRAYS);
+		}
+		$jsonPatch = $diff->getPatch();
+		$patchArray = $jsonPatch->jsonSerialize();
 
 		if(count($patchArray)==0) {
-			return $patch;
+			return $jsonPatch;
 		}
+
+		//remove tests from patch array
+		foreach($patchArray as $key=>$patch) {
+			if($patch->op=='test') {
+				unset($patchArray[$key]);
+			}
+		}
+		$patchArray = array_values($patchArray);
 
 		try {
 			$audit = audit::create( $this->mdb->collection->getCollectionName(), $afterSaveObject->_id, 'patch', $updateDeleteResult, '', $patchArray );
@@ -57,8 +70,8 @@ final class auditManager {
 			error_log($e);
 		}
 
-		error_log(json_encode($patch));
-		return $patch;
+		//error_log(json_encode($patchArray));
+		return $jsonPatch;
 	}
 
 

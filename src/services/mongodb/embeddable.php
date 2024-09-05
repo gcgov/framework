@@ -195,7 +195,7 @@ abstract class embeddable
 		return $this->doBsonSerialize();
 	}
 
-	public function doBsonSerialize( bool $deep=false ): array|\stdClass {
+	public function doBsonSerialize( bool $deep=false, bool $dateAsISOString=false ): array|\stdClass {
 		if( method_exists( $this, '_beforeBsonSerialize' ) ) {
 			$this->_beforeBsonSerialize();
 		}
@@ -225,12 +225,12 @@ abstract class embeddable
 					$save[ $reflectionCacheProperty->propertyName ] = $reflectionCacheProperty->defaultValue;
 				}
 				foreach( $reflectionCacheProperty->reflectionProperty->getValue( $this ) as $key => $value ) {
-					$save[ $reflectionCacheProperty->propertyName ][ $key ] = $this->bsonSerializeDataItem( $value, $deep );
+					$save[ $reflectionCacheProperty->propertyName ][ $key ] = $this->bsonSerializeDataItem( $value, $deep, $dateAsISOString );
 				}
 			}
 			else {
 				$value                 = $reflectionCacheProperty->reflectionProperty->getValue( $this );
-				$save[ $reflectionCacheProperty->propertyName ] = $this->bsonSerializeDataItem( $value, $deep );
+				$save[ $reflectionCacheProperty->propertyName ] = $this->bsonSerializeDataItem( $value, $deep, $dateAsISOString );
 			}
 
 		}
@@ -334,17 +334,18 @@ abstract class embeddable
 	 *
 	 * @return mixed
 	 */
-	private function bsonSerializeDataItem( mixed $value, bool $deep=false ): mixed {
-		if( $value instanceof \DateTimeInterface ) {
+	private function bsonSerializeDataItem( mixed $value, bool $deep=false, bool $dateAsISOString=false ): mixed {
+		if( !$dateAsISOString && $value instanceof \DateTimeInterface ) {
 			return new \MongoDB\BSON\UTCDateTime( $value );
 		}
+		elseif($dateAsISOString && $value instanceof \DateTimeInterface ) {
+			return $value->setTimezone( new \DateTimeZone( 'UTC' ) )->format( DATE_ATOM );
+		}
 		elseif($deep===true && $value instanceof embeddable ) {
-			$seri = $value->doBsonSerialize( $deep );
-			return $seri;
+			return $value->doBsonSerialize( true, $dateAsISOString );
 		}
 		elseif($deep===true && $value instanceof \MongoDB\BSON\Persistable ) {
-			$seri = $value->bsonSerialize();
-			return $seri;
+			return $value->bsonSerialize();
 		}
 
 		return $value;

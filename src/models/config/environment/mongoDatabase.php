@@ -23,6 +23,8 @@ class mongoDatabase extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	public bool $audit = false;
 
+	public bool $auditForward = false;
+
 	public string $auditDatabaseName = '';
 
 	public string $auditDatabaseUri = '';

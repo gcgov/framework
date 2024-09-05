@@ -19,6 +19,9 @@ final class mdb {
 	/** @var bool */
 	public bool $audit = false;
 
+	/** @var bool */
+	public bool $auditForward = false;
+
 	public bool $include_meta = true;
 
 	public bool $include_metaLabels = true;
@@ -44,6 +47,7 @@ final class mdb {
 				$this->db = $this->client->{$connector->auditDatabaseName};
 
 				$this->audit              = false;
+				$this->auditForward       = false;
 				$this->include_meta       = false;
 				$this->include_metaLabels = false;
 				$this->include_metaFields = false;
@@ -53,6 +57,7 @@ final class mdb {
 				$this->db = $this->client->{$connector->database};
 
 				$this->audit              = $connector->audit;
+				$this->auditForward       = $connector->auditForward;
 				$this->include_meta       = $connector->include_meta;
 				$this->include_metaLabels = $connector->include_metaLabels;
 				$this->include_metaFields = $connector->include_metaFields;
