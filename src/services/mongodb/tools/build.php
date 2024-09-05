@@ -5,7 +5,6 @@ namespace gcgov\framework\services\mongodb\tools;
 
 use gcgov\framework\config;
 
-
 class build {
 
 	/**
@@ -48,19 +47,50 @@ class build {
 				if( $classReflection->isSubclassOf( \gcgov\framework\services\mongodb\model::class ) ) {
 					error_log('Standardize '.$classFqn.' ('.round((($classIndex+1) / $classCount)*100, 2 ).'%)');
 					$queryOrs = $classFqn::mongoFieldsExistsQuery();
-					$dbObjects = $classFqn::getAll( [ '$or'=>$queryOrs ]);
-					error_log('--'.count($dbObjects));
-					foreach($dbObjects as $dbObjectIndex=>&$dbObject) {
-						try {
-							$item = $classFqn::getOne( $dbObject->_id );
-							$updates[] = $classFqn::save( $item );
-							error_log('-- '.$classFqn.'::save ('.($dbObjectIndex+1).'/ '.count($dbObjects) . ' - '.round((($dbObjectIndex+1) / count($dbObjects))*100, 2 ).'%)');
+					/** @var \gcgov\framework\services\mongodb\getResult $pagedResponse */
+					$pagedResponse = $classFqn::getPagedResponse( 10, 1, [ '$or'=>$queryOrs ]);
+					$totalDocumentCount = $pagedResponse->getTotalDocumentCount();
+					$totalPageCount = $pagedResponse->getTotalPageCount();
+					error_log('--'.$totalDocumentCount.' documents');
+					error_log('--'.$totalPageCount.' pages');
+
+					$currentDocumentCount = 1;
+					for($page=1;$page<=$totalPageCount;$page++) {
+						error_log('-- Page '.$page);
+						if($page>1) {
+							$pagedResponse = $classFqn::getPagedResponse( 10, $page, [ '$or'=>$queryOrs ]);
 						}
-						catch( \Exception $e ) {
-							error_log($e);
-							error_log('-- Failed to save '.$classFqn.' ('.$dbObject->_id.')');
+						$dbObjects = $pagedResponse->getData();
+
+						$maxRetryAttempts = 3;
+
+						foreach($dbObjects as $dbObjectIndex=>&$dbObject) {
+							//if a save fails, retry saving it up to $maxRetryAttempts
+							for($currentRetryAttempt = 0; $currentRetryAttempt<=$maxRetryAttempts; $currentRetryAttempt++) {
+								try {
+									$startRead = microtime(true);
+									$item = $classFqn::getOne( $dbObject->_id );
+									$endRead = microtime(true);
+									$startSave = microtime(true);
+									$updates[] = $classFqn::save( $item );
+									$endSave = microtime(true);
+									error_log('-- '.$classFqn.'::save ('.$currentDocumentCount.'/'.$totalDocumentCount . ' - '.round(($currentDocumentCount / $totalDocumentCount)*100, 2 ).'%) - Read: '.round($endRead-$startRead, 2).' seconds - Write: '.round($endSave-$startSave, 2).' seconds');
+									break;
+								}
+								catch( \Exception $e ) {
+									error_log($e);
+									error_log('-- Failed to save '.$classFqn.' ('.$dbObject->_id.'). Attempt '.($currentRetryAttempt+1).'/'.($maxRetryAttempts+1));
+								}
+							}
+
+							$currentDocumentCount++;
+
+							/*if($currentDocumentCount>2) {
+								break 3;
+							}*/
 						}
 					}
+
 				}
 			}
 			catch( \ReflectionException $e ) {

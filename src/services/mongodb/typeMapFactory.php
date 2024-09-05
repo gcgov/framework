@@ -5,7 +5,6 @@ namespace gcgov\framework\services\mongodb;
 
 use gcgov\framework\config;
 
-
 /**
  * Class typeMapFactory
  * @see     https://www.php.net/manual/en/mongodb.persistence.deserialization.php
@@ -13,18 +12,20 @@ use gcgov\framework\config;
  */
 class typeMapFactory {
 
-	private static bool $allModelTypeMapsFetched = false;
+	/** @var bool[] $allModelTypeMapsFetched */
+	private static array $allModelTypeMapsFetched = [];
 
 	/** @var \gcgov\framework\services\mongodb\typeMap[] */
 	private static array $typeMaps = [];
 
-	/** @var \gcgov\framework\services\mongodb\typeMap[] */
+	/** @var \gcgov\framework\services\mongodb\typeMap[][] */
 	private static array $modelTypeMaps = [];
 
 
 	/**
-	 * @param string $className
-	 * @param string[]  $parentContexts
+	 * @param string                                        $className
+	 * @param \gcgov\framework\services\mongodb\typeMapType $type
+	 * @param string[]                                      $parentContexts
 	 *
 	 * @return \gcgov\framework\services\mongodb\typeMap
 	 */
@@ -34,6 +35,9 @@ class typeMapFactory {
 		//cache key allows a typemap to be cached for an embeddable property for each location in a call tree it exists in
 		// this allows us to respect the #[excludeFromTypemapWhenThisClassNotRoot] attribute to limit the potential for
 		// an infinite loop from circular references while generating typemaps
+		if(!isset(self::$modelTypeMaps[$type->value])) {
+			self::$modelTypeMaps[$type->value] = [];
+		}
 		$cacheKey = $calledClassFqn.'.'.$type->value;
 		if(count($parentContexts)>0) {
 			$cacheKey = implode('.',$parentContexts).'.'.$calledClassFqn.'.'.$type->value;
@@ -46,7 +50,7 @@ class typeMapFactory {
 			self::$typeMaps[ $cacheKey ] = $typeMap;
 			//store root model typemaps in model typemaps
 			if( $typeMap->model && count($parentContexts)==0 ) {
-				self::$modelTypeMaps[ $cacheKey ] = $typeMap;
+				self::$modelTypeMaps[$type->value][ $cacheKey ] = $typeMap;
 			}
 		}
 
@@ -63,9 +67,13 @@ class typeMapFactory {
 //		}
 //	}
 
-
+	/**
+	 * @param \gcgov\framework\services\mongodb\typeMapType $type
+	 *
+	 * @return \gcgov\framework\services\mongodb\typeMap[]
+	 */
 	public static function getAllModelTypeMaps(typeMapType $type=typeMapType::serialize): array {
-		if( !self::$allModelTypeMapsFetched ) {
+		if( !isset(self::$allModelTypeMapsFetched[ $type->value ]) || !self::$allModelTypeMapsFetched[ $type->value ] ) {
 			$appDir = config::getAppDir();
 
 			//get app files
@@ -92,10 +100,10 @@ class typeMapFactory {
 				self::get( $classFqn, $type );
 			}
 
-			self::$allModelTypeMapsFetched = true;
+			self::$allModelTypeMapsFetched[ $type->value ] = true;
 		}
 
-		return self::$modelTypeMaps;
+		return self::$modelTypeMaps[ $type->value ];
 	}
 
 

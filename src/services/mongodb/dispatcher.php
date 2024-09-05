@@ -22,7 +22,7 @@ abstract class dispatcher
 		$updateType = typeHelpers::classNameToFqn( get_class( $object ) );
 
 		//get all model typemaps
-		$allTypeMaps = typeMapFactory::getAllModelTypeMaps();
+		$allTypeMaps = typeMapFactory::getAllModelTypeMaps(typeMapType::serialize );
 
 		/**
 		 * @see https://docs.mongodb.com/php-library/current/reference/method/MongoDBCollection-bulkWrite/
