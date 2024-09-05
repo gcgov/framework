@@ -192,6 +192,10 @@ abstract class embeddable
 	 * Called by Mongo while inserting into the DB
 	 */
 	public function bsonSerialize(): array|\stdClass {
+		return $this->doBsonSerialize();
+	}
+
+	public function doBsonSerialize( bool $deep=false ): array|\stdClass {
 		if( method_exists( $this, '_beforeBsonSerialize' ) ) {
 			$this->_beforeBsonSerialize();
 		}
@@ -221,12 +225,12 @@ abstract class embeddable
 					$save[ $reflectionCacheProperty->propertyName ] = $reflectionCacheProperty->defaultValue;
 				}
 				foreach( $reflectionCacheProperty->reflectionProperty->getValue( $this ) as $key => $value ) {
-					$save[ $reflectionCacheProperty->propertyName ][ $key ] = $this->bsonSerializeDataItem( $value );
+					$save[ $reflectionCacheProperty->propertyName ][ $key ] = $this->bsonSerializeDataItem( $value, $deep );
 				}
 			}
 			else {
 				$value                 = $reflectionCacheProperty->reflectionProperty->getValue( $this );
-				$save[ $reflectionCacheProperty->propertyName ] = $this->bsonSerializeDataItem( $value );
+				$save[ $reflectionCacheProperty->propertyName ] = $this->bsonSerializeDataItem( $value, $deep );
 			}
 
 		}
@@ -330,9 +334,17 @@ abstract class embeddable
 	 *
 	 * @return mixed
 	 */
-	private function bsonSerializeDataItem( mixed $value ): mixed {
+	private function bsonSerializeDataItem( mixed $value, bool $deep=false ): mixed {
 		if( $value instanceof \DateTimeInterface ) {
 			return new \MongoDB\BSON\UTCDateTime( $value );
+		}
+		elseif($deep===true && $value instanceof embeddable ) {
+			$seri = $value->doBsonSerialize( $deep );
+			return $seri;
+		}
+		elseif($deep===true && $value instanceof \MongoDB\BSON\Persistable ) {
+			$seri = $value->bsonSerialize();
+			return $seri;
 		}
 
 		return $value;

@@ -23,12 +23,22 @@ final class auditManager {
 		}
 	}
 
+	public function recordDelete( \MongoDB\BSON\ObjectId $_id, ?updateDeleteResult $updateDeleteResult = null ): void {
+		try {
+			$audit = audit::create( $this->mdb->collection->getCollectionName(), $_id, 'delete', $updateDeleteResult, '', [] );
+			audit::save( $audit );
+		}
+		catch( modelException $e ) {
+			error_log($e);
+		}
+	}
+
 	public function recordDiff( mixed $afterSaveObject, mixed $beforeSaveObject, ?updateDeleteResult $updateDeleteResult = null ): JsonPatch {
 		$afterSaveObjectClone = clone $afterSaveObject;
 		$beforeSaveObjectClone = clone $beforeSaveObject;
 
-		$after = json_decode(json_encode($afterSaveObjectClone->bsonSerialize()));
-		$before = json_decode(json_encode($beforeSaveObjectClone->bsonSerialize()));
+		$after = json_decode(json_encode($afterSaveObjectClone->doBsonSerialize( true )));
+		$before = json_decode(json_encode($beforeSaveObjectClone->doBsonSerialize( true )));
 
 		//create the patch from new to old (this allows us to work backwards from the current version that is saved in the main table)
 		$r = new JsonDiff($after, $before, JsonDiff::REARRANGE_ARRAYS);
@@ -39,7 +49,6 @@ final class auditManager {
 			return $patch;
 		}
 
-		//todo - figure out datetime diff (looks like utc vs est is causing a patch)
 		try {
 			$audit = audit::create( $this->mdb->collection->getCollectionName(), $afterSaveObject->_id, 'patch', $updateDeleteResult, '', $patchArray );
 			audit::save( $audit );

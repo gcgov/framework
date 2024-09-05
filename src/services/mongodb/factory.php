@@ -25,8 +25,8 @@ abstract class factory
 
 
 	/**
-	 * @param array $filter  optional
-	 * @param array $options optional
+	 * @param array                        $filter  optional
+	 * @param array                        $options optional
 	 *
 	 * @return int
 	 * @throws \gcgov\framework\exceptions\modelException
@@ -44,22 +44,19 @@ abstract class factory
 
 
 	/**
-	 * @param array $filter  optional
-	 * @param array $sort    optional
-	 * @param array $options optional
+	 * @param array                        $filter  optional
+	 * @param array                        $sort    optional
+	 * @param array                        $options optional
 	 *
 	 * @return $this[]
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getAll( array $filter = [], array $sort = [], array $options = [], ?\MongoDB\Driver\Session $mongoDbSession = null ): array {
+	public static function getAll( array $filter = [], array $sort = [], array $options = [] ): array {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$options = array_merge( $options, [
 			'typeMap' => static::getBsonOptionsTypeMap( typeMapType::unserialize )
 		] );
-		if(isset($mongoDbSession)) {
-			$options['session'] = $mongoDbSession;
-		}
 		if( count( $sort )>0 ) {
 			$options[ 'sort' ] = $sort;
 		}
@@ -76,15 +73,15 @@ abstract class factory
 
 
 	/**
-	 * @param int|string|null $limit
-	 * @param int|string|null $page
-	 * @param array           $filter  optional
-	 * @param array           $options optional
+	 * @param int|string|null              $limit
+	 * @param int|string|null              $page
+	 * @param array                        $filter  optional
+	 * @param array                        $options optional
 	 *
 	 * @return \gcgov\framework\services\mongodb\getResult
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getPagedResponse( int|string|null $limit, int|string|null $page, array $filter = [], array $options = [], ?\MongoDB\Driver\Session $mongoDbSession = null ): getResult {
+	public static function getPagedResponse( int|string|null $limit, int|string|null $page, array $filter = [], array $options = [] ): getResult {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		$result = new getResult( $limit, $page );
@@ -94,9 +91,6 @@ abstract class factory
 		] );
 		$options[ 'limit' ] = $result->getLimit();
 		$options[ 'skip' ]  = ( $result->getPage() - 1 ) * $result->getLimit();
-		if(isset($mongoDbSession)) {
-			$options['session'] = $mongoDbSession;
-		}
 
 		try {
 			$cursor = $mdb->collection->find( $filter, $options );
@@ -117,6 +111,7 @@ abstract class factory
 	 * @param \MongoDB\Driver\Session|null  $mongoDbSession
 	 *
 	 * @return $this
+	 * @throws \gcgov\framework\exceptions\modelDocumentNotFoundException
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function getOne( \MongoDB\BSON\ObjectId|string $_id, ?\MongoDB\Driver\Session $mongoDbSession = null ): object {
@@ -143,7 +138,7 @@ abstract class factory
 		}
 
 		if( $cursor===null ) {
-			throw new \gcgov\framework\exceptions\modelException( static::_getHumanName( capitalize: true ) . ' not found', 404 );
+			throw new modelDocumentNotFoundException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found' );
 		}
 
 		return $cursor;
@@ -155,6 +150,7 @@ abstract class factory
 	 * @param array $options optional
 	 *
 	 * @return $this
+	 * @throws \gcgov\framework\exceptions\modelDocumentNotFoundException
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function getOneBy( array $filter = [], array $options = [], ?\MongoDB\Driver\Session $mongoDbSession = null ): object {
@@ -175,7 +171,7 @@ abstract class factory
 		}
 
 		if( $cursor===null ) {
-			throw new \gcgov\framework\exceptions\modelException( static::_getHumanName( capitalize: true ) . ' not found', 404 );
+			throw new modelDocumentNotFoundException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found' );
 		}
 
 		return $cursor;
@@ -198,6 +194,9 @@ abstract class factory
 
 		$mdb         = new tools\mdb( collection: static::_getCollectionName() );
 
+		//AUDIT CHANGE STREAM
+		$auditManager = new auditManager($mdb);
+
 		//call _beforeSave for each item
 		if( $callBeforeAfterHooks && method_exists( $calledClass, '_beforeSave' ) ) {
 			log::info( 'MongoService', '--call _beforeSave' );
@@ -206,12 +205,6 @@ abstract class factory
 			}
 		}
 		unset( $object );
-
-		//AUDIT CHANGE STREAM
-		/*$auditManager = new auditManager($mdb);
-		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
-			$auditManager->startChangeStreamWatchOnDb();
-		}*/
 
 		//open database session if one is not already open
 		log::info( 'MongoService', '--do save' );
@@ -229,9 +222,19 @@ abstract class factory
 		$autoIncrementUpdateResults = [];
 
 		$mongoActions = [];
+		$previousObjects = [];
 
 		try {
 			foreach( $objects as $objectIndex => &$object ) {
+				if($auditManager->doAudit) {
+					try {
+						$previousObjects[$objectIndex] = static::getOne( $object->_id, $mongoDbSession );
+					}
+					catch( modelException $e ) {
+						$previousObjects[$objectIndex] = new \stdClass();
+					}
+				}
+
 				$saveResults[ $objectIndex ] = self::_saveItem( $object, $upsert, $mdb, $mongoDbSession );
 
 				//auto increment fields on insert
@@ -257,7 +260,7 @@ abstract class factory
 			unset( $object );
 
 			//run embedded actions
-			$embeddedResults = self::_runMongoActions( $mongoActions, 'save many embedded', $mongoDbSession );
+			$embeddedResults[] = self::_runMongoActions( $mongoActions, 'save many embedded', $mongoDbSession );
 
 			//commit session
 			if( $sessionParent ) {
@@ -281,26 +284,20 @@ abstract class factory
 			throw new \gcgov\framework\exceptions\modelException( 'Storing ' . static::_getCollectionName() . ' in the database failed', 500, $e );
 		}
 
-		//AUDIT CHANGE STREAM
-		$combinedResult = new updateDeleteResult( $saveResults, array_merge( $autoIncrementUpdateResults, $embeddedResults ) );
 
-		/*if( $mdb->audit && static::_getCollectionName()!='audit' && ( $combinedResult->getUpsertedCount()>0 || $combinedResult->getModifiedCount()>0 || $combinedResult->getDeletedCount()>0 ) ) {
-			$auditEntries = $auditManager->processChangeStream( $combinedResult );
-			if( count( $auditEntries )>0 ) {
-				try {
-					audit::saveMany( $auditEntries );
-				}
-				catch( modelException $e ) {
-					log::error( 'MongoService', 'Failed to save audit log entries' . $e->getMessage() );
-				}
-			}
-		}*/
+		//after save actions per object
+		foreach( $objects as $objectIndex => &$object ) {
 
-		//call _afterSave for each item with a successful save
-		if( $callBeforeAfterHooks && sys::methodExists( $calledClass, '_afterSave' ) ) {
-			foreach( $objects as $objectIndex => &$object ) {
+			//call _afterSave for each item with a successful save
+			if( $callBeforeAfterHooks && sys::methodExists( $calledClass, '_afterSave' ) ) {
 				static::_afterSave( $object, true, new updateDeleteResult($saveResults[ $objectIndex ]) );
 			}
+
+			//AUDIT CHANGE STREAM
+			if($auditManager->doAudit) {
+				$auditManager->recordDiff( $object, $previousObjects[ $objectIndex ], $saveResults[ $objectIndex ] );
+			}
+
 			unset( $object );
 		}
 
@@ -356,7 +353,7 @@ abstract class factory
 
 		//AUDIT CHANGE STREAM
 		$auditManager = new auditManager($mdb);
-		$previousObject = null;
+		$previousObject = new \stdClass();
 
 		//open database session if one is not already open
 		$sessionParent = false;
@@ -369,7 +366,11 @@ abstract class factory
 		//ACTUAL UPDATE
 		try {
 			if($auditManager->doAudit) {
-				$previousObject = static::getOne( $object->_id );
+				try {
+					$previousObject = static::getOne( $object->_id, $mongoDbSession );
+				}
+				catch( modelException $e ) {
+				}
 			}
 
 			$updateResult = static::_saveItem( $object, $upsert, $mdb, $mongoDbSession );
@@ -417,13 +418,13 @@ abstract class factory
 			$mongoDbSession->endSession();
 		}
 
+		if( $callBeforeAfterHooks && sys::methodExists( get_called_class(), '_afterSave' ) ) {
+			static::_afterSave( $object, true, $combinedResult );
+		}
+
 		//AUDIT CHANGE STREAM
 		if($auditManager->doAudit) {
 			$auditManager->recordDiff( $object, $previousObject, $combinedResult );
-		}
-
-		if( $callBeforeAfterHooks && sys::methodExists( get_called_class(), '_afterSave' ) ) {
-			static::_afterSave( $object, true, $combinedResult );
 		}
 
 		return $combinedResult;
@@ -442,10 +443,7 @@ abstract class factory
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		//AUDIT CHANGE STREAM
-		/*$auditManager = new auditManager($mdb);
-		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
-			$auditManager->startChangeStreamWatchOnDb();
-		}*/
+		$auditManager = new auditManager($mdb);
 
 		$_id = \gcgov\framework\services\mongodb\tools\helpers::stringToObjectId( $_id );
 
@@ -511,17 +509,9 @@ abstract class factory
 		}
 
 		//AUDIT CHANGE STREAM
-		/*if( $mdb->audit && static::_getCollectionName()!='audit' ) {
-			$auditEntries = $auditManager->processChangeStream( $combinedResult );
-			if( count( $auditEntries )>0 ) {
-				try {
-					audit::saveMany( $auditEntries );
-				}
-				catch( modelException $e ) {
-					log::error( 'MongoService', 'Failed to save audit log entries' . $e->getMessage() );
-				}
-			}
-		}*/
+		if($auditManager->doAudit) {
+			$auditManager->recordDelete( $_id, $combinedResult );
+		}
 
 		return $combinedResult;
 	}
@@ -541,10 +531,7 @@ abstract class factory
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		//AUDIT CHANGE STREAM
-		/*$auditManager = new auditManager($mdb);
-		if( $mdb->audit && static::_getCollectionName()!='audit' ) {
-			$auditManager->startChangeStreamWatchOnDb();
-		}*/
+		$auditManager = new auditManager($mdb);
 
 		log::info( 'MongoService', 'Delete many ' . static::_getCollectionName() );
 
@@ -603,17 +590,11 @@ abstract class factory
 		$combinedResult = new updateDeleteResult( $deleteResult, array_merge($embeddedDeletes, $deleteCascadeResults) );
 
 		//AUDIT CHANGE STREAM
-		/*if( $mdb->audit && static::_getCollectionName()!='audit') {
-			$auditEntries = $auditManager->processChangeStream( $combinedResult );
-			if( count( $auditEntries )>0 ) {
-				try {
-					audit::saveMany( $auditEntries );
-				}
-				catch( modelException $e ) {
-					log::error( 'MongoService', 'Failed to save audit log entries' . $e->getMessage() );
-				}
+		if($auditManager->doAudit) {
+			foreach($_ids as $_id) {
+				$auditManager->recordDelete( $_id, $combinedResult );
 			}
-		}*/
+		}
 
 		return $combinedResult;
 	}
@@ -621,6 +602,7 @@ abstract class factory
 
 	/**
 	 * @param \gcgov\framework\services\mongodb\model $object
+	 * @param \MongoDB\Driver\Session|null            $mongoDbSession
 	 *
 	 * @return \gcgov\framework\services\mongodb\updateDeleteResult
 	 * @throws \gcgov\framework\exceptions\modelException
@@ -730,10 +712,14 @@ abstract class factory
 
 	/**
 	 * Run a Mongo db aggregation on the collection
+	 *
+	 * @param array $pipeline
+	 * @param array $options
+	 *
 	 * @return array
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function aggregation( array $pipeline = [], $options = [] ): array {
+	public static function aggregation( array $pipeline = [], array $options = [] ): array {
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
 		try {
