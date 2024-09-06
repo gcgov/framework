@@ -37,8 +37,18 @@ final class auditManager {
 		$afterSaveObjectClone = clone $afterSaveObject;
 		$beforeSaveObjectClone = clone $beforeSaveObject;
 
-		$after = json_decode(json_encode($afterSaveObjectClone->doBsonSerialize( true, true )));
-		$before = json_decode(json_encode($beforeSaveObjectClone->doBsonSerialize( true, true )));
+		if(is_object($afterSaveObjectClone) && method_exists($afterSaveObjectClone, 'doBsonSerialize')) {
+			$after = json_decode(json_encode($afterSaveObjectClone->doBsonSerialize( true, true )));
+		}
+		else {
+			$after = json_decode(json_encode($afterSaveObjectClone));
+		}
+		if(is_object($beforeSaveObjectClone) && method_exists($beforeSaveObjectClone, 'doBsonSerialize')) {
+			$before = json_decode(json_encode($beforeSaveObjectClone->doBsonSerialize( true, true )));
+		}
+		else {
+			$before = json_decode(json_encode($beforeSaveObjectClone));
+		}
 
 		//create the patch from new to old (this allows us to work backwards from the current version that is saved in the main table)
 		if( $this->mdb->auditForward ) {
