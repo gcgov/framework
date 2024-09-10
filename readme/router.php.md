@@ -56,15 +56,23 @@ class router implements \gcgov\framework\interfaces\router {
 	 * @throws \gcgov\framework\exceptions\routeException
 	 */
 	public function authentication( \gcgov\framework\models\routeHandler $routeHandler ) : bool {
-		//if you are utilizing the \gcgov\framework\services\authoauth service
-		//it automatically adds our authentication guard
-		//you can add additional, custom authentication checks here
+		//if you are utilizing the \gcgov\framework\services\authoauth service or \gcgov\framework\services\authmsfront 
+		//  it automatically adds our authentication guard
+		//  you can add additional, custom authentication checks here
+		//  your custom checks will run before the service authentication checks
+		//  if you need to prevent the service authentication checks from running in certain situations, return false from $this->getRunFrameworkServiceRouteAuthentication()
 
 		//otherwise, you need to validate the user against the route here
 
 		//user has been authenticated
 		return true;
 	}
+	
+	//optional method that can be added to prevent the service authentication checks from running
+	//private $runFrameworkServiceRouteAuthentication = true;
+	//public function getRunFrameworkServiceRouteAuthentication(): bool {
+	//    return $this->runFrameworkServiceRouteAuthentication;
+	//}
 
 }
 ```
