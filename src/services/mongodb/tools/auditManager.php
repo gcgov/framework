@@ -4,6 +4,9 @@ namespace gcgov\framework\services\mongodb\tools;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\models\audit;
 use gcgov\framework\services\mongodb\updateDeleteResult;
+use MongoDB\BulkWriteResult;
+use MongoDB\DeleteResult;
+use MongoDB\UpdateResult;
 use OpenApi\Attributes as OA;
 use Swaggest\JsonDiff\JsonDiff;
 use Swaggest\JsonDiff\JsonPatch;
@@ -33,7 +36,10 @@ final class auditManager {
 		}
 	}
 
-	public function recordDiff( mixed $afterSaveObject, mixed $beforeSaveObject, ?updateDeleteResult $updateDeleteResult = null ): JsonPatch {
+	public function recordDiff( mixed $afterSaveObject, mixed $beforeSaveObject, updateDeleteResult|UpdateResult|BulkWriteResult|DeleteResult|null $updateDeleteResult = null ): JsonPatch {
+		if($updateDeleteResult instanceof UpdateResult || $updateDeleteResult instanceof BulkWriteResult || $updateDeleteResult instanceof DeleteResult) {
+			$updateDeleteResult = new updateDeleteResult( $updateDeleteResult );
+		}
 		$afterSaveObjectClone = clone $afterSaveObject;
 		$beforeSaveObjectClone = clone $beforeSaveObject;
 
