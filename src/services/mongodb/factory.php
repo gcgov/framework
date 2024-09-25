@@ -265,11 +265,15 @@ abstract class factory
 			//commit session
 			if( $sessionParent ) {
 				$mongoDbSession->commitTransaction();
+				$mongoDbSession->endSession();
 			}
 		}
 		catch( modelException|\MongoDB\Driver\Exception\RuntimeException|\MongoDB\Driver\Exception\CommandException $e ) {
-			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
-				$mongoDbSession->abortTransaction();
+			if( $sessionParent ) {
+				if( $mongoDbSession->isInTransaction() ) {
+					$mongoDbSession->abortTransaction();
+				}
+				$mongoDbSession->endSession();
 			}
 
 			//call _afterSave for each item with an unsuccessful save
@@ -389,11 +393,15 @@ abstract class factory
 			//commit session
 			if( $sessionParent ) {
 				$mongoDbSession->commitTransaction();
+				$mongoDbSession->endSession();
 			}
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException|modelException $e ) {
-			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
-				$mongoDbSession->abortTransaction();
+			if( $sessionParent ) {
+				if( $mongoDbSession->isInTransaction() ) {
+					$mongoDbSession->abortTransaction();
+				}
+				$mongoDbSession->endSession();
 			}
 
 			if( $callBeforeAfterHooks && sys::methodExists( get_called_class(), '_afterSave' ) ) {
@@ -412,10 +420,6 @@ abstract class factory
 				$object->_meta = new _meta( get_called_class() );
 			}
 			$object->_meta->setDb( $combinedResult );
-		}
-
-		if( $sessionParent && $mongoDbSession->isInTransaction() ) {
-			$mongoDbSession->endSession();
 		}
 
 		if( $callBeforeAfterHooks && sys::methodExists( get_called_class(), '_afterSave' ) ) {
@@ -485,21 +489,24 @@ abstract class factory
 		try {
 			$deleteResult = $mdb->collection->deleteOne( $filter, $options );
 
+			//dispatch delete for all embedded versions
+			$embeddedDeletes = self::_deleteEmbedded( get_called_class(), $_id, $mongoDbSession );
+
 			//commit session
 			if( $sessionParent ) {
 				$mongoDbSession->commitTransaction();
+				$mongoDbSession->endSession();
 			}
 		}
-		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			//commit session
-			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
-				$mongoDbSession->abortTransaction();
+		catch( \MongoDB\Driver\Exception\RuntimeException|modelException $e ) {
+			if( $sessionParent ) {
+				if( $mongoDbSession->isInTransaction() ) {
+					$mongoDbSession->abortTransaction();
+				}
+				$mongoDbSession->endSession();
 			}
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
 		}
-
-		//dispatch delete for all embedded versions
-		$embeddedDeletes = self::_deleteEmbedded( get_called_class(), $_id, $mongoDbSession );
 
 		//combine primary delete with embedded
 		$combinedResult = new updateDeleteResult( $deleteResult, $embeddedDeletes );
@@ -569,18 +576,25 @@ abstract class factory
 			//commit session
 			if( $sessionParent ) {
 				$mongoDbSession->commitTransaction();
+				$mongoDbSession->endSession();
 			}
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
-			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
-				$mongoDbSession->abortTransaction();
+			if( $sessionParent ) {
+				if( $mongoDbSession->isInTransaction() ) {
+					$mongoDbSession->abortTransaction();
+				}
+				$mongoDbSession->endSession();
 			}
 			log::info( 'MongoService', 'delete many runtime exception ' . static::_getCollectionName() );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
 		}
 		catch( modelException $e ) {
-			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
-				$mongoDbSession->abortTransaction();
+			if( $sessionParent ) {
+				if( $mongoDbSession->isInTransaction() ) {
+					$mongoDbSession->abortTransaction();
+				}
+				$mongoDbSession->endSession();
 			}
 			log::info( 'MongoService', 'delete cascade failure ' . static::_getCollectionName() );
 			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
@@ -688,11 +702,15 @@ abstract class factory
 			//commit session
 			if( $sessionParent ) {
 				$mongoDbSession->commitTransaction();
+				$mongoDbSession->endSession();
 			}
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException|\MongoDB\Driver\Exception\CommandException $e ) {
-			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
-				$mongoDbSession->abortTransaction();
+			if( $sessionParent ) {
+				if( $mongoDbSession->isInTransaction() ) {
+					$mongoDbSession->abortTransaction();
+				}
+				$mongoDbSession->endSession();
 			}
 			$message = 'Error incrementing values for collection ' . static::_getCollectionName() . ' properties ' . implode( ', ', array_keys( $mongodbSet ) ) . ': ' . $e->getMessage();
 			log::error( 'MongoServiceAutoIncrement', '--' . $message, $e->getTrace() );
