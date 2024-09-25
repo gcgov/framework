@@ -637,7 +637,7 @@ abstract class factory
 		if( !isset( $mongoDbSession ) ) {
 			$sessionParent  = true;
 			$mongoDbSession = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
-			$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 2000 ] );
+			$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 5000 ] );
 		}
 
 		try {
@@ -685,7 +685,10 @@ abstract class factory
 			];
 			$updateResult = $mdb->collection->updateOne( $filter, $update, $options );
 
-			//$session->commitTransaction();
+			//commit session
+			if( $sessionParent ) {
+				$mongoDbSession->commitTransaction();
+			}
 		}
 		catch( \MongoDB\Driver\Exception\RuntimeException|\MongoDB\Driver\Exception\CommandException $e ) {
 			if( $sessionParent && $mongoDbSession->isInTransaction() ) {
