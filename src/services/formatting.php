@@ -27,12 +27,14 @@ class formatting {
 			' '
 		];
 
-		$correction1 = $forceLowerCase ? strtolower( $fileName ) : $fileName;
-		$correction2 = str_replace( $illegalChars, $replacementForIllegalChars, $correction1 );
-		$correction3 = preg_replace( '/(\r\n|\r|\n)+/', ' ', $correction2 );
-		$correction4 = preg_replace( '/(' . $replacementForIllegalChars . ')+/', ' ', $correction3 );
+		$correction = $forceLowerCase ? strtolower( $fileName ) : $fileName;
+		$correction = str_replace( $illegalChars, $replacementForIllegalChars, $correction );
+		$correction = preg_replace( '/(\r\n|\r|\n)+/', ' ', $correction );
+		if($replacementForIllegalChars!='') {
+			$correction = preg_replace( '/(' . $replacementForIllegalChars . ')+/', ' ', $correction );
+		}
 
-		return $correction4;
+		return $correction;
 	}
 
 
