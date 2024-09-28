@@ -55,16 +55,18 @@ class formatting {
 			':',
 			'?'
 		];
-		$correction1  = $forceLowerCase ? strtolower( $tabName ) : $tabName;
-		$correction2  = str_replace( $illegalChars, $replacementForIllegalChars, $correction1 );
-		$correction3 = preg_replace( '/(\r\n|\r|\n)+/', ' ', $correction2 );
-		$correction4  = preg_replace( '/(' . $replacementForIllegalChars . ')+/', ' ', $correction3 );
-
-		if(strlen($correction4)>31) {
-			return substr($correction4, 0, 31);
+		$correction  = $forceLowerCase ? strtolower( $tabName ) : $tabName;
+		$correction  = str_replace( $illegalChars, $replacementForIllegalChars, $correction );
+		$correction = preg_replace( '/(\r\n|\r|\n)+/', ' ', $correction );
+		if($replacementForIllegalChars!='') {
+			$correction = preg_replace( '/(' . $replacementForIllegalChars . ')+/', ' ', $correction );
 		}
 
-		return $correction4;
+		if(strlen($correction)>31) {
+			return substr($correction, 0, 31);
+		}
+
+		return $correction;
 	}
 
 
