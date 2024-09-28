@@ -12,7 +12,7 @@ class formatting {
 	 *
 	 * @return string
 	 */
-	public static function fileName( string $fileName, string $replacementForIllegalChars = '-', bool $forceLowerCase = true ) : string {
+	public static function fileName( string $fileName, string $replacementForIllegalChars = '-', bool $forceLowerCase = true, bool $replaceSpace = true ) : string {
 		$illegalChars = [
 			'\\',
 			'/',
@@ -24,8 +24,10 @@ class formatting {
 			'>',
 			'|',
 			',',
-			' '
 		];
+		if($replaceSpace) {
+			$illegalChars[] = ' ';
+		}
 
 		$correction = $forceLowerCase ? strtolower( $fileName ) : $fileName;
 		$correction = str_replace( $illegalChars, $replacementForIllegalChars, $correction );
