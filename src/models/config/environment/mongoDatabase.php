@@ -2,6 +2,8 @@
 
 namespace gcgov\framework\models\config\environment;
 
+use gcgov\framework\models\config\environment\mongoDatabase\encryption;
+
 class mongoDatabase extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	public bool $default = false;
@@ -31,12 +33,19 @@ class mongoDatabase extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	public array $auditDatabaseClientParams = [];
 
+	public encryption $encryption;
+
 
 	public function __construct() {
+		$this->encryption = new encryption();
 	}
 
 
 	protected function _afterJsonDeserialize(): void {
+		if( !isset( $this->encryption ) ) {
+			$this->encryption = new encryption();
+		}
+
 		if( $this->audit ) {
 			if( empty( $this->auditDatabaseName ) ) {
 				$this->auditDatabaseName = $this->database;
