@@ -12,9 +12,7 @@ class email extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 	public int    $SMTPPort     = 587;
 	public string $SMTPUsername = '';
 	public string $SMTPPassword = '';
-
 	public string $replyToAddress = '';
-
 	public string $replyToName = '';
 
 
