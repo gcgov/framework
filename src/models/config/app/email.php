@@ -19,4 +19,5 @@ class email extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 	public function __construct() {
 	}
 
+
 }
