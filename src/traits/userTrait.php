@@ -40,6 +40,14 @@ trait userTrait {
 	#[OA\Property()]
 	public bool $active = true;
 
+	#[label( 'MFA Required' )]
+	#[OA\Property()]
+	public bool $mfaRequired = false;
+
+	#[label( 'MFA Configured' )]
+	#[OA\Property()]
+	public bool $mfaConfigured = false;
+
 
 	public function getName(): string {
 		return $this->name;

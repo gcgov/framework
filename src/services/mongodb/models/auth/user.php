@@ -2,6 +2,7 @@
 
 namespace gcgov\framework\services\mongodb\models\auth;
 
+use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\attributes\label;
 use gcgov\framework\services\mongodb\typeMapType;
@@ -30,6 +31,9 @@ class user
 	public function __construct() {
 		parent::__construct();
 		$this->_id = new \MongoDB\BSON\ObjectId();
+		if( config::getAppConfig()->settings->forceMfaForPasswordUsers ) {
+			$this->mfaRequired = true;
+		}
 	}
 
 
@@ -41,32 +45,10 @@ class user
 	}
 
 
-	protected function _beforeBsonSerialize(): void {
-		if( empty( $this->oauthId ) ) {
-			//clear oauth provider
-			if( !empty( $this->password ) ) {
-				$this->oauthProvider = '';
-			}
-
-			//hash password or remove it from the object if it's not being updated
-			if( empty( $this->password ) ) {
-				unset( $this->password );
-			}
-			else {
-				$this->password = password_hash( $this->password, PASSWORD_DEFAULT );
-			}
-		}
-		else {
-			//clear the password to limit sign in to oauth
-			$this->password = '';
-		}
-	}
-
-
 	/**
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getFromOauth( string $email, string $externalId, string $externalProvider, ?string $firstName = '', ?string $lastName = '', bool $addIfNotExisting = false, array $rolesForNewUser=[] ): \gcgov\framework\interfaces\auth\user {
+	public static function getFromOauth( string $email, string $externalId, string $externalProvider, ?string $firstName = '', ?string $lastName = '', bool $addIfNotExisting = false, array $rolesForNewUser = [] ): \gcgov\framework\interfaces\auth\user {
 		try {
 			$filter = [
 				'$or' => [
@@ -184,6 +166,39 @@ class user
 
 	public function getId(): \MongoDB\BSON\ObjectId {
 		return $this->_id;
+	}
+
+
+	protected function _beforeBsonSerialize(): void {
+		if( config::getAppConfig()->settings->forceMfaForPasswordUsers ) {
+			$this->mfaRequired = true;
+		}
+
+		if( empty( $this->oauthId ) ) {
+			//clear oauth provider
+			if( !empty( $this->password ) ) {
+				$this->oauthProvider = '';
+			}
+
+			//hash password or remove it from the object if it's not being updated
+			if( empty( $this->password ) ) {
+				unset( $this->password );
+			}
+			else {
+				$this->password = password_hash( $this->password, PASSWORD_DEFAULT );
+			}
+		}
+		else {
+			//clear the password to limit sign in to oauth
+			$this->password = '';
+		}
+	}
+
+
+	protected function _afterBsonUnserialize( $rawBsonData ): void {
+		if( config::getAppConfig()->settings->forceMfaForPasswordUsers ) {
+			$this->mfaRequired = true;
+		}
 	}
 
 }
