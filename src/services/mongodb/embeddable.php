@@ -540,7 +540,7 @@ abstract class embeddable
 	 * @return \Symfony\Component\Validator\ConstraintViolationListInterface
 	 */
 	public function updateValidationState( ?array $validationGroups=null, bool $includeDefaultGroup=true ): \Symfony\Component\Validator\ConstraintViolationListInterface  {
-		$validator = \Symfony\Component\Validator\Validation::createValidatorBuilder() ->enableAnnotationMapping()->getValidator();
+		$validator = \Symfony\Component\Validator\Validation::createValidatorBuilder()->enableAttributeMapping()->getValidator();
 
 		if( $validationGroups===null  && method_exists( $this, '_defineValidationGroups' ) ) {
 			$validationGroups = $this->_defineValidationGroups();
