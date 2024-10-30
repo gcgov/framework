@@ -9,8 +9,11 @@ use gcgov\framework\services\mongodb\attributes\label;
 use gcgov\framework\services\mongodb\updateDeleteResult;
 use MongoDB\BSON\ObjectId;
 use OpenApi\Attributes as OA;
+use Spatie\TypeScriptTransformer\Attributes\LiteralTypeScriptType;
+use Spatie\TypeScriptTransformer\Attributes\TypeScript;
 
 #[OA\Schema]
+#[TypeScript('IAudit')]
 final class audit
 	extends
 	\gcgov\framework\services\mongodb\model {
@@ -87,6 +90,7 @@ final class audit
 
 	#[label( 'Data' )]
 	#[OA\Property]
+	#[LiteralTypeScriptType('unknown')]
 	public mixed                   $data             = null;
 
 	#[label( 'Date Time Stamp' )]

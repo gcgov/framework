@@ -3,8 +3,10 @@
 namespace gcgov\framework\services\mongodb\models\_meta;
 
 use OpenApi\Attributes as OA;
+use Spatie\TypeScriptTransformer\Attributes\TypeScript;
 
 #[OA\Schema]
+#[TypeScript('IMetaDb')]
 class db
 	extends
 	\andrewsauder\jsonDeserialize\jsonDeserialize {

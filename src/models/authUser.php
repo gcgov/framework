@@ -1,11 +1,14 @@
 <?php
 namespace gcgov\framework\models;
 
+use Spatie\TypeScriptTransformer\Attributes\TypeScript;
+
 /**
  * Class authUser
  * Singleton to store authenticated user globally
  * @OA\Schema()
  */
+#[TypeScript]
 class authUser {
 
 	/** @OA\Property() */

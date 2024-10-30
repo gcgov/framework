@@ -28,6 +28,7 @@
 		"google/cloud-kms": "^2.1",
 		"ext-mongodb": "*",
 		"ext-fileinfo": "*",
-		"ext-pdo": "*"
+		"ext-pdo": "*",
+		"spatie/typescript-transformer": "^2.4"
 	}
 }

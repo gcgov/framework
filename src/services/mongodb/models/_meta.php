@@ -2,18 +2,21 @@
 namespace gcgov\framework\services\mongodb\models;
 
 use gcgov\framework\config;
-use gcgov\framework\services\mongodb\attributes\visibility;
-use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\attributes\label;
+use gcgov\framework\services\mongodb\attributes\visibility;
 use gcgov\framework\services\mongodb\models\_meta\db;
 use gcgov\framework\services\mongodb\models\_meta\ui;
 use gcgov\framework\services\mongodb\models\_meta\uiField;
+use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\tools\metaAttributeCache;
 use gcgov\framework\services\mongodb\tools\reflectionCache;
 use JetBrains\PhpStorm\ArrayShape;
 use OpenApi\Attributes as OA;
+use Spatie\TypeScriptTransformer\Attributes\RecordTypeScriptType;
+use Spatie\TypeScriptTransformer\Attributes\TypeScript;
 
 #[OA\Schema]
+#[TypeScript('IMeta')]
 class _meta
 	extends
 	\andrewsauder\jsonDeserialize\jsonDeserialize
@@ -24,10 +27,12 @@ class _meta
 	public ui $ui;
 
 	#[OA\Property]
+	#[RecordTypeScriptType('string', \gcgov\framework\services\mongodb\models\_meta\uiField::class)]
 	/** @var \gcgov\framework\services\mongodb\models\_meta\uiField[] $fields */
 	public array $fields = [];
 
 	#[OA\Property]
+	#[RecordTypeScriptType('string', 'string')]
 	/** @var string[] $labels */
 	public array $labels;
 

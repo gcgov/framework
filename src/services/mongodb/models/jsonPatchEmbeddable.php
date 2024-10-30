@@ -2,8 +2,11 @@
 namespace gcgov\framework\services\mongodb\models;
 
 use OpenApi\Attributes as OA;
+use Spatie\TypeScriptTransformer\Attributes\LiteralTypeScriptType;
+use Spatie\TypeScriptTransformer\Attributes\TypeScript;
 
 #[OA\Schema]
+#[TypeScript('IJsonPatchEmbeddable')]
 class jsonPatchEmbeddable extends \gcgov\framework\services\mongodb\embeddable {
 
 	#[OA\Property]
@@ -13,7 +16,8 @@ class jsonPatchEmbeddable extends \gcgov\framework\services\mongodb\embeddable {
 	public string $path = '';
 
 	#[OA\Property]
-	public $value = null;
+	#[LiteralTypeScriptType('unknown')]
+	public mixed $value = null;
 
 
 	public function __construct() {

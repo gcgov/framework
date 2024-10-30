@@ -2,6 +2,11 @@
 namespace gcgov\framework\services\mongodb\tools;
 
 
+use gcgov\framework\config;
+use Spatie\TypeScriptTransformer\TypeScriptTransformer;
+use Spatie\TypeScriptTransformer\TypeScriptTransformerConfig;
+use Spatie\TypeScriptTransformer\Writers\ModuleWriter;
+
 class helpers {
 
 	/**
@@ -50,4 +55,26 @@ class helpers {
 		return $json;
 	}
 
+
+	public static function convertModelsToTypescript( string $typescriptFilePathName ): bool {
+		try {
+			$config = TypeScriptTransformerConfig::create()
+				// path where your PHP classes are
+				                                 ->autoDiscoverTypes( config::getRootDir() . '\vendor\gcgov\framework\src\\' )
+			                                     ->autoDiscoverTypes( config::getAppDir() )
+				// list of transformers
+				                                 ->transformers( [ \Spatie\TypeScriptTransformer\Transformers\EnumTransformer::class, \Spatie\TypeScriptTransformer\Transformers\DtoTransformer::class ] )
+				// file where TypeScript type definitions will be written
+				                                 ->defaultTypeReplacements( [ \DateTimeImmutable::class => 'string', \MongoDB\BSON\ObjectId::class => 'string' ] )
+			                                     ->writer( ModuleWriter::class )
+			                                     ->outputFile( $typescriptFilePathName );
+
+			TypeScriptTransformer::create( $config )->transform();
+			return true;
+		}
+		catch(\Exception $e) {
+			throw new \gcgov\framework\exceptions\modelException( 'Failed to convert', 400 );
+		}
+		return false;
+	}
 }
