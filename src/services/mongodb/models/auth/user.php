@@ -6,13 +6,11 @@ use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\attributes\label;
 use gcgov\framework\services\mongodb\typeMapType;
-use Spatie\TypeScriptTransformer\Attributes\TypeScript;
 
 /**
  * Class user
  * @OA\Schema()
  */
-#[TypeScript('IUser')]
 class user
 	extends \gcgov\framework\services\mongodb\model
 	implements \gcgov\framework\interfaces\auth\user {
