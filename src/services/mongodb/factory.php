@@ -197,14 +197,6 @@ abstract class factory
 		//AUDIT CHANGE STREAM
 		$auditManager = new auditManager($mdb);
 
-		//call _beforeSave for each item
-		if( $callBeforeAfterHooks && method_exists( $calledClass, '_beforeSave' ) ) {
-			log::info( 'MongoService', '--call _beforeSave' );
-			foreach( $objects as &$object ) {
-				static::_beforeSave( $object );
-			}
-		}
-		unset( $object );
 
 		//open database session if one is not already open
 		log::info( 'MongoService', '--do save' );
@@ -214,6 +206,15 @@ abstract class factory
 			$mongoDbSession = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
 			$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 60000 ] );
 		}
+
+		//call _beforeSave for each item
+		if( $callBeforeAfterHooks && method_exists( $calledClass, '_beforeSave' ) ) {
+			log::info( 'MongoService', '--call _beforeSave' );
+			foreach( $objects as &$object ) {
+				static::_beforeSave( $object, $mongoDbSession );
+			}
+		}
+		unset( $object );
 
 		/** @var \gcgov\framework\services\mongodb\updateDeleteResult[] $saveResults */
 		$saveResults = [];
@@ -349,9 +350,6 @@ abstract class factory
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function save( object &$object, bool $upsert = true, bool $callBeforeAfterHooks = true, ?\MongoDB\Driver\Session $mongoDbSession = null ): updateDeleteResult {
-		if( $callBeforeAfterHooks && method_exists( get_called_class(), '_beforeSave' ) ) {
-			static::_beforeSave( $object );
-		}
 
 		$mdb = new tools\mdb( collection: static::_getCollectionName() );
 
@@ -365,6 +363,10 @@ abstract class factory
 			$sessionParent  = true;
 			$mongoDbSession = $mdb->client->startSession( [ 'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' ) ] );
 			$mongoDbSession->startTransaction( [ 'maxCommitTimeMS' => 5000 ] );
+		}
+
+		if( $callBeforeAfterHooks && method_exists( get_called_class(), '_beforeSave' ) ) {
+			static::_beforeSave( $object, $mongoDbSession );
 		}
 
 		//ACTUAL UPDATE
