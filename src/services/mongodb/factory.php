@@ -138,7 +138,7 @@ abstract class factory
 		}
 
 		if( $cursor===null ) {
-			throw new modelDocumentNotFoundException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found' );
+			throw new modelDocumentNotFoundException( static::_getHumanName( capitalize: true ) . ' not found' );
 		}
 
 		return $cursor;
@@ -171,7 +171,7 @@ abstract class factory
 		}
 
 		if( $cursor===null ) {
-			throw new modelDocumentNotFoundException( static::_getHumanName( capitalize: true ) . ' not deleted because it was not found' );
+			throw new modelDocumentNotFoundException( static::_getHumanName( capitalize: true ) . ' not found' );
 		}
 
 		return $cursor;
