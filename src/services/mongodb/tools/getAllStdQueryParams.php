@@ -10,7 +10,7 @@ class getAllStdQueryParams {
 	/**
 	 * @var array<string, int>
 	 */
-	public array $sort;
+	public array $sort = [];
 
 
 	public function __construct( int $defaultLimit = 10, int $defaultPage = 1 ) {
