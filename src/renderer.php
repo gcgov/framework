@@ -78,26 +78,34 @@ final class renderer {
 			}
 			catch( modelException $e ) {
 				\error_log( $e );
-				\gcgov\framework\services\log::debug( 'Renderer', $e->getMessage(), $e->getTrace() );
+				if(config::getEnvironmentConfig()->logging->renderer) {
+					\gcgov\framework\services\log::debug( 'Renderer', $e->getMessage(), $e->getTrace() );
+				}
 
 				return \app\renderer::processModelException( $e );
 			}
 			catch( controllerException $e ) {
 				\error_log( $e );
-				\gcgov\framework\services\log::debug( 'Renderer', $e->getMessage(), $e->getTrace() );
+				if(config::getEnvironmentConfig()->logging->renderer) {
+					\gcgov\framework\services\log::debug( 'Renderer', $e->getMessage(), $e->getTrace() );
+				}
 
 				return \app\renderer::processControllerException( $e );
 			}
 			catch( \Exception|\Error|\ErrorException $e ) {
 				\error_log( $e );
-				\gcgov\framework\services\log::error( 'Renderer', $e->getMessage(), [ $e ] );
+				if(config::getEnvironmentConfig()->logging->renderer) {
+					\gcgov\framework\services\log::error( 'Renderer', $e->getMessage(), [ $e ] );
+				}
 
 				return \app\renderer::processSystemErrorException( $e );
 			}
 		}
 		catch( \ReflectionException $e ) {
 			error_log( $e );
-			\gcgov\framework\services\log::error( 'Renderer', $e->getMessage(), [ $e ] );
+			if(config::getEnvironmentConfig()->logging->renderer) {
+				\gcgov\framework\services\log::error( 'Renderer', $e->getMessage(), [ $e ] );
+			}
 
 			return \app\renderer::processSystemErrorException( $e );
 		}
@@ -116,7 +124,9 @@ final class renderer {
 			}
 		}
 		else {
-			\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $filename . ' on line ' . $lineNumber );
+			if(config::getEnvironmentConfig()->logging->renderer) {
+				\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $filename . ' on line ' . $lineNumber );
+			}
 		}
 
 		if( $controllerDataResponse->getHttpStatus()!=200 ) {
@@ -162,7 +172,9 @@ final class renderer {
 			}
 		}
 		else {
-			\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $fileBasename . ' on line ' . $lineNumber );
+			if(config::getEnvironmentConfig()->logging->renderer) {
+				\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $fileBasename . ' on line ' . $lineNumber );
+			}
 		}
 
 		if( $controllerFileResponse->getHttpStatus()!=200 ) {
@@ -210,7 +222,9 @@ final class renderer {
 			}
 		}
 		else {
-			\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $fileBasename . ' on line ' . $lineNumber );
+			if(config::getEnvironmentConfig()->logging->renderer) {
+				\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $fileBasename . ' on line ' . $lineNumber );
+			}
 		}
 
 		if( $controllerResponse->getHttpStatus()!=200 ) {

@@ -3,14 +3,12 @@
 namespace gcgov\framework\models;
 
 
-use gcgov\framework\exceptions\configException;
 use gcgov\framework\models\config\environment\jwtAuth;
+use gcgov\framework\models\config\environment\logging;
 use gcgov\framework\models\config\environment\microsoft;
-use gcgov\framework\models\config\environment\mongoDatabase;
 use gcgov\framework\models\config\environment\payjunction;
 use gcgov\framework\models\config\environment\sqlDatabase;
 use JetBrains\PhpStorm\Deprecated;
-
 
 class environmentConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
@@ -41,6 +39,7 @@ class environmentConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 	public jwtAuth $jwtAuth;
 
 	public payjunction $payjunction;
+	public logging $logging;
 
 	public array $appDictionary = [];
 
@@ -49,8 +48,23 @@ class environmentConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 		$this->microsoft   = new microsoft();
 		$this->jwtAuth     = new jwtAuth();
 		$this->payjunction = new payjunction();
+		$this->logging = new logging();
 	}
 
+	protected function _afterJsonDeserialize(): void {
+		if(!isset($this->microsoft)) {
+			$this->microsoft = new microsoft();
+		}
+		if(!isset($this->jwtAuth)) {
+			$this->jwtAuth = new jwtAuth();
+		}
+		if(!isset($this->payjunction)) {
+			$this->payjunction = new payjunction();
+		}
+		if(!isset($this->logging)) {
+			$this->logging = new logging();
+		}
+	}
 
 	public function getRootUrl(): string {
 		return rtrim( $this->rootUrl, '/ ' );
