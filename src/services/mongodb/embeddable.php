@@ -12,6 +12,7 @@ use gcgov\framework\services\mongodb\exceptions\databaseException;
 use gcgov\framework\services\mongodb\models\_meta;
 use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\tools\reflectionCache;
+use gcgov\framework\services\mongodb\tools\reflectionCache\reflectionCacheProperty;
 use JetBrains\PhpStorm\ArrayShape;
 use JetBrains\PhpStorm\Deprecated;
 
@@ -30,43 +31,33 @@ abstract class embeddable
 	}
 
 
-	public function __clone() {
+	protected function __clone() {
 		try {
-			$reflectionCacheClass = reflectionCache::getReflectionClass( get_called_class() );
+			$rc = \gcgov\framework\services\mongodb\tools\reflectionCache::getReflectionClass( get_called_class() );
 		}
 		catch( \ReflectionException $e ) {
-			throw new databaseException( 'Failed to clone ' . get_called_class(), 500, $e );
+			throw new \gcgov\framework\services\mongodb\exceptions\databaseException( 'Failed to clone ' . get_called_class(), 500, $e );
 		}
 
-		foreach( $reflectionCacheClass->properties as $reflectionCacheProperty ) {
-			//if there is no type we assume we do not need to clone
-			if( !$reflectionCacheProperty->propertyHasType ) {
+		foreach( $rc->properties as $p ) {
+			$name = $p->propertyName;
+			if( !isset( $this->{$name} ) ) {
 				continue;
 			}
 
-			//get the reflection class for the property's type so we can check if it is clonable
-			try {
-				$propertyTypeReflectionCacheClass = reflectionCache::getReflectionClass( $reflectionCacheProperty->propertyTypeNameFQN );
-				//if this class is not cloneable, skip to next
-				if( !$propertyTypeReflectionCacheClass->reflectionClass->isCloneable()) {
-					continue;
-				}
-			}
-			catch( \ReflectionException $e ) {
-				//if reflection fails, assume it is a base type
-				continue;
-			}
-
-			//if this property has a value, clone it
-			if(isset( $this->{$reflectionCacheProperty->propertyName} ) ) {
-				if( $reflectionCacheProperty->propertyIsTypedArray ) {
-					foreach( $this->{$reflectionCacheProperty->propertyName} as $i => $v ) {
-						$this->{$reflectionCacheProperty->propertyName}[ $i ] = clone $v;
+			// typed array: clone each object element if cloneable
+			if( $p->propertyIsTypedArray ) {
+				foreach( $this->{$name} as $i => $v ) {
+					if( \is_object( $v ) && $p->propertyTypeIsCloneable ) {
+						$this->{$name}[ $i ] = clone $v;
 					}
 				}
-				else {
-					$this->{$reflectionCacheProperty->propertyName} = clone $this->{$reflectionCacheProperty->propertyName};
-				}
+				continue;
+			}
+
+			// single object
+			if( \is_object( $this->{$name} ) && $p->propertyTypeIsCloneable ) {
+				$this->{$name} = clone $this->{$name};
 			}
 		}
 	}
@@ -80,36 +71,62 @@ abstract class embeddable
 
 
 	protected function _afterJsonSerialize( array $export ): array {
-		//get the called class name
-		//$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
-
 		try {
-			$reflectionCacheClass = reflectionCache::getReflectionClass( get_called_class() );
-			if( $reflectionCacheClass->hasAttribute( includeMeta::class ) ) {
-				/** @var attributes\includeMeta $includeMetaAttributeInstance */
-				$includeMetaAttributeInstance = $reflectionCacheClass->getAttributeInstance( includeMeta::class );
-				if( !$includeMetaAttributeInstance->includeMeta ) {
+			$rc = reflectionCache::getReflectionClass( get_called_class() );
+
+			// includeMeta handling
+			$includeMeta = true;
+			if( $rc->hasAttribute( includeMeta::class ) ) {
+				/** @var includeMeta $includeMeta */
+				$includeMeta = $rc->getAttributeInstance( includeMeta::class );
+				if( !$includeMeta->includeMeta ) {
+					$includeMeta = false;
 					unset( $export[ '_meta' ] );
 				}
 			}
-			else {
-				if(!isset($export[ '_meta' ])) {
-					$export[ '_meta' ] = new _meta( get_called_class() );
-				}
+
+			// ensure meta is present if not explicitly disabled
+			if( $includeMeta && !isset( $export[ '_meta' ] ) ) {
+				$export[ '_meta' ] = new _meta( get_called_class() );
+			}
+			elseif( !$includeMeta && isset($export['_meta'])) {
+				unset( $export[ '_meta' ] );
 			}
 
-			$redactAttributeInstances = $reflectionCacheClass->getAttributeInstancesByPropertyName( redact::class );
-			if(count($redactAttributeInstances)>0){
-				$authUser                = authUser::getInstance();
-				foreach( $redactAttributeInstances as $propertyName=>$redactAttributeInstance) {
-					if( count( $redactAttributeInstance->redactIfUserHasAnyRoles )===0 && count( $redactAttributeInstance->redactIfUserHasAllRoles )===0 ) {
-						unset( $export[ $propertyName ] );
+
+			// property-level redaction
+			$redactByProp = $rc->getAttributeInstancesByPropertyName( redact::class );
+			if( !empty( $redactByProp ) ) {
+				$authUser = authUser::getInstance();
+
+				foreach( $redactByProp as $propName => $attr ) {
+					// only consider properties that are included in the export
+					if( !array_key_exists( $propName, $export ) ) {
+						continue;
 					}
-					elseif( count( $redactAttributeInstance->redactIfUserHasAnyRoles )>0 && count( array_intersect( $redactAttributeInstance->redactIfUserHasAnyRoles, $authUser->roles ) )>0 ) {
-						unset( $export[ $propertyName ] );
+
+					// SHOW constraints (hide if user does NOT meet)
+					if( !empty( $attr->showIfUserHasAnyRoles ?? [] ) &&
+						count( array_intersect( $attr->showIfUserHasAnyRoles, $authUser->roles ) )===0 ) {
+						unset( $export[ $propName ] );
+						continue;
 					}
-					elseif( count( $redactAttributeInstance->redactIfUserHasAllRoles )>0 && count( array_diff( $redactAttributeInstance->redactIfUserHasAllRoles, $authUser->roles ) )===0 ) {
-						unset( $export[ $propertyName ] );
+					if( !empty( $attr->showIfUserHasAllRoles ?? [] ) &&
+						count( array_diff( $attr->showIfUserHasAllRoles, $authUser->roles ) )>0 ) {
+						unset( $export[ $propName ] );
+						continue;
+					}
+
+					// REDACT constraints (hide if user DOES meet)
+					if( !empty( $attr->redactIfUserHasAnyRoles ?? [] ) &&
+						count( array_intersect( $attr->redactIfUserHasAnyRoles, $authUser->roles ) )>0 ) {
+						unset( $export[ $propName ] );
+						continue;
+					}
+					if( !empty( $attr->redactIfUserHasAllRoles ?? [] ) &&
+						count( array_diff( $attr->redactIfUserHasAllRoles, $authUser->roles ) )===0 ) {
+						unset( $export[ $propName ] );
+						continue;
 					}
 				}
 			}
@@ -117,40 +134,61 @@ abstract class embeddable
 		catch( \ReflectionException $e ) {
 			log::error( 'MongoService', 'Generate attribute data failed: ' . $e->getMessage(), $e->getTrace() );
 		}
+
 		return $export;
 	}
 
 
 	protected function _afterJsonDeserialize(): void {
-		//reset meta fields
+		// reset meta
 		$this->_meta = new _meta( get_called_class() );
 
 		try {
-			$reflectionCacheClass = reflectionCache::getReflectionClass( get_called_class() );
+			$rc = reflectionCache::getReflectionClass( get_called_class() );
 
-			//meta
-			if($reflectionCacheClass->hasAttribute( includeMeta::class ) ) {
-				/** @var attributes\includeMeta $includeMetaAttributeInstance */
-				$includeMetaAttributeInstance = $reflectionCacheClass->getAttributeInstance( includeMeta::class );
-
-				if( !$includeMetaAttributeInstance->includeMeta ) {
+			// includeMeta handling
+			if( $rc->hasAttribute( includeMeta::class ) ) {
+				/** @var includeMeta $includeMeta */
+				$includeMeta = $rc->getAttributeInstance( includeMeta::class );
+				if( !$includeMeta->includeMeta ) {
 					unset( $this->_meta );
 				}
-
 			}
 
-			$redactAttributeInstances = $reflectionCacheClass->getAttributeInstancesByPropertyName( redact::class );
-			if(count($redactAttributeInstances)>0) {
-				$authUser = authUser::getInstance();
-				foreach( $redactAttributeInstances as $propertyName => $redactAttributeInstance ) {
-					if( count( $redactAttributeInstance->redactIfUserHasAnyRoles )===0 && count( $redactAttributeInstance->redactIfUserHasAllRoles )===0 ) {
-						unset( $this->$propertyName );
+			// property-level redaction
+			$redactByProp = $rc->getAttributeInstancesByPropertyName( redact::class );
+			if( !empty( $redactByProp ) ) {
+				$authUser  = authUser::getInstance();
+				$userRoles = $authUser->roles ?? [];
+
+				foreach( $redactByProp as $propName => $attr ) {
+					// If property isn't set there is nothing to redact
+					if( !isset( $this->$propName ) ) {
+						continue;
 					}
-					elseif( count( $redactAttributeInstance->redactIfUserHasAnyRoles )>0 && count( array_intersect( $redactAttributeInstance->redactIfUserHasAnyRoles, $authUser->roles ) )>0 ) {
-						unset( $this->$propertyName );
+
+					// SHOW constraints (remove if user does NOT meet)
+					if( !empty( $attr->showIfUserHasAnyRoles ?? [] ) &&
+						count( array_intersect( $attr->showIfUserHasAnyRoles, $userRoles ) )===0 ) {
+						unset( $this->$propName );
+						continue;
 					}
-					elseif( count( $redactAttributeInstance->redactIfUserHasAllRoles )>0 && count( array_diff( $redactAttributeInstance->redactIfUserHasAllRoles, $authUser->roles ) )===0 ) {
-						unset( $this->$propertyName );
+					if( !empty( $attr->showIfUserHasAllRoles ?? [] ) &&
+						count( array_diff( $attr->showIfUserHasAllRoles, $userRoles ) )>0 ) {
+						unset( $this->$propName );
+						continue;
+					}
+
+					// REDACT constraints (remove if user DOES meet)
+					if( !empty( $attr->redactIfUserHasAnyRoles ?? [] ) &&
+						count( array_intersect( $attr->redactIfUserHasAnyRoles, $userRoles ) )>0 ) {
+						unset( $this->$propName );
+						continue;
+					}
+					if( !empty( $attr->redactIfUserHasAllRoles ?? [] ) &&
+						count( array_diff( $attr->redactIfUserHasAllRoles, $userRoles ) )===0 ) {
+						unset( $this->$propName );
+						continue;
 					}
 				}
 			}
@@ -161,7 +199,7 @@ abstract class embeddable
 	}
 
 
-	public static function getTypeMap( typeMapType $type=typeMapType::serialize ): typeMap {
+	public static function getTypeMap( typeMapType $type = typeMapType::serialize ): typeMap {
 		return typeMapFactory::get( get_called_class(), $type );
 	}
 
@@ -176,7 +214,7 @@ abstract class embeddable
 		'root'       => "string",
 		'fieldPaths' => "string[]"
 	] )]
-	public static function getBsonOptionsTypeMap( typeMapType $type=typeMapType::serialize ): array {
+	public static function getBsonOptionsTypeMap( typeMapType $type = typeMapType::serialize ): array {
 		return typeMapFactory::get( get_called_class(), $type )->toArray();
 	}
 
@@ -195,7 +233,8 @@ abstract class embeddable
 		return $this->doBsonSerialize();
 	}
 
-	public function doBsonSerialize( bool $deep=false, bool $dateAsISOString=false ): array|\stdClass {
+
+	public function doBsonSerialize( bool $deep = false, bool $dateAsISOString = false ): array|\stdClass {
 		if( method_exists( $this, '_beforeBsonSerialize' ) ) {
 			$this->_beforeBsonSerialize();
 		}
@@ -203,36 +242,37 @@ abstract class embeddable
 		$save = [];
 
 		try {
-			$reflectionCacheClass = reflectionCache::getReflectionClass( get_called_class() );
+			$rc = \gcgov\framework\services\mongodb\tools\reflectionCache::getReflectionClass( get_called_class() );
+
+			foreach( $rc->properties as $p ) {
+				if( $p->excludeBsonSerialize ) {
+					continue;
+				}
+
+				// typed props require init check via ReflectionProperty
+				if( !$p->reflectionProperty->isInitialized( $this ) ) {
+					continue;
+				}
+
+				if( $p->propertyIsTypedArray ) {
+					$val = $p->reflectionProperty->getValue( $this );
+					if( !\is_array( $val ) ) {
+						continue;
+					}
+					$out = [];
+					foreach( $val as $k => $v ) {
+						$out[ $k ] = $this->bsonSerializeDataItem( $v, false, false );
+					}
+					$save[ $p->propertyName ] = $out;
+				}
+				else {
+					$val                      = $p->reflectionProperty->getValue( $this );
+					$save[ $p->propertyName ] = $this->bsonSerializeDataItem( $val, false, false );
+				}
+			}
 		}
 		catch( \ReflectionException $e ) {
-			throw new databaseException( 'Failed to serialize data to bson for ' . get_called_class(), 500, $e );
-		}
-
-		//generate save key, values in $save
-		foreach( $reflectionCacheClass->properties as $reflectionCacheProperty ) {
-			if($reflectionCacheProperty->hasAttribute(excludeBsonSerialize::class)) {
-				continue;
-			}
-
-			if( !$reflectionCacheProperty->reflectionProperty->isInitialized( $this ) ) {
-				continue;
-			}
-
-			//load the data from json into the instance of our class
-			if( $reflectionCacheProperty->propertyIsTypedArray ) {
-				if( !isset( $save[ $reflectionCacheProperty->propertyName ] ) ) {
-					$save[ $reflectionCacheProperty->propertyName ] = $reflectionCacheProperty->defaultValue;
-				}
-				foreach( $reflectionCacheProperty->reflectionProperty->getValue( $this ) as $key => $value ) {
-					$save[ $reflectionCacheProperty->propertyName ][ $key ] = $this->bsonSerializeDataItem( $value, $deep, $dateAsISOString );
-				}
-			}
-			else {
-				$value                 = $reflectionCacheProperty->reflectionProperty->getValue( $this );
-				$save[ $reflectionCacheProperty->propertyName ] = $this->bsonSerializeDataItem( $value, $deep, $dateAsISOString );
-			}
-
+			throw new \gcgov\framework\services\mongodb\exceptions\databaseException( 'BSON serialize failed for ' . get_called_class(), 500, $e );
 		}
 
 		return $save;
@@ -245,82 +285,58 @@ abstract class embeddable
 	 * @param array $data Properties within the BSON document
 	 */
 	public function bsonUnserialize( array $data ): void {
-		//get the called class name
-		$calledClassFqn = typeHelpers::classNameToFqn( get_called_class() );
-
 		try {
-			$rClass = new \ReflectionClass( $calledClassFqn );
+			$rc = \gcgov\framework\services\mongodb\tools\reflectionCache::getReflectionClass( get_called_class() );
 		}
 		catch( \ReflectionException $e ) {
-			throw new databaseException( 'Failed to unserialize bson data for ' . $calledClassFqn, 500, $e );
+			throw new \gcgov\framework\services\mongodb\exceptions\databaseException( 'BSON unserialize failed for ' . get_called_class(), 500, $e );
 		}
 
-		$this->_meta = new _meta( $calledClassFqn );
+		foreach( $rc->properties as $p ) {
+			$name = $p->propertyName;
 
-		//get properties of the class and set their values to the data provided from the database
-		$rProperties = $rClass->getProperties();
-		foreach( $rProperties as $rProperty ) {
-			$propertyName = $rProperty->getName();
-
-			//if property is not meant to be unserialized, exclude it
-			$attributes = $rProperty->getAttributes( excludeBsonUnserialize::class );
-			if( count( $attributes )>0 ) {
+			if( $p->excludeBsonUnserialize ) {
 				continue;
 			}
 
-			$propertyType     = null;
-			$propertyTypeName = '';
-
-			if( $rProperty->hasType() ) {
-				$propertyType = $rProperty->getType();
-
-				if( !( $propertyType instanceof \ReflectionUnionType ) ) {
-					$propertyTypeName = $propertyType->getName();
+			// not present in DB result
+			if( !array_key_exists( $name, $data ) ) {
+				// preserve default if any
+				if( $p->hasDefaultValue ) {
+					$this->{$name} = $p->defaultValue;
 				}
+				continue;
 			}
 
-			//if the property is an array, check if the doc comment defines the type
-			$propertyIsTypedArray = false;
-			if( $propertyTypeName=='array' ) {
-				$arrayType = typeHelpers::getVarTypeFromDocComment( $rProperty->getDocComment() );
-				if( $arrayType!='array' && $arrayType!='string' && $arrayType!='float' && $arrayType!='int' ) {
-					$propertyIsTypedArray = true;
+			$raw = $data[ $name ];
+
+			// typed array of objects
+			if( $p->propertyIsTypedArray && \is_array( $raw ) ) {
+				$dest = [];
+				foreach( $raw as $k => $v ) {
+					$dest[ $k ] = $this->bsonUnserializeDataItem( $p, $v );
 				}
+				$this->{$name} = $dest;
+				continue;
 			}
 
-			if( $propertyIsTypedArray ) {
-				if( !isset( $data[ $propertyName ] ) ) {
-					log::info( 'MongoUnserialize', $calledClassFqn.'.'.$propertyName.' of type '.$propertyType.' set to default value'  );
-					$data[ $propertyName ] = $rProperty->getDefaultValue();
-				}
-				foreach( $data[ $propertyName ] as $key => $value ) {
-					log::info( 'MongoUnserialize', $calledClassFqn.'.'.$propertyName.' key '.$key.' of type '.$propertyType.' set'  );
-					$this->$propertyName[ $key ] = $this->bsonUnserializeDataItem( $rProperty, $propertyType, $arrayType, $value );
-				}
-			}
-			else {
-				if( !array_key_exists( $propertyName, $data ) ) {
-					log::info( 'MongoUnserialize', $calledClassFqn.'.'.$propertyName.' value not in provided data' );
-					$value = null;
-				}
-				else {
-					$value = $data[ $propertyName ];
-				}
-
-				//set the class property = the parsed value from the database
-				try {
-					log::info( 'MongoUnserialize', $calledClassFqn.'.'.$propertyName.' of type '.$propertyType.' set'  );
-					$this->$propertyName = $this->bsonUnserializeDataItem( $rProperty, $propertyType, $propertyTypeName, $value );
-				}
-				catch( \Exception|\TypeError $e ) {
-					error_log( $e );
-				}
-			}
+			// single value
+			$this->{$name} = $this->bsonUnserializeDataItem( $p, $raw );
 		}
 
 		//if this is a text search that has provided the score of the result via the _score field
 		if( isset( $data[ '_score' ] ) ) {
-			$this->_meta->score = round( $data[ '_score' ], 2 );
+			$setScore = true;
+			if( $rc->hasAttribute( includeMeta::class ) ) {
+				/** @var includeMeta $includeMeta */
+				$includeMeta = $rc->getAttributeInstance( includeMeta::class );
+				if( !$includeMeta->includeMeta ) {
+					$setScore = false;
+				}
+			}
+			if( $setScore ) {
+				$this->_meta->score = round( $data[ '_score' ], 2 );
+			}
 		}
 
 		if( method_exists( $this, '_afterBsonUnserialize' ) ) {
@@ -330,21 +346,21 @@ abstract class embeddable
 
 
 	/**
-	 * @param mixed               $value
+	 * @param mixed $value
 	 *
 	 * @return mixed
 	 */
-	private function bsonSerializeDataItem( mixed $value, bool $deep=false, bool $dateAsISOString=false ): mixed {
+	private function bsonSerializeDataItem( mixed $value, bool $deep = false, bool $dateAsISOString = false ): mixed {
 		if( !$dateAsISOString && $value instanceof \DateTimeInterface ) {
 			return new \MongoDB\BSON\UTCDateTime( $value );
 		}
-		elseif($dateAsISOString && $value instanceof \DateTimeInterface ) {
+		elseif( $dateAsISOString && $value instanceof \DateTimeInterface ) {
 			return $value->setTimezone( new \DateTimeZone( 'UTC' ) )->format( DATE_ATOM );
 		}
-		elseif($deep===true && $value instanceof embeddable ) {
+		elseif( $deep===true && $value instanceof embeddable ) {
 			return $value->doBsonSerialize( true, $dateAsISOString );
 		}
-		elseif($deep===true && $value instanceof \MongoDB\BSON\Persistable ) {
+		elseif( $deep===true && $value instanceof \MongoDB\BSON\Persistable ) {
 			return $value->bsonSerialize();
 		}
 
@@ -353,103 +369,92 @@ abstract class embeddable
 
 
 	/**
-	 * @param \ReflectionProperty   $rProperty
-	 * @param                       $propertyType
-	 * @param                       $propertyTypeName
-	 * @param mixed                 $value
+	 * @param \gcgov\framework\services\mongodb\tools\reflectionCache\reflectionCacheProperty $p
+	 * @param mixed                                                                           $value
 	 *
 	 * @return mixed
 	 */
-	private function bsonUnserializeDataItem( \ReflectionProperty $rProperty, $propertyType, $propertyTypeName, mixed $value ): mixed {
-		//$data[$propertyName] was not in the database result
+	private function bsonUnserializeDataItem( reflectionCacheProperty $p, mixed $value ): mixed {
+		// If DB didn’t provide a value
 		if( $value===null ) {
+			// If the declared type is non-nullable, try to construct special defaults
+			$propertyType = $p->propertyType; // ReflectionType|null
 			if( $propertyType!==null && !$propertyType->allowsNull() ) {
-				//attempt to instantiate special types
-				try {
-					$rPropertyClass       = new \ReflectionClass( $propertyTypeName );
-					$instantiateArguments = [];
-					if( substr( $propertyTypeName, -5 )=='_meta' ) {
-						$instantiateArguments[] = get_called_class();
+				$typeName = $p->propertyTypeName;
+				if( $typeName!=='' ) {
+					// _meta special case
+					if( \str_ends_with( $typeName, '_meta' ) ) {
+						return new \gcgov\framework\services\mongodb\models\_meta( \get_called_class() );
 					}
 
-					if($rPropertyClass->isEnum()) {
-						$rEnum = new \ReflectionEnum( $propertyTypeName );
-
-						if($rEnum->isBacked()) {
-							return $propertyTypeName::from($value);
+					if ($p->propertyTypeIsEnum) {
+						if ($p->propertyTypeEnumIsBacked) {
+							return $p->propertyTypeNameFQN::from($value);
 						}
-						else {
-							return $rEnum->getCase( $value );
+						$const = $p->propertyTypeNameFQN.'::'.$value;
+						if (\defined($const)) {
+							return \constant($const);
 						}
 					}
-
-					return $rPropertyClass->newInstance( ...$instantiateArguments );
-				}
-					//regular non class types
-				catch( \ReflectionException $e ) {
-					return $rProperty->getDefaultValue();
 				}
 			}
-
-			return null;
+			return null; // leave null
 		}
 
-		//$data[ $propertyName ] exists and has value
-		else {
-
-			if( $propertyTypeName==='MongoDB\BSON\ObjectId' && is_string($value) ) {
-				return new \MongoDB\BSON\ObjectId($value);
+		// Handle DateTime targets efficiently (no ReflectionClass instantiation)
+		if ($p->propertyTypeImplementsDateTimeInterface) {
+			if( $value instanceof \MongoDB\BSON\UTCDateTime ) {
+				return \DateTimeImmutable::createFromMutable( $value->toDateTime() )
+				                         ->setTimezone( new \DateTimeZone( 'America/New_York' ) );
 			}
-
-			if( $propertyTypeName==='array' && $value instanceof \stdClass ) {
-				return (array)$value;
-			}
-
-			if( $propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONDocument ) {
-				return (array)$value;
-			}
-
-			if( $propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONArray ) {
-				return (array)$value;
-			}
-			else {
+			if( \is_string( $value ) ) {
 				try {
-					$rPropertyClass = new \ReflectionClass( $propertyTypeName );
-
-					if($rPropertyClass->isEnum()) {
-						$rEnum = new \ReflectionEnum( $propertyTypeName );
-
-						if($rEnum->isBacked()) {
-							return $propertyTypeName::from($value);
-						}
-						else {
-							return $rEnum->getCase( $value );
-						}
-					}
-
-					if( $rPropertyClass->implementsInterface( \DateTimeInterface::class ) ) {
-						if( $value instanceof \MongoDB\BSON\UTCDateTime ) {
-							return \DateTimeImmutable::createFromMutable( $value->toDateTime() )->setTimezone( new \DateTimeZone( "America/New_York" ) );
-						}
-						elseif( is_string( $value ) ) {
-							try {
-								return new \DateTimeImmutable( $value );
-							}
-							catch( \Exception $e ) {
-								log::warning( 'MongoUnserialize', 'Invalid date is stored in database. ' . $e->getMessage(), $e->getTrace() );
-								return new \DateTimeImmutable();
-							}
-						}
-					}
+					return new \DateTimeImmutable( $value );
 				}
-					//regular non class types
-				catch( \ReflectionException $e ) {
-					log::info( 'MongoUnserialize', $rProperty?->getName().' error '.$e->getMessage() );
+				catch( \Exception $e ) {
+					\gcgov\framework\services\mongodb\tools\log::warning(
+						'MongoUnserialize',
+						'Invalid date is stored in database. ' . $e->getMessage()
+					);
+					return new \DateTimeImmutable();
 				}
 			}
-
+			// Already a DateTime or unsupported format -> pass through
 			return $value;
 		}
+
+		// Enums (avoid ReflectionEnum on hot path)
+		if( $p->propertyTypeNameFQN!=='' && \enum_exists( $p->propertyTypeNameFQN ) ) {
+			// Backed enum?
+			if( \method_exists( $p->propertyTypeNameFQN, 'from' ) ) {
+				// Will throw on invalid; that matches normal PHP semantics
+				return $p->propertyTypeNameFQN::from( $value );
+			}
+			// Unit enum: use constant lookup instead of ReflectionEnum
+			$const = $p->propertyTypeNameFQN . '::' . $value;
+			if( \defined( $const ) ) {
+				return \constant( $const );
+			}
+			return $value; // unknown case name; pass through
+		}
+
+		if( $p->propertyTypeNameFQN==='MongoDB\BSON\ObjectId' && is_string($value) ) {
+			return new \MongoDB\BSON\ObjectId($value);
+		}
+
+		if( $p->propertyTypeName==='array' && $value instanceof \stdClass ) {
+			return (array)$value;
+		}
+
+		if( $p->propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONDocument ) {
+			return (array)$value;
+		}
+
+		if( $p->propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONArray ) {
+			return (array)$value;
+		}
+
+		return $value;
 	}
 
 
@@ -479,7 +484,7 @@ abstract class embeddable
 			$rPropertyName = $rProperty->getName();
 			$rPropertyType = $rProperty->getType();
 			$typeName      = '';
-			if( $rPropertyType!==null && method_exists($rPropertyType, 'getName') ) {
+			if( $rPropertyType!==null && method_exists( $rPropertyType, 'getName' ) ) {
 				$typeName = $rPropertyType->getName();
 			}
 			$propertyIsArray = false;
@@ -535,25 +540,25 @@ abstract class embeddable
 	 * Run Symfony validation against object's #[Assert\...] attributes. Method updates _meta->fields->error and _meta->fields->errorMessages[] with violations and returns the constraint violations to the caller
 	 *
 	 * @param string[]|null $validationGroups
-	 * @param bool     $includeDefaultGroup
+	 * @param bool          $includeDefaultGroup
 	 *
 	 * @return \Symfony\Component\Validator\ConstraintViolationListInterface
 	 */
-	public function updateValidationState( ?array $validationGroups=null, bool $includeDefaultGroup=true ): \Symfony\Component\Validator\ConstraintViolationListInterface  {
+	public function updateValidationState( ?array $validationGroups = null, bool $includeDefaultGroup = true ): \Symfony\Component\Validator\ConstraintViolationListInterface {
 		$validator = \Symfony\Component\Validator\Validation::createValidatorBuilder()->enableAttributeMapping()->getValidator();
 
-		if( $validationGroups===null  && method_exists( $this, '_defineValidationGroups' ) ) {
+		if( $validationGroups===null && method_exists( $this, '_defineValidationGroups' ) ) {
 			$validationGroups = $this->_defineValidationGroups();
-			if( !is_array( $validationGroups) ) {
-				throw new \LogicException('_defineValidationGroups must return an array of strings');
+			if( !is_array( $validationGroups ) ) {
+				throw new \LogicException( '_defineValidationGroups must return an array of strings' );
 			}
 		}
-		if( !is_array( $validationGroups) ) {
+		if( !is_array( $validationGroups ) ) {
 			$validationGroups = [];
 		}
 
-		if( count($validationGroups)>0 ) {
-			if( !in_array('Default', $validationGroups) && $includeDefaultGroup) {
+		if( count( $validationGroups )>0 ) {
+			if( !in_array( 'Default', $validationGroups ) && $includeDefaultGroup ) {
 				$validationGroups[] = 'Default';
 			}
 			$violations = $validator->validate( value: $this, groups: $validationGroups );
@@ -565,27 +570,27 @@ abstract class embeddable
 		if( count( $violations )>0 ) {
 			$propertyAccessor = \Symfony\Component\PropertyAccess\PropertyAccess::createPropertyAccessor();
 
-			foreach($violations as $violation) {
+			foreach( $violations as $violation ) {
 				$propertyPath = $violation->getPropertyPath();
-				if(str_contains($propertyPath, '.')) {
-					$parentObjPath = substr( $propertyPath, 0, strrpos($propertyPath, '.'));
-					$fieldPath = substr( $propertyPath, strrpos($propertyPath, '.')+1);
-					$metaPath = $parentObjPath.'._meta.fields['.$fieldPath.']';
+				if( str_contains( $propertyPath, '.' ) ) {
+					$parentObjPath = substr( $propertyPath, 0, strrpos( $propertyPath, '.' ) );
+					$fieldPath     = substr( $propertyPath, strrpos( $propertyPath, '.' ) + 1 );
+					$metaPath      = $parentObjPath . '._meta.fields[' . $fieldPath . ']';
 				}
 				else {
 					$fieldPath = $propertyPath;
-					$metaPath = '_meta.fields['.$fieldPath.']';
+					$metaPath  = '_meta.fields[' . $fieldPath . ']';
 				}
 
 				/** @var \gcgov\framework\services\mongodb\models\_meta\uiField $metaVal */
-				$uiField = $propertyAccessor->getValue($this, $metaPath);
+				$uiField = $propertyAccessor->getValue( $this, $metaPath );
 
 				if( $uiField instanceof \gcgov\framework\services\mongodb\models\_meta\uiField ) {
 					$uiField->error           = true;
 					$uiField->errorMessages[] = $violation->getMessage();//.' - field '.$propertyPath.' meta '.$metaPath;
 				}
 				else {
-					log::error('MongoService', 'Validation violation not recorded in _meta for '.get_called_class().' property path '.$propertyPath.'. The meta field path (computed to be '.$metaPath.') did was not an instance of a \gcgov\framework\services\mongodb\models\_meta\uiField');
+					log::error( 'MongoService', 'Validation violation not recorded in _meta for ' . get_called_class() . ' property path ' . $propertyPath . '. The meta field path (computed to be ' . $metaPath . ') did was not an instance of a \gcgov\framework\services\mongodb\models\_meta\uiField' );
 				}
 
 			}
@@ -595,4 +600,5 @@ abstract class embeddable
 		return $violations;
 
 	}
+
 }

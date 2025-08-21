@@ -2,73 +2,121 @@
 
 namespace gcgov\framework\services\mongodb\tools\reflectionCache;
 
-use gcgov\framework\services\mongodb\exceptions\databaseException;
 use gcgov\framework\services\mongodb\typeHelpers;
 
 final class reflectionCacheProperty {
 
-	public \ReflectionProperty                            $reflectionProperty;
-	public string                                         $propertyName         = '';
-	public bool                                           $propertyHasType      = false;
-	public null|\ReflectionNamedType|\ReflectionUnionType $propertyType         = null;
-	public string                                         $propertyTypeName     = '';
-	public string                                         $propertyTypeNameFQN  = '';
-	public bool                                           $hasDefaultValue      = false;
-	public mixed                                          $defaultValue         = null;
-	public bool                                           $propertyIsArray      = false;
-	public bool                                           $propertyIsTypedArray = false;
-
 	use reflectionCacheAttributeTrait;
 
-	public function __construct( \ReflectionProperty $reflectionProperty ) {
+	public string $propertyName = '';
 
-		$this->reflectionProperty = $reflectionProperty;
+	public bool                                           $propertyHasType     = false;
+	public null|\ReflectionNamedType|\ReflectionUnionType $propertyType        = null;
+	public string                                         $propertyTypeName    = '';
+	public string                                         $propertyTypeNameFQN = '';
 
-		$this->propertyName = $reflectionProperty->getName();
+	public bool $propertyIsArray      = false;
+	public bool $propertyIsTypedArray = false;
 
-		$this->defineAttributes( $reflectionProperty->getAttributes() );
+	public bool  $hasDefaultValue = false;
+	public mixed $defaultValue    = null;
+	public bool $allowsNulls    = false;
 
-		$this->defineTypeInfo( $reflectionProperty );
+	// hot flags
+	public bool $excludeBsonSerialize   = false;
+	public bool $excludeBsonUnserialize = false;
+	public bool $excludeJsonDeserialize = false;
 
-		$this->hasDefaultValue = $reflectionProperty->hasDefaultValue();
-		if( $this->hasDefaultValue ) {
-			$this->defaultValue = $reflectionProperty->getDefaultValue();
-		}
-	}
+	// quick check for cloning
+	public bool $propertyTypeIsCloneable = false;
+
+	// lazily used ReflectionProperty (for isInitialized/get/set)
+	public \ReflectionProperty $reflectionProperty;
+	public bool                $propertyTypeIsEnum = false;
+
+	public bool $propertyTypeEnumIsBacked = false;
+
+	// type checks
+	public bool $propertyTypeImplementsStringable = false;
+
+	public bool $propertyTypeImplementsDateTimeInterface = false;
+
+	public bool $propertyTypeImplementsPersistable = false;
+
+	// embeddable types
+
+	public bool $propertyTypeIsEmbeddable = false;
 
 
-	private function defineTypeInfo( \ReflectionProperty $reflectionProperty ): void {
+	/**
+	 * Build from ReflectionProperty
+	 *
+	 * @param array $typeFeatureFlags [
+	 *   'isEnum'=>bool,
+	 *   'enumIsBacked'=>bool,
+	 *   'isDateTime'=>bool,
+	 *   'isPersistable'=>bool,
+	 *   'isEmbeddable'=>bool
+	 * ]
+	 */
+	public static function fromReflection( \ReflectionProperty $rp,
+	                                       array $classDefaultProps,
+	                                       array $attrSnapshot,
+	                                       bool $typeIsCloneable,
+	                                       array $typeFeatureFlags = [] ): self {
+		$self                     = new self();
+		$self->propertyName       = $rp->getName();
+		$self->reflectionProperty = $rp;
 
-		$this->propertyHasType = $reflectionProperty->hasType();
+		$self->setAttributeSnapshot( $attrSnapshot );
 
-		//if the property does not have a type defined, exit
-		if( !$this->propertyHasType ) {
-			return;
-		}
-
-		//get property type reflection
-		$this->propertyType = $reflectionProperty->getType();
-
-		//union types not checked - could potentially be improved in the future
-		if( $this->propertyType instanceof \ReflectionUnionType ) {
-			return;
-		}
-
-		//get name of type
-		$this->propertyTypeName    = $this->propertyType->getName();
-
-		//handle typed arrays from the type defined in PHPDoc @var
-		if( $this->propertyTypeName=='array' ) {
-			$this->propertyIsArray = true;
-			$arrayType             = typeHelpers::getVarTypeFromDocComment( $reflectionProperty->getDocComment() );
-			if( $arrayType!=='array' ) {
-				$this->propertyIsTypedArray = true;
-				$this->propertyTypeName     = $arrayType;
+		$self->propertyHasType  = $rp->hasType();
+		$self->propertyType     = $rp->getType();
+		$self->propertyTypeName = '';
+		if( $self->propertyHasType ) {
+			$t = $self->propertyType;
+			if( $t instanceof \ReflectionNamedType ) {
+				$self->propertyTypeName = $t->getName();
 			}
 		}
 
-		$this->propertyTypeNameFQN = typeHelpers::classNameToFqn( $this->propertyTypeName );
+		// parse @var for typed arrays
+		$docType = typeHelpers::getVarTypeFromDocComment( $rp->getDocComment() ?: '' );
+		if( $self->propertyHasType ) {
+			if( $self->propertyTypeName==='array' ) {
+				$self->propertyIsArray = true;
+				if( $docType && $docType!=='array' ) {
+					$self->propertyIsTypedArray = true;
+					$self->propertyTypeName     = $docType;
+				}
+			}
+		}
+		elseif( $docType==='array' ) {
+			$self->propertyIsArray = true;
+		}
 
+		$self->propertyTypeNameFQN = typeHelpers::classNameToFqn( $self->propertyTypeName ?: '' );
+
+		// defaults
+		$self->hasDefaultValue = array_key_exists( $self->propertyName, $classDefaultProps );
+		$self->defaultValue    = $self->hasDefaultValue ? $classDefaultProps[ $self->propertyName ] : null;
+		$self->allowsNulls    = $self->propertyType->allowsNull();
+
+		// hot flags (attributes present?)
+		$self->excludeBsonSerialize   = isset( $attrSnapshot[ \gcgov\framework\services\mongodb\attributes\excludeBsonSerialize::class ] );
+		$self->excludeBsonUnserialize = isset( $attrSnapshot[ \gcgov\framework\services\mongodb\attributes\excludeBsonUnserialize::class ] );
+		$self->excludeJsonDeserialize = isset( $attrSnapshot[ \gcgov\framework\services\mongodb\attributes\excludeJsonDeserialize::class ] );
+
+		$self->propertyTypeIsCloneable = $typeIsCloneable;
+
+		// NEW: hydrate type feature flags (defaults to false if missing)
+		$self->propertyTypeIsEnum                      = (bool)($typeFeatureFlags['isEnum']        ?? false);
+		$self->propertyTypeEnumIsBacked                = (bool)($typeFeatureFlags['enumIsBacked']  ?? false);
+		$self->propertyTypeImplementsDateTimeInterface = (bool)($typeFeatureFlags['isDateTime']    ?? false);
+		$self->propertyTypeImplementsPersistable       = (bool)($typeFeatureFlags['isPersistable'] ?? false);
+		$self->propertyTypeIsEmbeddable                = (bool)($typeFeatureFlags['isEmbeddable']  ?? false);
+
+		return $self;
 	}
 
 }
