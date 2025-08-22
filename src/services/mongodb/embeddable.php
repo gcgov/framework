@@ -74,26 +74,6 @@ abstract class embeddable
 		try {
 			$rc = reflectionCache::getReflectionClass( get_called_class() );
 
-			// includeMeta handling
-			$includeMeta = true;
-			if( $rc->hasAttribute( includeMeta::class ) ) {
-				/** @var includeMeta $includeMeta */
-				$includeMeta = $rc->getAttributeInstance( includeMeta::class );
-				if( !$includeMeta->includeMeta ) {
-					$includeMeta = false;
-					unset( $export[ '_meta' ] );
-				}
-			}
-
-			// ensure meta is present if not explicitly disabled
-			if( $includeMeta && !isset( $export[ '_meta' ] ) ) {
-				$export[ '_meta' ] = new _meta( get_called_class() );
-			}
-			elseif( !$includeMeta && isset($export['_meta'])) {
-				unset( $export[ '_meta' ] );
-			}
-
-
 			// property-level redaction
 			$redactByProp = $rc->getAttributeInstancesByPropertyName( redact::class );
 			if( !empty( $redactByProp ) ) {
@@ -261,13 +241,13 @@ abstract class embeddable
 					}
 					$out = [];
 					foreach( $val as $k => $v ) {
-						$out[ $k ] = $this->bsonSerializeDataItem( $v, false, false );
+						$out[ $k ] = $this->bsonSerializeDataItem( $v, $deep, $dateAsISOString );
 					}
 					$save[ $p->propertyName ] = $out;
 				}
 				else {
 					$val                      = $p->reflectionProperty->getValue( $this );
-					$save[ $p->propertyName ] = $this->bsonSerializeDataItem( $val, false, false );
+					$save[ $p->propertyName ] = $this->bsonSerializeDataItem( $val,  $deep, $dateAsISOString );
 				}
 			}
 		}
@@ -323,6 +303,9 @@ abstract class embeddable
 			// single value
 			$this->{$name} = $this->bsonUnserializeDataItem( $p, $raw );
 		}
+
+		//ensure _meta is present
+		$this->_meta = new \gcgov\framework\services\mongodb\models\_meta( \get_called_class() );
 
 		//if this is a text search that has provided the score of the result via the _score field
 		if( isset( $data[ '_score' ] ) ) {
@@ -424,18 +407,35 @@ abstract class embeddable
 		}
 
 		// Enums (avoid ReflectionEnum on hot path)
-		if( $p->propertyTypeNameFQN!=='' && \enum_exists( $p->propertyTypeNameFQN ) ) {
-			// Backed enum?
-			if( \method_exists( $p->propertyTypeNameFQN, 'from' ) ) {
-				// Will throw on invalid; that matches normal PHP semantics
-				return $p->propertyTypeNameFQN::from( $value );
+		if ($p->propertyTypeIsEnum) {
+			if ($p->propertyTypeEnumIsBacked) {
+				/** ::from is safe */
+				return $p->propertyTypeNameFQN::from($value);
 			}
-			// Unit enum: use constant lookup instead of ReflectionEnum
-			$const = $p->propertyTypeNameFQN . '::' . $value;
-			if( \defined( $const ) ) {
+			$const = $p->propertyTypeNameFQN.'::'.$value;
+			if (\defined($const)) {
 				return \constant( $const );
 			}
-			return $value; // unknown case name; pass through
+		}
+
+		// Embedded document / Persistable types
+		if (\is_array($value) && $p->propertyTypeNameFQN !== '' && \class_exists($p->propertyTypeNameFQN)) {
+			// gcgov embeddable (your models)
+			if (\is_subclass_of($p->propertyTypeNameFQN, \gcgov\framework\services\mongodb\embeddable::class)) {
+				$inst = new ($p->propertyTypeNameFQN)();
+				$inst->bsonUnserialize($value);
+				return $inst;
+			}
+
+			// Mongo Persistable (userland types)
+			if (\is_subclass_of($p->propertyTypeNameFQN, \MongoDB\BSON\Persistable::class)) {
+				$inst = new ($p->propertyTypeNameFQN)();
+				// If class implements Persistable, it must define bsonUnserialize; call it if present
+				if (\method_exists($inst, 'bsonUnserialize')) {
+					$inst->bsonUnserialize($value);
+				}
+				return $inst;
+			}
 		}
 
 		if( $p->propertyTypeNameFQN==='MongoDB\BSON\ObjectId' && is_string($value) ) {
@@ -456,7 +456,6 @@ abstract class embeddable
 
 		return $value;
 	}
-
 
 	public static function mongoFieldsExistsQuery( $fieldPrefix = '' ): array {
 		$query = [];

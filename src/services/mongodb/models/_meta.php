@@ -119,6 +119,9 @@ class _meta
 		try {
 			$reflectionCacheClass = reflectionCache::getReflectionClass( $className );
 			foreach( $reflectionCacheClass->properties as $reflectionCacheProperty ) {
+				if($reflectionCacheProperty->propertyName==='_meta') {
+					continue;
+				}
 				$this->fields[ $reflectionCacheProperty->propertyName ] = new uiField();
 				if( $reflectionCacheProperty->hasAttribute( label::class ) ) {
 					$labelAttributeInstance                                        = $reflectionCacheProperty->getAttributeInstance( label::class );
