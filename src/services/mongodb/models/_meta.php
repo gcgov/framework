@@ -17,6 +17,7 @@ use Spatie\TypeScriptTransformer\Attributes\TypeScript;
 
 #[OA\Schema]
 #[TypeScript('IMeta')]
+#[\andrewsauder\jsonDeserialize\attributes\skipJsonSerializeProcessing]
 class _meta
 	extends
 	\andrewsauder\jsonDeserialize\jsonDeserialize
