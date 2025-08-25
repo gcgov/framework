@@ -31,7 +31,7 @@ abstract class embeddable
 	}
 
 
-	protected function __clone() {
+	public function __clone() {
 		try {
 			$rc = \gcgov\framework\services\mongodb\tools\reflectionCache::getReflectionClass( get_called_class() );
 		}
