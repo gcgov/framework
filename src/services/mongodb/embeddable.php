@@ -442,15 +442,15 @@ abstract class embeddable
 			return new \MongoDB\BSON\ObjectId($value);
 		}
 
-		if( $p->propertyTypeName==='array' && $value instanceof \stdClass ) {
+		if( $p->propertyIsArray && $value instanceof \stdClass ) {
 			return (array)$value;
 		}
 
-		if( $p->propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONDocument ) {
+		if( $p->propertyIsArray && $value instanceof \MongoDB\Model\BSONDocument ) {
 			return (array)$value;
 		}
 
-		if( $p->propertyTypeName==='array' && $value instanceof \MongoDB\Model\BSONArray ) {
+		if( $p->propertyIsArray && $value instanceof \MongoDB\Model\BSONArray ) {
 			return (array)$value;
 		}
 
