@@ -55,12 +55,12 @@ class build {
 					error_log('--'.$totalPageCount.' pages');
 
 					$currentDocumentCount = 1;
-					for($page=1;$page<=$totalPageCount;$page++) {
-						error_log('-- Page '.$page.'/'.$totalPageCount);
-						if($page>1) {
-							$pagedResponse = $classFqn::getPagedResponse( 200, $page, [ '$or'=>$queryOrs ]);
-							error_log('-- Page Documents '.count($pagedResponse->getData()));
-						}
+					while($totalPageCount>0) {
+						$page = 1;
+						error_log('-- Pages remaining '.($totalPageCount-1));
+						$pagedResponse = $classFqn::getPagedResponse( 200, $page, [ '$or'=>$queryOrs ]);
+						$totalPageCount = $pagedResponse->getTotalPageCount();
+						error_log('-- Page Documents '.count($pagedResponse->getData()));
 						$dbObjects = $pagedResponse->getData();
 
 						$maxRetryAttempts = 3;
