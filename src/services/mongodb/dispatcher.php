@@ -324,12 +324,8 @@ abstract class dispatcher
 
 					//handle complex paths to solve mongo "too many positional elements error"
 					if( substr_count( $updateKey, '$' )>1 ) {
-						//$updateKey = \gcgov\framework\services\mongodb\dispatcher::convertFieldPathToComplexUpdate( $updateKey, true, 'arrayFilter' );
 						$complexFieldPath = new complexFieldPath( $updateKey, true, $objectToInsert->$foreignKey );
 						$options   = [
-							/*'arrayFilters' => [
-								[ 'arrayFilter._id' => $objectToInsert->$foreignKey ]
-							]*/
 							'arrayFilters' => $complexFieldPath->getArrayFilters()
 						];
 					}
@@ -505,39 +501,6 @@ abstract class dispatcher
 	}
 
 
-	private static function convertFieldPathToComplexUpdate( string $fieldPath, bool $arrayFilter = true, string $arrayFilterKey = 'arrayFilter', mixed $arrayFilterValue=null ): string {
-		//convert $fieldPath  `
-		// from     `inspections.$.scheduleRequests.$.comments.$`
-		// to       `inspections.$[].scheduleRequests.$[].comments.$[arrayFilter]`
-		$pathParts          = explode( '.', $fieldPath );
-		$reversedPathParts  = array_reverse( $pathParts );
-		$foundPrimaryTarget = false;
-		$arrayFilters = [];
-		$arrayFilterIndex = 0;
-		foreach( $reversedPathParts as $i => $part ) {
-			//on the first dollar sign, convert `$`=>`$[arrayFilter]`
-			if( !$foundPrimaryTarget && $part==='$' ) {
-				$foundPrimaryTarget = true;
-				if( $arrayFilter ) {
-					$reversedPathParts[ $i ] = '$[' . $arrayFilterKey . $arrayFilterIndex . ']';
-					$arrayFilters[]=[ $arrayFilterKey . $arrayFilterIndex . '._id'=>$arrayFilterValue ];
-					$arrayFilterIndex++;
-				}
-				else {
-					unset( $reversedPathParts[ $i ] );
-				}
-			}
-			elseif( $foundPrimaryTarget && $part==='$' ) {
-				$reversedPathParts[ $i ] = '$[' . $arrayFilterKey . $arrayFilterIndex . ']';
-				$arrayFilters[]=[ $arrayFilterKey . $arrayFilterIndex . '._id'];
-
-			}
-		}
-		$complexPathParts = array_reverse( $reversedPathParts );
-
-		return implode( '.', $complexPathParts );
-	}
-
 
 	/**
 	 * @param string                 $collectionName
@@ -564,7 +527,6 @@ abstract class dispatcher
 
 			$filter[ $filterPath . '._id' ] = $_id;
 
-			//$complexPath = self::convertFieldPathToComplexUpdate( $pathToUpdate, false );
 			$complexFieldPath = new complexFieldPath( $pathToUpdate, false );
 
 			$update = [
@@ -652,46 +614,7 @@ abstract class dispatcher
 				'arrayFilters' => []//array_reverse( $arrayFilters )
 			];
 		}
-/*		$pathParts         = explode( '.', $fieldPath );
-		$reversedPathParts = array_reverse( $pathParts );
-
-		$arrayFilters = [];
-
-		$previousParts = [];
-
-		$foundPrimaryTarget = false;
-		foreach( $reversedPathParts as $i => $part ) {
-			$arrayFilterIndex = count( $arrayFilters );
-			//on the first dollar sign, convert `$`=>`$[arrayFilter]`
-			if( !$foundPrimaryTarget && $part==='$' ) {
-				$foundPrimaryTarget = true;
-				if( $useArrayFilter ) {
-					$reversedPathParts[ $i ]           = '$[arrayFilter' . $arrayFilterIndex . ']';
-					$arrayFilters[ $arrayFilterIndex ] = $previousParts;
-				}
-				else {
-					unset( $reversedPathParts[ $i ] );
-				}
-			}
-			elseif( $foundPrimaryTarget && $part==='$' ) {
-				$reversedPathParts[ $i ]           = '$[arrayFilter' . $arrayFilterIndex . ']';
-				$arrayFilters[ $arrayFilterIndex ] = $previousParts;
-			}
-			else {
-				$previousParts[] = $part;
-			}
-
-		}*/
-		//$oldcomplexPathParts = array_reverse( $reversedPathParts );
-		//$complexPathParts = self::convertFieldPathToComplexUpdate( $fieldPath, $useArrayFilter );
 		$complexFieldPath = new complexFieldPath( $fieldPath, $useArrayFilter, $arrayFilterValue );
-
-		/*foreach( $arrayFilters as $i => $arrayFilter ) {
-			$arrayFilter[]      = 'arrayFilter' . $i;
-			$arrayFilters[ $i ] = [
-				implode( '.', array_reverse( $arrayFilter ) ) . '._id' => $arrayFilterValue
-			];
-		}*/
 
 		return [
 			'complexPath'  => $complexFieldPath->getComplexPath(),
