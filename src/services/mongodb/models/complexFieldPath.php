@@ -48,18 +48,23 @@ class complexFieldPath {
 				}
 			}
 			elseif( $foundPrimaryTarget && $part==='$' ) {
-				$reversedPathParts[ $i ] = '$[arrayFilter' . $arrayFilterIndex .']';
+				if( $this->useArrayFilter ) {
+					$reversedPathParts[ $i ] = '$[arrayFilter' . $arrayFilterIndex . ']';
 
-				$notNullPathParts = [];
-				for($notNullIndex = $i-1; $notNullIndex>=0; $notNullIndex-- ) {
-					if( str_starts_with( $reversedPathParts[ $notNullIndex ], '$' ) ) {
-						break;
+					$notNullPathParts = [];
+					for( $notNullIndex = $i - 1; $notNullIndex>=0; $notNullIndex-- ) {
+						if( str_starts_with( $reversedPathParts[ $notNullIndex ], '$' ) ) {
+							break;
+						}
+						$notNullPathParts[] = $reversedPathParts[ $notNullIndex ];
 					}
-					$notNullPathParts[] = $reversedPathParts[ $notNullIndex ];
-				}
-				$this->arrayFilters[]    = [ 'arrayFilter' . $arrayFilterIndex . '.'.implode('.', $notNullPathParts) => [ '$ne' => null ] ];
+					$this->arrayFilters[] = [ 'arrayFilter' . $arrayFilterIndex . '.' . implode( '.', $notNullPathParts ) => [ '$ne' => null ] ];
 
-				$arrayFilterIndex++;
+					$arrayFilterIndex++;
+				}
+				else {
+					$reversedPathParts[ $i ] = '$[]';
+				}
 			}
 		}
 

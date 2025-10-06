@@ -325,6 +325,7 @@ abstract class dispatcher
 					//handle complex paths to solve mongo "too many positional elements error"
 					if( substr_count( $updateKey, '$' )>1 ) {
 						$complexFieldPath = new complexFieldPath( $updateKey, true, $objectToInsert->$foreignKey );
+						$updateKey		= $complexFieldPath->getComplexPath();
 						$options   = [
 							'arrayFilters' => $complexFieldPath->getArrayFilters()
 						];
