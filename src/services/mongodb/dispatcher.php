@@ -5,6 +5,7 @@ namespace gcgov\framework\services\mongodb;
 use gcgov\framework\config;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\mongodb\attributes\deleteCascade;
+use gcgov\framework\services\mongodb\models\complexFieldPath;
 use gcgov\framework\services\mongodb\tools\log;
 use gcgov\framework\services\mongodb\tools\reflectionCache;
 use JetBrains\PhpStorm\ArrayShape;
@@ -323,11 +324,13 @@ abstract class dispatcher
 
 					//handle complex paths to solve mongo "too many positional elements error"
 					if( substr_count( $updateKey, '$' )>1 ) {
-						$updateKey = \gcgov\framework\services\mongodb\dispatcher::convertFieldPathToComplexUpdate( $updateKey, true, 'arrayFilter' );
+						//$updateKey = \gcgov\framework\services\mongodb\dispatcher::convertFieldPathToComplexUpdate( $updateKey, true, 'arrayFilter' );
+						$complexFieldPath = new complexFieldPath( $updateKey, true, $objectToInsert->$foreignKey );
 						$options   = [
-							'arrayFilters' => [
+							/*'arrayFilters' => [
 								[ 'arrayFilter._id' => $objectToInsert->$foreignKey ]
-							]
+							]*/
+							'arrayFilters' => $complexFieldPath->getArrayFilters()
 						];
 					}
 
@@ -419,7 +422,15 @@ abstract class dispatcher
 				foreach( $mongoActions as $collectionName => $queries ) {
 					log::info( $logChannel, '---touch collection ' . $collectionName );
 
-					$result = $mdb->db->$collectionName->bulkWrite( $queries, [ 'session' => $mongoDbSession ] );
+					foreach($queries as $query) {
+						try {
+							$result = $mdb->db->$collectionName->bulkWrite( [$query], [ 'session' => $mongoDbSession ] );
+						}
+						catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+							error_log( $e );
+							throw $e;
+						}
+					}
 
 					log::info( $logChannel, '----Matched: ' . $result->getMatchedCount() );
 					log::info( $logChannel, '----Mod: ' . $result->getModifiedCount() );
@@ -494,26 +505,32 @@ abstract class dispatcher
 	}
 
 
-	private static function convertFieldPathToComplexUpdate( string $fieldPath, bool $arrayFilter = true, string $arrayFilterKey = 'arrayFilter' ): string {
+	private static function convertFieldPathToComplexUpdate( string $fieldPath, bool $arrayFilter = true, string $arrayFilterKey = 'arrayFilter', mixed $arrayFilterValue=null ): string {
 		//convert $fieldPath  `
 		// from     `inspections.$.scheduleRequests.$.comments.$`
 		// to       `inspections.$[].scheduleRequests.$[].comments.$[arrayFilter]`
 		$pathParts          = explode( '.', $fieldPath );
 		$reversedPathParts  = array_reverse( $pathParts );
 		$foundPrimaryTarget = false;
+		$arrayFilters = [];
+		$arrayFilterIndex = 0;
 		foreach( $reversedPathParts as $i => $part ) {
 			//on the first dollar sign, convert `$`=>`$[arrayFilter]`
 			if( !$foundPrimaryTarget && $part==='$' ) {
 				$foundPrimaryTarget = true;
 				if( $arrayFilter ) {
-					$reversedPathParts[ $i ] = '$[' . $arrayFilterKey . ']';
+					$reversedPathParts[ $i ] = '$[' . $arrayFilterKey . $arrayFilterIndex . ']';
+					$arrayFilters[]=[ $arrayFilterKey . $arrayFilterIndex . '._id'=>$arrayFilterValue ];
+					$arrayFilterIndex++;
 				}
 				else {
 					unset( $reversedPathParts[ $i ] );
 				}
 			}
 			elseif( $foundPrimaryTarget && $part==='$' ) {
-				$reversedPathParts[ $i ] = '$[]';
+				$reversedPathParts[ $i ] = '$[' . $arrayFilterKey . $arrayFilterIndex . ']';
+				$arrayFilters[]=[ $arrayFilterKey . $arrayFilterIndex . '._id'];
+
 			}
 		}
 		$complexPathParts = array_reverse( $reversedPathParts );
@@ -547,11 +564,12 @@ abstract class dispatcher
 
 			$filter[ $filterPath . '._id' ] = $_id;
 
-			$complexPath = self::convertFieldPathToComplexUpdate( $pathToUpdate, false );
+			//$complexPath = self::convertFieldPathToComplexUpdate( $pathToUpdate, false );
+			$complexFieldPath = new complexFieldPath( $pathToUpdate, false );
 
 			$update = [
 				'$pull' => [
-					$complexPath => [ '_id' => $_id ]
+					$complexFieldPath->getComplexPath() => [ '_id' => $_id ]
 				]
 			];
 		}
@@ -634,7 +652,7 @@ abstract class dispatcher
 				'arrayFilters' => []//array_reverse( $arrayFilters )
 			];
 		}
-		$pathParts         = explode( '.', $fieldPath );
+/*		$pathParts         = explode( '.', $fieldPath );
 		$reversedPathParts = array_reverse( $pathParts );
 
 		$arrayFilters = [];
@@ -663,20 +681,21 @@ abstract class dispatcher
 				$previousParts[] = $part;
 			}
 
-		}
-		$oldcomplexPathParts = array_reverse( $reversedPathParts );
-		$complexPathParts = self::convertFieldPathToComplexUpdate( $fieldPath, $useArrayFilter );
+		}*/
+		//$oldcomplexPathParts = array_reverse( $reversedPathParts );
+		//$complexPathParts = self::convertFieldPathToComplexUpdate( $fieldPath, $useArrayFilter );
+		$complexFieldPath = new complexFieldPath( $fieldPath, $useArrayFilter, $arrayFilterValue );
 
-		foreach( $arrayFilters as $i => $arrayFilter ) {
+		/*foreach( $arrayFilters as $i => $arrayFilter ) {
 			$arrayFilter[]      = 'arrayFilter' . $i;
 			$arrayFilters[ $i ] = [
 				implode( '.', array_reverse( $arrayFilter ) ) . '._id' => $arrayFilterValue
 			];
-		}
+		}*/
 
 		return [
-			'complexPath'  => $complexPathParts,//implode( '.', $complexPathParts ),
-			'arrayFilters' => [ ['arrayFilter._id'=>$arrayFilterValue] ]//array_reverse( $arrayFilters )
+			'complexPath'  => $complexFieldPath->getComplexPath(),
+			'arrayFilters' => $complexFieldPath->getArrayFilters()
 		];
 
 	}
