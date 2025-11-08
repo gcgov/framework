@@ -100,7 +100,7 @@ final class reflectionCacheProperty {
 		// defaults
 		$self->hasDefaultValue = array_key_exists( $self->propertyName, $classDefaultProps );
 		$self->defaultValue    = $self->hasDefaultValue ? $classDefaultProps[ $self->propertyName ] : null;
-		$self->allowsNulls    = $self->propertyType->allowsNull();
+		$self->allowsNulls    = $self->propertyType!=null ? $self->propertyType->allowsNull() : true;
 
 		// hot flags (attributes present?)
 		$self->excludeBsonSerialize   = isset( $attrSnapshot[ \gcgov\framework\services\mongodb\attributes\excludeBsonSerialize::class ] );
