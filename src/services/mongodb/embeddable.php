@@ -74,6 +74,14 @@ abstract class embeddable
 		try {
 			$rc = reflectionCache::getReflectionClass( get_called_class() );
 
+			if( $rc->hasAttribute( includeMeta::class ) ) {
+				/** @var includeMeta $includeMeta */
+				$includeMeta = $rc->getAttributeInstance( includeMeta::class );
+				if( !$includeMeta->includeMeta ) {
+					unset( $export['_meta'] );
+				}
+			}
+
 			// property-level redaction
 			$redactByProp = $rc->getAttributeInstancesByPropertyName( redact::class );
 			if( !empty( $redactByProp ) ) {
