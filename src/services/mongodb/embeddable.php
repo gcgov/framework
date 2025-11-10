@@ -583,22 +583,41 @@ abstract class embeddable
 					$parentObjPath = substr( $propertyPath, 0, strrpos( $propertyPath, '.' ) );
 					$fieldPath     = substr( $propertyPath, strrpos( $propertyPath, '.' ) + 1 );
 					$metaPath      = $parentObjPath . '._meta.fields[' . $fieldPath . ']';
+					$metaPathParent      = $parentObjPath . '._meta';
 				}
 				else {
+					$parentObjPath = null;
 					$fieldPath = $propertyPath;
 					$metaPath  = '_meta.fields[' . $fieldPath . ']';
+					$metaPathParent  = '_meta';
 				}
 
-				/** @var \gcgov\framework\services\mongodb\models\_meta\uiField $metaVal */
-				$uiField = $propertyAccessor->getValue( $this, $metaPath );
+				//_meta is not initialized for parent object, create it
+				if($propertyAccessor->isReadable($this, $metaPathParent) === false) {
+					$parentObjType = $this::class;
+					if( isset($parentObjPath)) {
+						$parentObjType = ($propertyAccessor->getValue($this, $parentObjPath))::class;
+					}
+					$propertyAccessor->setValue( $this, $metaPathParent, new _meta( $parentObjType ) );
+				}
 
-				if( $uiField instanceof \gcgov\framework\services\mongodb\models\_meta\uiField ) {
-					$uiField->error           = true;
-					$uiField->errorMessages[] = $violation->getMessage();//.' - field '.$propertyPath.' meta '.$metaPath;
+				try {
+					/** @var \gcgov\framework\services\mongodb\models\_meta\uiField $metaVal */
+					$uiField = $propertyAccessor->getValue( $this, $metaPath );
+
+					if( $uiField instanceof \gcgov\framework\services\mongodb\models\_meta\uiField ) {
+						$uiField->error           = true;
+						$uiField->errorMessages[] = $violation->getMessage();//.' - field '.$propertyPath.' meta '.$metaPath;
+					}
+					else {
+						log::error( 'MongoService', 'Validation violation not recorded in _meta for ' . get_called_class() . ' property path ' . $propertyPath . '. The meta field path (computed to be ' . $metaPath . ') did was not an instance of a \gcgov\framework\services\mongodb\models\_meta\uiField' );
+					}
 				}
-				else {
-					log::error( 'MongoService', 'Validation violation not recorded in _meta for ' . get_called_class() . ' property path ' . $propertyPath . '. The meta field path (computed to be ' . $metaPath . ') did was not an instance of a \gcgov\framework\services\mongodb\models\_meta\uiField' );
+				catch( \Exception $e ) {
+					error_log($e);
+					log::error( 'MongoService', 'Validation violation not recorded in _meta for ' . get_called_class() . ' property path ' . $propertyPath . '. The meta field path (computed to be ' . $metaPath . ') could not be accessed. ' . $e->getMessage(), $e->getTrace() );
 				}
+
 
 			}
 
