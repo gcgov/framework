@@ -25,6 +25,10 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 	#[OA\Property]
 	public string $base64EncodedContent  = '';
 
+	#[label( 'Date Uploaded' )]
+	#[OA\Property]
+	public ?\DateTimeImmutable $uploadDate = null;
+
 	/**
 	 * @return string
 	 */
@@ -65,6 +69,7 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 		$fileGridFs->filename = $metadata->filename;
 		$fileGridFs->contentType = $metadata->metadata?->contentType ?? '';
 		$fileGridFs->base64EncodedContent = base64_encode($contents);
+		$fileGridFs->uploadDate = \DateTimeImmutable::createFromMutable( $metadata->uploadDate->toDateTime() )->setTimezone( new \DateTimeZone( date_default_timezone_get() ) );
 
 		return $fileGridFs;
 	}
