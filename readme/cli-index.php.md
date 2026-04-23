@@ -9,9 +9,11 @@ $_SERVER[ 'REQUEST_METHOD' ] = 'CLI';
 $_SERVER['REQUEST_URI'] = $argv[1];
 $_SERVER[ 'REMOTE_ADDR' ] = '127.0.0.1';
 
-$framework = new \gcgov\framework\framework( $projectRootDirectory );
+$framework = new \gcgov\framework\framework();
 echo $framework->runApp();
 ```
+
+`$argv[1]` should contain the route path to execute (for example `/structure/cleanup`).
 
 Create a Windows batch file to load the app (cli.bat)
 `php.exe -c php.ini -f /app/cli/index.php %1`

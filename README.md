@@ -12,6 +12,36 @@ The easiest way to start is to use the [framework scaffolding project](https://g
 to start a new api and the [frontend app template](https://github.com/gcgov/framework-frontend-template) to start a
 corresponding front end application.
 
+### Requirements
+
+Framework package requirements from `composer.json`:
+
+* PHP `>=8.3`
+* PHP extensions: `ext-mongodb`, `ext-fileinfo`, `ext-pdo`
+
+Install dependencies with Composer:
+
+```bash
+composer install
+```
+
+### Minimum Application Contract
+
+The framework expects these app classes/files to exist in your `/app` directory:
+
+* `\app\app` implementing `\gcgov\framework\interfaces\app`
+* `\app\router` implementing `\gcgov\framework\interfaces\router`
+* `\app\renderer` implementing `\gcgov\framework\interfaces\render`
+
+Controllers should implement `\gcgov\framework\interfaces\controller`.
+
+Required configuration files:
+
+* `/app/config/app.json`
+* `/app/config/environment.json`
+
+If either file is missing, the framework throws a config exception during request handling.
+
 ## System Architecture
 
 ### Application File System
@@ -80,8 +110,9 @@ automatically start with some extra folders and tools.
 
 ### Core Files and Application Namespacing
 
-The webserver should point requests to /www/index.php. URL rewriting the original path to url parameter `R0` is
-required.
+The webserver should point requests to `/www/index.php`. URL rewriting should route application paths to this file.
+
+`gcgov\framework\router` routes using `$_SERVER['REQUEST_URI']` and `$_SERVER['REQUEST_METHOD']`. Rewrite rules should preserve the original request path in `REQUEST_URI`.
 
 * [index.php](readme/index.php.md)
 
@@ -218,7 +249,73 @@ Service** and **Microsoft Auth Token Exchange** extensions before rolling a new 
 Deprecated - use https://github.com/andrewsauder/microsoftServices instead
 
 ### MongoDB
-Comprehensive database modeling system `\gcgov\framework\services\mongodb`
+Comprehensive database modeling system `\gcgov\framework\services\mongodb`.
+
+Use this service by defining classes in `\app\models` that extend `\gcgov\framework\services\mongodb\model` (top-level collection documents) or `\gcgov\framework\services\mongodb\embeddable` (nested documents that are not stored as their own collection).
+
+#### How Models Work
+
+The Mongo model stack is layered like this:
+
+1. `embeddable` handles BSON and JSON serialization/deserialization, typemaps, `_meta`, and validation helpers.
+2. `dispatcher` handles embedded-model propagation (insert/update/delete in parent collections) and cascade deletion behavior.
+3. `factory` provides static data access and persistence APIs.
+4. `model` is the base class your top-level collection models extend.
+
+Every class extending `\gcgov\framework\services\mongodb\model` must define a public `$_id` field of type `\MongoDB\BSON\ObjectId`.
+
+By default, a model's collection name is the class name. You can override this and user-facing names with constants:
+
+```php
+final class inspection extends \gcgov\framework\services\mongodb\model {
+    const _COLLECTION = 'inspection';
+    const _HUMAN = 'inspection';
+    const _HUMAN_PLURAL = 'inspections';
+
+    public \MongoDB\BSON\ObjectId $_id;
+}
+```
+
+#### Core Model APIs (Static)
+
+Available through any model class (for example `\app\models\inspection`):
+
+* Read: `countDocuments`, `getAll`, `getPagedResponse`, `getOne`, `getOneBy`
+* Write: `save`, `saveMany`
+* Delete: `delete`, `deleteMany`, `deleteManyBy`
+* Analytics: `aggregation`
+
+Save and delete operations are transaction-aware. If you do not pass a `\MongoDB\Driver\Session`, the service opens and manages one for the operation.
+
+#### Serialization, Typemaps, and `_meta`
+
+`embeddable` provides the serialization pipeline used by all models and embedded documents:
+
+* BSON typemaps are generated from typed properties so Mongo results hydrate into your model classes.
+* Date handling maps Mongo `UTCDateTime` values to PHP `DateTimeImmutable` during read.
+* `_meta` is managed automatically and can include field labels, UI state, validation state, and DB operation results.
+* Property and class attributes control behavior such as `#[includeMeta]`, `#[excludeBsonSerialize]`, `#[excludeBsonUnserialize]`, `#[excludeJsonDeserialize]`, and `#[redact(...)]`.
+
+#### Embedded Model Dispatch and Cascading
+
+When saving a model, `dispatcher` can automatically propagate changes to embedded copies in other collections:
+
+* `_insertEmbedded` pushes newly saved models into configured parent arrays.
+* `_updateEmbedded` updates embedded copies by matching `_id`.
+* `_deleteEmbedded` removes embedded copies when the source model is deleted.
+* `_deleteCascade` recursively deletes related models marked with cascade attributes.
+
+This behavior is driven by typemap + attribute metadata, enabling denormalized Mongo document patterns while keeping embedded data synchronized.
+
+#### Additional Features Provided by the Mongo Service
+
+* `#[autoIncrement]` support for generated counters (including grouped/formatting scenarios).
+* `_beforeSave` and `_afterSave` lifecycle hooks on models.
+* Optional auditing/diff logging when enabled in environment config.
+* Validation integration via `updateValidationState()` using Symfony validation attributes.
+
+For full reference, configuration options, attributes, and detailed examples, see:
+
 * [MongoDB Service](readme/mongodb.md)
 
 

@@ -33,8 +33,8 @@ class router implements \gcgov\framework\interfaces\router {
 		/** @var \gcgov\framework\models\route[] $routes */
 		$routes = [];
 
-		//if your app will not run at the root of the domain, add the relative url to the app: ie: if your site will serve from http://example.com/api, $routePrepend="/api";
-		$routePrepend = '/bridges/api/';
+		//if your app will not run at the root of the domain, add a prefix, for example "/api"
+		$routePrepend = '';
 
 		$routes[] = new route( 'GET', $routePrepend.'structure', '\app\controllers\structure', 'getAll', true, [ constants::ROLE_STRUCTURE_READ ] );
 		$routes[] = new route( 'GET', $routePrepend.'structure/basic', '\app\controllers\structure', 'getAllBasic', true, [ constants::ROLE_STRUCTURE_READ ] );
