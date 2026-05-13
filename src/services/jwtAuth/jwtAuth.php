@@ -134,7 +134,7 @@ class jwtAuth {
 			// Configures the time that the token was issue (iat claim)
 			->issuedAt( $now )
 			// Configures the time that the token can be used (nbf claim)
-			//->canOnlyBeUsedAfter($now->modify('+1 second'))
+			->canOnlyBeUsedAfter( $now )
 			// Configures the expiration time of the token (exp claim)
 			->expiresAt( $now->add( $duration ) )
 			// Configures a new claim, called "scopes" with array of user roles
@@ -179,7 +179,7 @@ class jwtAuth {
 			// Configures the time that the token was issue (iat claim)
 			->issuedAt( $userRefreshToken->creation )
 			// Configures the time that the token can be used (nbf claim)
-			//->canOnlyBeUsedAfter($now->modify('+1 second'))
+			->canOnlyBeUsedAfter( $userRefreshToken->creation )
 			// Configures the expiration time of the token (exp claim)
 			->expiresAt( $userRefreshToken->expiration )
 			// Configures a new claim, called "scopes" with array of user roles
@@ -222,7 +222,7 @@ class jwtAuth {
 		//validate
 		$constraints = [
 			new \Lcobucci\JWT\Validation\Constraint\SignedWith( $this->signer, \Lcobucci\JWT\Signer\Key\InMemory::file( $this->getPublicKeyPath() ) ),
-			new \Lcobucci\JWT\Validation\Constraint\ValidAt( \Lcobucci\Clock\SystemClock::fromSystemTimezone() ),
+			new \Lcobucci\JWT\Validation\Constraint\StrictValidAt( \Lcobucci\Clock\SystemClock::fromSystemTimezone(), new \DateInterval( 'PT30S' ) ),
 			new \Lcobucci\JWT\Validation\Constraint\IssuedBy( $this->issuedBy ),
 			new \Lcobucci\JWT\Validation\Constraint\PermittedFor( $this->permittedFor ),
 			//new \Lcobucci\JWT\Validation\Constraint\RelatedTo('zz'),
@@ -261,7 +261,7 @@ class jwtAuth {
 		//validate
 		$constraints = [
 			new \Lcobucci\JWT\Validation\Constraint\SignedWith( $this->signer, \Lcobucci\JWT\Signer\Key\InMemory::file( $this->getPublicKeyPath() ) ),
-			new \Lcobucci\JWT\Validation\Constraint\ValidAt( \Lcobucci\Clock\SystemClock::fromSystemTimezone() ),
+			new \Lcobucci\JWT\Validation\Constraint\StrictValidAt( \Lcobucci\Clock\SystemClock::fromSystemTimezone(), new \DateInterval( 'PT30S' ) ),
 			new \Lcobucci\JWT\Validation\Constraint\IssuedBy( $this->issuedBy ),
 			new \Lcobucci\JWT\Validation\Constraint\PermittedFor( $this->permittedFor ),
 			//new \Lcobucci\JWT\Validation\Constraint\RelatedTo('zz'),
