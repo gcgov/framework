@@ -39,6 +39,7 @@ for ($i = 0; $i -lt 5; $i++)
 
 $guids.ForEach({ Write-Host $_ })
 
-$guids | ConvertTo-Json |  Out-File "$path/guids.json"
+$json = $guids | ConvertTo-Json
+[System.IO.File]::WriteAllText("$path/guids.json", $json, (New-Object System.Text.UTF8Encoding $false))
 
 Pop-Location
