@@ -107,6 +107,8 @@ final class AuthUserTest extends TestCase {
 			public function getEmail(): string { return 'bob@example.com'; }
 			public function getRoles(): array { return [ 'Reader' ]; }
 			public function getActive(): bool { return true; }
+			public function getMfaRequired(): bool { return false; }
+			public function getMfaConfigured(): bool { return false; }
 			public static function getFromOauth( string $email, string $externalId, string $externalProvider, ?string $firstName = '', ?string $lastName = '', bool $addIfNotExisting = false, array $rolesForNewUser=[] ): self { throw new \BadMethodCallException(); }
 			public static function verifyUsernamePassword( string $username, string $password ): self { throw new \BadMethodCallException(); }
 			public static function getOneByExternalId( string $externalId ): self { throw new \BadMethodCallException(); }

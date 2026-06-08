@@ -89,4 +89,14 @@ trait userTrait {
 		return $this->active;
 	}
 
+
+	public function getMfaRequired(): bool {
+		return $this->mfaRequired;
+	}
+
+
+	public function getMfaConfigured(): bool {
+		return $this->mfaConfigured;
+	}
+
 }

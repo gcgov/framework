@@ -34,6 +34,12 @@ interface user {
 	public function getActive(): bool;
 
 
+	public function getMfaRequired(): bool;
+
+
+	public function getMfaConfigured(): bool;
+
+
 	public static function getFromOauth( string $email, string $externalId, string $externalProvider, ?string $firstName = '', ?string $lastName = '', bool $addIfNotExisting = false, array $rolesForNewUser=[] ): self;
 
 
