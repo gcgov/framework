@@ -4,10 +4,10 @@ namespace gcgov\framework\services\mongodb\tools;
 
 class sys {
 
-	/** @var bool[] $propertyExists Multidimensional - $propertyExists[ Class FQN ][ Method Name ]=>bool */
+	/** @var array<string, array<string, bool>> Class FQN => property name => exists */
 	private static array $propertyExists = [];
 
-	/** @var bool[] $methodExists Multidimensional - $methodExists[ Class FQN ][ Method Name ]=>bool */
+	/** @var array<string, array<string, bool>> Class FQN => method name => exists */
 	private static array $methodExists = [];
 
 

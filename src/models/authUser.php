@@ -42,7 +42,7 @@ class authUser {
 
 
     /**
-     * @return static
+     * @return \gcgov\framework\models\authUser
      */
 	final public static function getInstance(): authUser {
 		$calledClass = get_called_class();

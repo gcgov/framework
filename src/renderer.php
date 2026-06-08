@@ -150,17 +150,31 @@ final class renderer {
 		if( $controllerDataResponse->getContentType()==='application/json' ) {
 			$encodedResponse = json_encode( $controllerDataResponse->getData() );
 			if( $encodedResponse===false ) {
-				return \app\renderer::processSystemErrorException( new \LogicException( 'JSON encoding of controller->data failed', 0 ) );
+				return $this->renderErrorResponseAsString(
+					\app\renderer::processSystemErrorException( new \LogicException( 'JSON encoding of controller->data failed', 0 ) )
+				);
 			}
 		}
 		elseif( $controllerDataResponse->getContentType()==='text/plain' ) {
 			$encodedResponse = (string)$controllerDataResponse->getData();
 		}
 		else {
-			return \app\renderer::processSystemErrorException( new \LogicException( 'Unsupported content-type provided in controller response', 500 ) );
+			return $this->renderErrorResponseAsString(
+				\app\renderer::processSystemErrorException( new \LogicException( 'Unsupported content-type provided in controller response', 500 ) )
+			);
 		}
 
 		return $encodedResponse;
+	}
+
+
+	private function renderErrorResponseAsString( controllerResponse $response ): string {
+		http_response_code( $response->getHttpStatus() );
+		if( $response instanceof controllerDataResponse ) {
+			$encoded = json_encode( $response->getData() );
+			return $encoded === false ? '' : $encoded;
+		}
+		return '';
 	}
 
 
@@ -210,7 +224,7 @@ final class renderer {
 
 		$encodedResponse = file_get_contents( $controllerFileResponse->getFilePathname() );
 
-		return $encodedResponse;
+		return $encodedResponse === false ? '' : $encodedResponse;
 	}
 
 
@@ -260,7 +274,7 @@ final class renderer {
 
 		$encodedResponse = base64_decode( $controllerResponse->getBase64EncodedContent() );
 
-		return $encodedResponse;
+		return $encodedResponse === false ? '' : $encodedResponse;
 	}
 
 
@@ -277,9 +291,9 @@ final class renderer {
 			ob_end_clean();
 		}
 		catch( \Throwable $e ) {
-			return \app\renderer::processSystemErrorException( $e );
+			return $this->renderErrorResponseAsString( \app\renderer::processSystemErrorException( $e ) );
 		}
-		return $content;
+		return $content === false ? '' : $content;
 	}
 
 

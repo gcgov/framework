@@ -18,9 +18,6 @@ class updateDeleteResult
 
 	private ?\MongoDB\BSON\ObjectId $upsertedId = null;
 
-	/** @var  \MongoDB\BSON\ObjectId[] */
-	private array $upsertedIds = [];
-
 	private int $upsertedCount = 0;
 
 	private int $embeddedDeletedCount = 0;
@@ -62,28 +59,32 @@ class updateDeleteResult
 					$this->deletedCount += $result->getDeletedCount();
 				}
 				elseif( $result instanceof \MongoDB\UpdateResult ) {
-					$this->modifiedCount += $result->getModifiedCount() ?? 0;
+					$this->modifiedCount += $result->getModifiedCount();
 					$this->matchedCount  += $result->getMatchedCount();
 					$this->upsertedCount += $result->getUpsertedCount();
 					if( $result->getUpsertedCount()>0 ) {
-						$this->upsertedId     = $result->getUpsertedId();
-						$this->upsertedIds [] = $result->getUpsertedId();
+						$this->upsertedId = $result->getUpsertedId();
 					}
 				}
 				elseif( $result instanceof \MongoDB\BulkWriteResult ) {
-					$this->modifiedCount += $result->getModifiedCount() ?? 0;
+					$this->modifiedCount += $result->getModifiedCount();
 					$this->matchedCount  += $result->getMatchedCount();
 					$this->upsertedCount += $result->getUpsertedCount();
-					if( $result->getUpsertedCount()>0 ) {
-						$this->upsertedIds = $result->getUpsertedIds();
-					}
 				}
 			}
 
 		}
 
 		//if embedded results are provided, add them to the object and sum their counts
-		if( count( $embeddedResults )>0 ) {
+		if( $embeddedResults instanceof \MongoDB\BulkWriteResult ) {
+			$this->embeddedMatchedCount  += $embeddedResults->getMatchedCount();
+			$this->embeddedModifiedCount += $embeddedResults->getModifiedCount();
+			$this->embeddedUpsertedCount += $embeddedResults->getUpsertedCount();
+			if( $embeddedResults->getUpsertedCount()>0 ) {
+				$this->embeddedUpsertedIds = array_merge( $this->embeddedUpsertedIds, array_values( $embeddedResults->getUpsertedIds() ) );
+			}
+		}
+		elseif( count( $embeddedResults )>0 ) {
 			foreach( $embeddedResults as $result ) {
 				if( $result instanceof \MongoDB\DeleteResult || $result instanceof updateDeleteResult ) {
 					$this->embeddedDeletedCount += $result->getDeletedCount();
@@ -93,15 +94,10 @@ class updateDeleteResult
 					$this->embeddedModifiedCount += $result->getModifiedCount();
 					$this->embeddedUpsertedCount += $result->getUpsertedCount();
 					if( $result->getUpsertedCount()>0 ) {
-						$this->embeddedUpsertedIds[] = $result->getUpsertedId();
-					}
-				}
-				if( $result instanceof \MongoDB\BulkWriteResult ) {
-					$this->embeddedMatchedCount  += $result->getMatchedCount();
-					$this->embeddedModifiedCount += $result->getModifiedCount();
-					$this->embeddedUpsertedCount += $result->getUpsertedCount();
-					if( $result->getUpsertedCount()>0 ) {
-						$this->embeddedUpsertedIds = array_merge( $this->embeddedUpsertedIds, $result->getUpsertedIds() );
+						$upsertedId = $result->getUpsertedId();
+						if( $upsertedId !== null ) {
+							$this->embeddedUpsertedIds[] = $upsertedId;
+						}
 					}
 				}
 			}

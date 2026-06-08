@@ -97,12 +97,6 @@ final class audit
 	#[OA\Property]
 	public \DateTimeImmutable      $dateTimeStamp;
 
-	#[excludeBsonSerialize]
-	#[excludeBsonUnserialize]
-	#[excludeJsonSerialize]
-	#[excludeJsonDeserialize]
-	private \MongoDB\ChangeStream $changeStream;
-
 	public function __construct() {
 		parent::__construct();
 		$this->_id = new \MongoDB\BSON\ObjectId();

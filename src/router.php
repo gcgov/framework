@@ -13,9 +13,6 @@ final class router {
 	/** @var \gcgov\framework\interfaces\router[] $serviceRouters  */
 	private array $serviceRouters = [];
 
-	/** @var string[] $serviceNamespaces  */
-	private array $serviceNamespaces = [];
-
 	/**
 	 * @param string[] $serviceNamespaces
 	 *
@@ -47,12 +44,7 @@ final class router {
 		if(config::getEnvironmentConfig()->logging->lifecycle) {
 			log::debug( 'Framework Lifecycle', '-Router- create \app\router' );
 		}
-		$appRouter = new \app\router();
-		if(!($appRouter instanceof \gcgov\framework\interfaces\router)) {
-			error_log('\app\router must implement \gcgov\framework\interfaces\router');
-			throw new routeException( '\app\router must implement \gcgov\framework\interfaces\router', 500 );
-		}
-		$this->appRouter = $appRouter;
+		$this->appRouter = new \app\router();
 	}
 
 
@@ -83,12 +75,9 @@ final class router {
 			case \FastRoute\Dispatcher::NOT_FOUND:
 				// ... 404 Not Found
 				throw new \gcgov\framework\exceptions\routeException ( 'URL Not Found', 404 );
-				break;
 			case \FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
-				$allowedMethods = $routeInfo[ 1 ];
 				// ... 405 Method Not Allowed
 				throw new \gcgov\framework\exceptions\routeException ( 'Method Not Allowed', 405 );
-				break;
 			case \FastRoute\Dispatcher::FOUND:
 				if(config::getEnvironmentConfig()->logging->lifecycle) {
 					log::debug( 'Framework Lifecycle', '-Router- found matching route' );

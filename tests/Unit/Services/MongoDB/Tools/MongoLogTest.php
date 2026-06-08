@@ -56,27 +56,18 @@ final class MongoLogTest extends TestCase {
 		}
 	}
 
-	public function testEmptyMongoDatabasesTriggersWarningAccessingFirstEntry(): void {
-		// Documents the current behaviour: log methods read
-		// `mongoDatabases[ 0 ]?->logging` without guarding that the array has
-		// any entries, so an empty array raises a PHP warning. Follow-up:
-		// add isset() / count() guard.
+	public function testEmptyMongoDatabasesIsAGracefulNoOp(): void {
+		// log::* methods short-circuit when mongoDatabases is empty rather
+		// than trying to access the first entry. This used to raise a PHP
+		// warning under PHP 8.4; the guard added during the level-5 cleanup
+		// preserves silent no-op semantics.
 		$env = new environmentConfig();
 		$env->mongoDatabases = [];
 		$prop = new \ReflectionProperty( \gcgov\framework\config::class, 'environmentConfig' );
 		$prop->setValue( null, $env );
 
-		set_error_handler( fn( $e, $msg ) => throw new \ErrorException( $msg, 0, $e ) );
-		try {
-			log::debug( 'empty-mongo', 'msg' );
-			$this->fail( 'Expected a warning to be raised' );
-		}
-		catch ( \ErrorException $e ) {
-			$this->assertStringContainsString( 'Undefined array key', $e->getMessage() );
-		}
-		finally {
-			restore_error_handler();
-		}
+		log::debug( 'empty-mongo', 'msg' );
+		$this->assertFileDoesNotExist( $this->logsDir . '/empty-mongo.log' );
 	}
 
 	private function primeEnvWithMongoLogging( bool $enabled ): void {

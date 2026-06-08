@@ -7,6 +7,9 @@ use gcgov\framework\services\mongodb\attributes\label;
 use JetBrains\PhpStorm\Deprecated;
 use OpenApi\Attributes as OA;
 
+/**
+ * @phpstan-consistent-constructor
+ */
 #[OA\Schema]
 class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
@@ -46,10 +49,10 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 
 	/**
-	 * @return $this
+	 * @return static
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function getFile( \MongoDB\BSON\ObjectId $_id ): gridfs {
+	public static function getFile( \MongoDB\BSON\ObjectId $_id ): static {
 
 		$collectionName = static::_getCollectionName();
 		$mdb            = new \gcgov\framework\services\mongodb\tools\mdb( collection: static::_getCollectionName() );
@@ -59,17 +62,28 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 		$stream   = $bucket->openDownloadStream( $_id );
 
 		$metadata = $bucket->getFileDocumentForStream($stream);
+		if( !is_object( $metadata ) ) {
+			throw new modelException( 'GridFS file metadata is not in the expected document shape', 500 );
+		}
 
 		$contents = stream_get_contents( $stream );
 		if( $contents===false ) {
 			throw new modelException('Unable to get file contents', 500);
 		}
 
-		$fileGridFs = new gridfs();
-		$fileGridFs->filename = $metadata->filename;
-		$fileGridFs->contentType = $metadata->metadata?->contentType ?? '';
+		$nestedMetadata = $metadata->metadata ?? null;
+		$contentType    = is_object( $nestedMetadata ) && isset( $nestedMetadata->contentType ) ? (string) $nestedMetadata->contentType : '';
+
+		$uploadDate = $metadata->uploadDate;
+		if( !( $uploadDate instanceof \MongoDB\BSON\UTCDateTime ) ) {
+			throw new modelException( 'GridFS file metadata is missing the uploadDate field', 500 );
+		}
+
+		$fileGridFs = new static();
+		$fileGridFs->filename = (string) $metadata->filename;
+		$fileGridFs->contentType = $contentType;
 		$fileGridFs->base64EncodedContent = base64_encode($contents);
-		$fileGridFs->uploadDate = \DateTimeImmutable::createFromMutable( $metadata->uploadDate->toDateTime() )->setTimezone( new \DateTimeZone( date_default_timezone_get() ) );
+		$fileGridFs->uploadDate = \DateTimeImmutable::createFromMutable( $uploadDate->toDateTime() )->setTimezone( new \DateTimeZone( date_default_timezone_get() ) );
 
 		return $fileGridFs;
 	}
@@ -84,6 +98,9 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 			$gridFsEntities = $bucket->find($filter);
 
 			foreach($gridFsEntities as $gridFsEntity) {
+				if( !is_object( $gridFsEntity ) || !isset( $gridFsEntity->_id ) ) {
+					continue;
+				}
 				$bucket->delete( $gridFsEntity->_id );
 			}
 		}
@@ -107,7 +124,8 @@ class gridfs extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 			$_id = new \MongoDB\BSON\ObjectId();
 
-			$stream = $bucket->openUploadStream( basename( $filePathname ), [ '_id' => $_id, ['metadata'=>['contentType'=>mime_content_type($filePathname)??'']] ] );
+			$detectedContentType = mime_content_type( $filePathname );
+			$stream = $bucket->openUploadStream( basename( $filePathname ), [ '_id' => $_id, ['metadata'=>['contentType'=> $detectedContentType === false ? '' : $detectedContentType]] ] );
 
 		}
 		catch( \Exception $e ) {

@@ -71,7 +71,8 @@ final class reflectionCacheProperty {
 		$self->setAttributeSnapshot( $attrSnapshot );
 
 		$self->propertyHasType  = $rp->hasType();
-		$self->propertyType     = $rp->getType();
+		$propertyType           = $rp->getType();
+		$self->propertyType     = $propertyType instanceof \ReflectionNamedType || $propertyType instanceof \ReflectionUnionType ? $propertyType : null;
 		$self->propertyTypeName = '';
 		if( $self->propertyHasType ) {
 			$t = $self->propertyType;

@@ -42,7 +42,7 @@ class mongoDatabase extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 
 	protected function _afterJsonDeserialize(): void {
-		if( !isset( $this->encryption ) ) {
+		if( !( new \ReflectionProperty( $this, 'encryption' ) )->isInitialized( $this ) ) {
 			$this->encryption = new encryption();
 		}
 

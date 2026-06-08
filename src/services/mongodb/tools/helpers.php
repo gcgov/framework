@@ -35,21 +35,23 @@ class helpers {
 	 * @param  string            $modelExceptionMessage
 	 * @param  int               $modelExceptionCode
 	 *
-	 * @return \stdClass|stdClass[]
+	 * @return \stdClass|\stdClass[]
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public static function jsonToObject( string|\stdClass $json, $modelExceptionMessage = 'Malformed JSON', $modelExceptionCode = 400 ) : \stdClass|array {
-		if( $json === null ) {
-			throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, $modelExceptionCode );
-		}
-
+	public static function jsonToObject( string|\stdClass $json, string $modelExceptionMessage = 'Malformed JSON', int $modelExceptionCode = 400 ) : \stdClass|array {
 		if( is_string( $json ) ) {
 			try {
-				$json = json_decode( $json, false, 512, JSON_THROW_ON_ERROR );
+				$decoded = json_decode( $json, false, 512, JSON_THROW_ON_ERROR );
 			}
 			catch( \JsonException $e ) {
 				throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, $modelExceptionCode, $e );
 			}
+
+			if( !( $decoded instanceof \stdClass ) && !is_array( $decoded ) ) {
+				throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, $modelExceptionCode );
+			}
+
+			return $decoded;
 		}
 
 		return $json;
@@ -73,8 +75,7 @@ class helpers {
 			return true;
 		}
 		catch(\Exception $e) {
-			throw new \gcgov\framework\exceptions\modelException( 'Failed to convert', 400 );
+			throw new \gcgov\framework\exceptions\modelException( 'Failed to convert', 400, $e );
 		}
-		return false;
 	}
 }

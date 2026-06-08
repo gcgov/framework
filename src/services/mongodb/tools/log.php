@@ -9,75 +9,86 @@ use Monolog\Handler\StreamHandler;
 
 final class log {
 
-	public static function debug( string $channel, string $message, array $context = [] ) {
-		if( !config::getEnvironmentConfig()?->mongoDatabases[ 0 ]?->logging ) {
+	/** @param array<string, mixed> $context */
+	public static function debug( string $channel, string $message, array $context = [] ): void {
+		if( !self::isMongoLoggingEnabled() ) {
 			return;
 		}
-		$logger = self::getLogger( $channel );
-		$logger->debug( $message, $context );
+		self::getLogger( $channel )->debug( $message, $context );
 	}
 
 
-	public static function info( string $channel, string $message, array $context = [] ) {
-		if( !config::getEnvironmentConfig()?->mongoDatabases[ 0 ]?->logging ) {
+	/** @param array<string, mixed> $context */
+	public static function info( string $channel, string $message, array $context = [] ): void {
+		if( !self::isMongoLoggingEnabled() ) {
 			return;
 		}
-		$logger = self::getLogger( $channel );
-		$logger->info( $message, $context );
+		self::getLogger( $channel )->info( $message, $context );
 	}
 
 
-	public static function notice( string $channel, string $message, array $context = [] ) {
-		if( !config::getEnvironmentConfig()?->mongoDatabases[ 0 ]?->logging ) {
+	/** @param array<string, mixed> $context */
+	public static function notice( string $channel, string $message, array $context = [] ): void {
+		if( !self::isMongoLoggingEnabled() ) {
 			return;
 		}
-		$logger = self::getLogger( $channel );
-		$logger->notice( $message, $context );
+		self::getLogger( $channel )->notice( $message, $context );
 	}
 
 
-	public static function warning( string $channel, string $message, array $context = [] ) {
-		if( !config::getEnvironmentConfig()?->mongoDatabases[ 0 ]?->logging ) {
+	/** @param array<string, mixed> $context */
+	public static function warning( string $channel, string $message, array $context = [] ): void {
+		if( !self::isMongoLoggingEnabled() ) {
 			return;
 		}
-		$logger = self::getLogger( $channel );
-		$logger->warning( $message, $context );
+		self::getLogger( $channel )->warning( $message, $context );
 	}
 
 
-	public static function error( string $channel, string $message, array $context = [] ) {
-		if( !config::getEnvironmentConfig()?->mongoDatabases[ 0 ]?->logging ) {
+	/** @param array<string, mixed> $context */
+	public static function error( string $channel, string $message, array $context = [] ): void {
+		if( !self::isMongoLoggingEnabled() ) {
 			return;
 		}
-		$logger = self::getLogger( $channel );
-		$logger->error( $message, $context );
+		self::getLogger( $channel )->error( $message, $context );
 	}
 
 
-	public static function critical( string $channel, string $message, array $context = [] ) {
-		if( !config::getEnvironmentConfig()?->mongoDatabases[ 0 ]?->logging ) {
+	/** @param array<string, mixed> $context */
+	public static function critical( string $channel, string $message, array $context = [] ): void {
+		if( !self::isMongoLoggingEnabled() ) {
 			return;
 		}
-		$logger = self::getLogger( $channel );
-		$logger->critical( $message, $context );
+		self::getLogger( $channel )->critical( $message, $context );
 	}
 
 
-	public static function alert( string $channel, string $message, array $context = [] ) {
-		if( !config::getEnvironmentConfig()?->mongoDatabases[ 0 ]?->logging ) {
+	/** @param array<string, mixed> $context */
+	public static function alert( string $channel, string $message, array $context = [] ): void {
+		if( !self::isMongoLoggingEnabled() ) {
 			return;
 		}
-		$logger = self::getLogger( $channel );
-		$logger->alert( $message, $context );
+		self::getLogger( $channel )->alert( $message, $context );
 	}
 
 
-	public static function emergency( string $channel, string $message, array $context = [] ) {
-		if( !config::getEnvironmentConfig()?->mongoDatabases[ 0 ]?->logging ) {
+	/** @param array<string, mixed> $context */
+	public static function emergency( string $channel, string $message, array $context = [] ): void {
+		if( !self::isMongoLoggingEnabled() ) {
 			return;
 		}
-		$logger = self::getLogger( $channel );
-		$logger->emergency( $message, $context );
+		self::getLogger( $channel )->emergency( $message, $context );
+	}
+
+
+	private static function isMongoLoggingEnabled(): bool {
+		try {
+			$envConfig = config::getEnvironmentConfig();
+		}
+		catch( \gcgov\framework\exceptions\configException $e ) {
+			return false;
+		}
+		return isset( $envConfig->mongoDatabases[ 0 ] ) && $envConfig->mongoDatabases[ 0 ]->logging;
 	}
 
 
@@ -89,8 +100,16 @@ final class log {
 			return self::$loggers[ $channel ];
 		}
 
-		if( empty( $channel ) ) {
-			$channel = \gcgov\framework\config::getAppConfig()?->app?->title ?? 'app';
+		if( $channel === '' ) {
+			try {
+				$channel = \gcgov\framework\config::getAppConfig()->app->title;
+				if( $channel === '' ) {
+					$channel = 'app';
+				}
+			}
+			catch( \gcgov\framework\exceptions\configException $e ) {
+				$channel = 'app';
+			}
 		}
 
 		$handlers = [

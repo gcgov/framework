@@ -105,7 +105,6 @@ class mail {
 
 
 	/**
-	 * @return mixed
 	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
 	private function getMicrosoftAccessToken() : string {
@@ -113,7 +112,7 @@ class mail {
 
 		//get user access token
 		if( isset( $_SERVER[ 'HTTP_X_MSACCESSTOKEN' ] ) ) {
-			return (string) $microsoftAuth->getAccessToken( $_SERVER[ 'HTTP_X_MSACCESSTOKEN' ] );
+			return (string) $microsoftAuth->getAccessToken( (string) $_SERVER[ 'HTTP_X_MSACCESSTOKEN' ] );
 		}
 		//get access token
 		else {

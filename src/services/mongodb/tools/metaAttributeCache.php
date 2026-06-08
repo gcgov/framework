@@ -5,20 +5,24 @@ namespace gcgov\framework\services\mongodb\tools;
 
 final class metaAttributeCache {
 
-	/** @var \gcgov\framework\services\mongodb\models\_meta\uiField[] $fields */
+	/** @var array<string, array<string, \gcgov\framework\services\mongodb\models\_meta\uiField>> */
 	private static array $fields = [];
 
-	/** @var string[][] $labels */
+	/** @var array<string, array<string, string>> */
 	private static array $labels = [];
 
 
-	public static function set( string $className, array $labels, array $fields ) {
+	/**
+	 * @param array<string, string> $labels
+	 * @param array<string, \gcgov\framework\services\mongodb\models\_meta\uiField> $fields
+	 */
+	public static function set( string $className, array $labels, array $fields ): void {
 		self::$fields[ $className ] = $fields;
 		self::$labels[ $className ] = $labels;
 	}
 
 	/**
-	 * @return ?\gcgov\framework\services\mongodb\models\_meta\uiField[]
+	 * @return array<string, \gcgov\framework\services\mongodb\models\_meta\uiField>|null
 	 */
 	public static function getFields( string $className ): ?array {
 		if( isset( self::$fields[ $className ] ) ) {
@@ -29,7 +33,7 @@ final class metaAttributeCache {
 
 
 	/**
-	 * @return ?string[]
+	 * @return array<string, string>|null
 	 */
 	public static function getLabels( string $className ): ?array {
 		if( isset( self::$labels[ $className ] ) ) {
@@ -39,7 +43,7 @@ final class metaAttributeCache {
 	}
 
 	/**
-	 * @return \gcgov\framework\services\mongodb\models\_meta\uiField[]
+	 * @return array<string, array<string, \gcgov\framework\services\mongodb\models\_meta\uiField>>
 	 */
 	public static function getAllFields(): array {
 		return self::$fields;
@@ -47,7 +51,7 @@ final class metaAttributeCache {
 
 
 	/**
-	 * @return string[]
+	 * @return array<string, array<string, string>>
 	 */
 	public static function getAllLabels(): array {
 		return self::$labels;

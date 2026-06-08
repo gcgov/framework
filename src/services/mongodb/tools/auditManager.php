@@ -43,17 +43,17 @@ final class auditManager {
 		$afterSaveObjectClone = clone $afterSaveObject;
 		$beforeSaveObjectClone = clone $beforeSaveObject;
 
-		if(is_object($afterSaveObjectClone) && method_exists($afterSaveObjectClone, 'doBsonSerialize')) {
-			$after = json_decode(json_encode($afterSaveObjectClone->doBsonSerialize( true, true )));
+		if(method_exists($afterSaveObjectClone, 'doBsonSerialize')) {
+			$after = json_decode((string) json_encode($afterSaveObjectClone->doBsonSerialize( true, true )));
 		}
 		else {
-			$after = json_decode(json_encode($afterSaveObjectClone));
+			$after = json_decode((string) json_encode($afterSaveObjectClone));
 		}
-		if(is_object($beforeSaveObjectClone) && method_exists($beforeSaveObjectClone, 'doBsonSerialize')) {
-			$before = json_decode(json_encode($beforeSaveObjectClone->doBsonSerialize( true, true )));
+		if(method_exists($beforeSaveObjectClone, 'doBsonSerialize')) {
+			$before = json_decode((string) json_encode($beforeSaveObjectClone->doBsonSerialize( true, true )));
 		}
 		else {
-			$before = json_decode(json_encode($beforeSaveObjectClone));
+			$before = json_decode((string) json_encode($beforeSaveObjectClone));
 		}
 
 		//create the patch from new to old (this allows us to work backwards from the current version that is saved in the main table)
@@ -133,6 +133,9 @@ final class auditManager {
 			}
 
 			$event = $this->changeStream->current();
+			if( !is_object( $event ) ) {
+				continue;
+			}
 
 			$ns = sprintf( '%s.%s', $event->ns->db, $event->ns->coll );
 			$id = (string)$event->documentKey->_id;
@@ -156,7 +159,8 @@ final class auditManager {
 				$message = "Updated document in " . $ns . " with _id: " . $id;
 			}
 
-			log::info( 'MongoAudit', $message, json_decode( json_encode( $data ), true ) );
+			$context = json_decode( (string) json_encode( $data ), true );
+			log::info( 'MongoAudit', $message, is_array( $context ) ? $context : [] );
 
 			$audits[] = \gcgov\framework\services\mongodb\models\audit::create( $event->ns->coll, $event->documentKey->_id, $event->operationType, $updateDeleteResult, $message, $data );
 			//break;

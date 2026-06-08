@@ -62,9 +62,9 @@ class db
 	 *
 	 * @param  \gcgov\framework\services\mongodb\updateDeleteResult  $primaryResult
 	 */
-	public function set( \gcgov\framework\services\mongodb\updateDeleteResult $primaryResult ) {
+	public function set( \gcgov\framework\services\mongodb\updateDeleteResult $primaryResult ): void {
 		$this->deleted          = $primaryResult->getDeletedCount();
-		$this->modified         = $primaryResult->getModifiedCount() ?? 0;
+		$this->modified         = $primaryResult->getModifiedCount();
 		$this->matched          = $primaryResult->getMatchedCount();
 		$this->upserted         = $primaryResult->getUpsertedCount();
 		$this->upsertedId       = $primaryResult->getUpsertedCount() > 0 ? (string) $primaryResult->getUpsertedId() : '';

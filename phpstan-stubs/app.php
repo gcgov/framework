@@ -21,28 +21,39 @@ class app implements \gcgov\framework\interfaces\app {
 
 }
 
-class router {
+class router implements \gcgov\framework\interfaces\router {
 	public static function _before(): void {}
 	public static function _after(): void {}
+
+	/**
+	 * @return \gcgov\framework\models\route[]
+	 */
+	public function getRoutes(): array {
+		return [];
+	}
+
+	public function authentication( \gcgov\framework\models\routeHandler $routeHandler ): bool {
+		return true;
+	}
 }
 
 class renderer {
 	public static function _before(): void {}
 	public static function _after(): void {}
 
-	public static function processRouteException( \gcgov\framework\exceptions\routeException $e ): \gcgov\framework\interfaces\_controllerResponse {
+	public static function processRouteException( \gcgov\framework\exceptions\routeException $e ): \gcgov\framework\models\controllerResponse {
 		throw new \LogicException( 'stub' );
 	}
 
-	public static function processModelException( \gcgov\framework\exceptions\modelException $e ): \gcgov\framework\interfaces\_controllerResponse {
+	public static function processModelException( \gcgov\framework\exceptions\modelException $e ): \gcgov\framework\models\controllerResponse {
 		throw new \LogicException( 'stub' );
 	}
 
-	public static function processControllerException( \gcgov\framework\exceptions\controllerException $e ): \gcgov\framework\interfaces\_controllerResponse {
+	public static function processControllerException( \gcgov\framework\exceptions\controllerException $e ): \gcgov\framework\models\controllerResponse {
 		throw new \LogicException( 'stub' );
 	}
 
-	public static function processSystemErrorException( \Throwable $e ): \gcgov\framework\interfaces\_controllerResponse {
+	public static function processSystemErrorException( \Throwable $e ): \gcgov\framework\models\controllerResponse {
 		throw new \LogicException( 'stub' );
 	}
 }

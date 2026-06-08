@@ -52,16 +52,20 @@ class environmentConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 	}
 
 	protected function _afterJsonDeserialize(): void {
-		if(!isset($this->microsoft)) {
+		// jsonDeserialize may instantiate this class without invoking the
+		// constructor, leaving typed-non-nullable properties uninitialized.
+		// Use reflection so we can ask the engine about init state without
+		// PHPStan narrowing the check away.
+		if( !( new \ReflectionProperty( $this, 'microsoft' ) )->isInitialized( $this ) ) {
 			$this->microsoft = new microsoft();
 		}
-		if(!isset($this->jwtAuth)) {
+		if( !( new \ReflectionProperty( $this, 'jwtAuth' ) )->isInitialized( $this ) ) {
 			$this->jwtAuth = new jwtAuth();
 		}
-		if(!isset($this->payjunction)) {
+		if( !( new \ReflectionProperty( $this, 'payjunction' ) )->isInitialized( $this ) ) {
 			$this->payjunction = new payjunction();
 		}
-		if(!isset($this->logging)) {
+		if( !( new \ReflectionProperty( $this, 'logging' ) )->isInitialized( $this ) ) {
 			$this->logging = new logging();
 		}
 	}

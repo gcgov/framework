@@ -56,7 +56,7 @@ class http {
 			503 => 'Service Unavailable',
 			504 => 'Gateway Time-out',
 			505 => 'HTTP Version not supported',
-			default => 'Unknown http status code "' . htmlentities( $code ) . '"',
+			default => 'Unknown http status code "' . htmlentities( (string) $code ) . '"',
 		};
 	}
 

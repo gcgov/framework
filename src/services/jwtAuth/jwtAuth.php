@@ -146,6 +146,9 @@ class jwtAuth {
 			// Builds a new token
 			->getToken( $this->configuration->signer(), $this->configuration->signingKey() );
 
+		if( !( $token instanceof \Lcobucci\JWT\Token\Plain ) ) {
+			throw new \LogicException( 'JWT builder returned an unexpected token implementation' );
+		}
 		return $token;
 	}
 
@@ -193,6 +196,9 @@ class jwtAuth {
 
 		\gcgov\framework\services\jwtAuth\models\userRefreshToken::save( $userRefreshToken );
 
+		if( !( $token instanceof \Lcobucci\JWT\Token\Plain ) ) {
+			throw new \LogicException( 'JWT builder returned an unexpected token implementation' );
+		}
 		return $token;
 	}
 
@@ -238,7 +244,7 @@ class jwtAuth {
 	/**
 	 * @param string $token Encoded token
 	 *
-	 * @return \Lcobucci\JWT\Token
+	 * @return \MongoDB\BSON\ObjectId
 	 * @throws \Lcobucci\JWT\Validation\RequiredConstraintsViolated
 	 * @throws \Lcobucci\JWT\Encoding\CannotDecodeContent
 	 * @throws \Lcobucci\JWT\Token\UnsupportedHeaderFound
@@ -251,6 +257,9 @@ class jwtAuth {
 
 		//decode
 		$parsedToken = $this->configuration->parser()->parse( $token );
+		if( !( $parsedToken instanceof \Lcobucci\JWT\UnencryptedToken ) ) {
+			throw new \Exception( 'Refresh token invalid', 401 );
+		}
 
 		//get guid from the token header "kid" field
 		$guid = $parsedToken->headers()->get( 'kid' );
@@ -284,12 +293,15 @@ class jwtAuth {
 	/**
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public function deleteRefreshToken( string $unparsedToken ) {
+	public function deleteRefreshToken( string $unparsedToken ): void {
 		//if token is passed straight from the header, strip "Bearer " from the string before we try to parse it
 		$token = str_replace( 'Bearer ', '', $unparsedToken );
 
 		//decode
 		$parsedToken = $this->configuration->parser()->parse( $token );
+		if( !( $parsedToken instanceof \Lcobucci\JWT\UnencryptedToken ) ) {
+			return;
+		}
 
 		\gcgov\framework\services\jwtAuth\models\userRefreshToken::delete( $parsedToken->claims()->get( 'sub' ) );
 

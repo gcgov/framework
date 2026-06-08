@@ -20,7 +20,7 @@ class encryption extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 	}
 
 	protected function _afterJsonDeserialize(): void {
-		if(!isset($this->kmsProviders)) {
+		if( !( new \ReflectionProperty( $this, 'kmsProviders' ) )->isInitialized( $this ) ) {
 			$this->kmsProviders = new kmsProviders();
 		}
 	}
@@ -65,7 +65,7 @@ class encryption extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	public function getDriverOptionKmsProviders(): array {
 		$kmsProviders = [];
-		if( isset( $this->kmsProviders?->gcp ) ) {
+		if( isset( $this->kmsProviders->gcp ) ) {
 			$kmsProviders[ 'gcp' ] = [
 				'email' => $this->kmsProviders->gcp->email
 			];
@@ -73,7 +73,10 @@ class encryption extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 				$kmsProviders[ 'gcp' ][ 'privateKey' ] = $this->kmsProviders->gcp->privateKey;
 			}
 			if( !empty( $this->kmsProviders->gcp->privateKeyFilePathName ) ) {
-				$kmsProviders[ 'gcp' ][ 'privateKey' ] = file_get_contents( $this->kmsProviders->gcp->privateKeyFilePathName );
+				$privateKey = file_get_contents( $this->kmsProviders->gcp->privateKeyFilePathName );
+				if( $privateKey !== false ) {
+					$kmsProviders[ 'gcp' ][ 'privateKey' ] = $privateKey;
+				}
 			}
 		}
 

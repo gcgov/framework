@@ -16,7 +16,7 @@ class request {
 
 	public static function getUserClassFqdn(): string {
 		if( class_exists( '\app\models\user' ) ) {
-			if( is_a( \app\models\user::class, \gcgov\framework\interfaces\auth\user::class ) ) {
+			if( !is_a( \app\models\user::class, \gcgov\framework\interfaces\auth\user::class, true ) ) {
 				throw new configException( '\app\models\user must implement \gcgov\framework\interfaces\auth\user to be used in framework authentication routes' );
 			}
 			return \app\models\user::class;
@@ -25,11 +25,15 @@ class request {
 	}
 
 
+	/**
+	 * @return array<string, mixed>
+	 */
 	public static function getPostData(): array {
 		$postData = $_POST;
 
 		if( count( $_POST )===0 ) {
-			$postData = json_decode( file_get_contents( 'php://input' ), true );
+			$rawInput = file_get_contents( 'php://input' );
+			$postData = $rawInput === false ? [] : json_decode( $rawInput, true );
 		}
 
 		if( !is_array( $postData ) ) {
@@ -38,5 +42,6 @@ class request {
 
 		return $postData;
 	}
+
 
 }

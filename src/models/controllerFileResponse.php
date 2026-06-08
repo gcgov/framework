@@ -23,9 +23,6 @@ class controllerFileResponse extends controllerResponse implements _controllerFi
 	}
 
 
-	/**
-	 * @return mixed
-	 */
 	public function getFilePathname(): string {
 
 		return $this->filePathname;
@@ -42,7 +39,8 @@ class controllerFileResponse extends controllerResponse implements _controllerFi
 			throw new controllerException($filePathname.' not found', 400);
 		}
 		$this->filePathname = $filePathname;
-		$this->contentType  = mime_content_type( $filePathname );
+		$detectedContentType = mime_content_type( $filePathname );
+		$this->contentType   = $detectedContentType === false ? '' : $detectedContentType;
 	}
 
 

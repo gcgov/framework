@@ -36,8 +36,8 @@ class guid {
 		}
 
 		// Fallback (PHP 4.2+)
-		mt_srand( (double) microtime() * 10000 );
-		$charid = strtolower( md5( uniqid( rand(), true ) ) );
+		mt_srand( (int) ( (float) microtime() * 10000 ) );
+		$charid = strtolower( md5( uniqid( (string) rand(), true ) ) );
 		$hyphen = chr( 45 );                  // "-"
 		$lbrace = $trim ? "" : chr( 123 );    // "{"
 		$rbrace = $trim ? "" : chr( 125 );    // "}"

@@ -18,11 +18,11 @@ class controllerPagedDataResponse extends controllerDataResponse implements _con
 		}
 
 		$headers = [
-			new controllerResponseHeader( 'X-Page', $result->getPage() ),
-			new controllerResponseHeader( 'X-Count', $result->getCount() ),
-			new controllerResponseHeader( 'X-Limit', $result->getLimit() ),
-			new controllerResponseHeader( 'X-Page-Count', $result->getTotalPageCount() ),
-			new controllerResponseHeader( 'X-Total-Count', $result->getTotalDocumentCount() ),
+			new controllerResponseHeader( 'X-Page', (string) $result->getPage() ),
+			new controllerResponseHeader( 'X-Count', (string) $result->getCount() ),
+			new controllerResponseHeader( 'X-Limit', (string) $result->getLimit() ),
+			new controllerResponseHeader( 'X-Page-Count', (string) $result->getTotalPageCount() ),
+			new controllerResponseHeader( 'X-Total-Count', (string) $result->getTotalDocumentCount() ),
 		];
 
 		parent::__construct( $result->getData(), $headers );

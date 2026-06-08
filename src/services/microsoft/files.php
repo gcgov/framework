@@ -14,7 +14,6 @@ use Microsoft\Graph\Exception\GraphException;
 class files {
 
 	public string $rootBasePath         = '';
-	private bool  $usingUserAccessToken = false;
 
 
 	public function __construct( $rootBasePath = '' ) {
@@ -295,7 +294,7 @@ class files {
 						$uploadByte     = $graph->createRequest( "PUT", $graphUrl )->addHeaders( $headers )
 							->attachBody( $data )
 							->setReturnType( \Microsoft\Graph\Model\UploadSession::class )
-							->setTimeout( "1000" )->execute();
+							->setTimeout( 1000 )->execute();
 						$bytesRemaining = $bytesRemaining - $chunkSize;
 						$i++;
 					}
@@ -342,7 +341,6 @@ class files {
 
 
 	/**
-	 * @return mixed
 	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
 	private function getMicrosoftAccessToken(): string {
@@ -350,13 +348,11 @@ class files {
 
 		//get user access token
 		if( isset( $_SERVER[ 'HTTP_X_MSACCESSTOKEN' ] ) ) {
-			$this->usingUserAccessToken = true;
-			return (string)$microsoftAuth->getAccessToken( $_SERVER[ 'HTTP_X_MSACCESSTOKEN' ] );
+			return (string)$microsoftAuth->getAccessToken( (string) $_SERVER[ 'HTTP_X_MSACCESSTOKEN' ] );
 
 		}
 		//get access token
 		else {
-			$this->usingUserAccessToken = false;
 			return $microsoftAuth->getApplicationAccessToken();
 		}
 	}
@@ -400,44 +396,5 @@ class files {
 		}
 	}
 
-
-	/**
-	 * @param            $accessToken
-	 * @param string[]   $basePath
-	 *
-	 * @return \Microsoft\Graph\Model\DriveItem[]
-	 */
-	private function createMicrosoftDirectories( $accessToken, array $basePath ): array {
-		$driveItems = [];
-
-		$graph = new \Microsoft\Graph\Graph();
-		$graph->setAccessToken( $accessToken );
-
-		$path = '';
-		foreach( $basePath as $i => $directoryName ) {
-			$body = [
-				'name'                              => $directoryName,
-				'folder'                            => (object)[],
-				'@microsoft.graph.conflictBehavior' => 'fail'
-			];
-
-			try {
-				/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
-				$driveItems[] = $graph->createRequest( "POST", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/root:/' . $this->rootBasePath . $path . ":/children" )
-					->attachBody( $body )->setReturnType( \Microsoft\Graph\Model\DriveItem::class )
-					->execute();
-			}
-			catch( \Exception|\GuzzleHttp\Exception\GuzzleException $e ) {
-				error_log( $path . '/' . $directoryName . ' not created - already exists?' );
-				error_log( $e );
-			}
-
-			//build out the path with each iteration since the array is the directory structure
-			//ie if $basePath array = [ parent folder, child folder, grandchild folder ], $path becomes "/parent folder/child folder" after the second index
-			$path .= '/' . $directoryName;
-		}
-
-		return $driveItems;
-	}
 
 }

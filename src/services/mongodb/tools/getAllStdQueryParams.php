@@ -19,10 +19,10 @@ class getAllStdQueryParams {
 	}
 
 
-	public static function get( int $defaultLimit = 10, int $defaultPage = 1 ): static {
+	public static function get( int $defaultLimit = 10, int $defaultPage = 1 ): self {
 		$params        = new self( $defaultLimit, $defaultPage );
-		$params->limit = $_GET[ 'limit' ] ?? $defaultLimit;
-		$params->page  = $_GET[ 'page' ] ?? $defaultPage;
+		$params->limit = isset( $_GET[ 'limit' ] ) ? (int) $_GET[ 'limit' ] : $defaultLimit;
+		$params->page  = isset( $_GET[ 'page' ] ) ? (int) $_GET[ 'page' ] : $defaultPage;
 
 		if( isset( $_GET[ 'sortBy' ] ) && is_array( $_GET[ 'sortBy' ] ) ) {
 			foreach( $_GET[ 'sortBy' ] as $sortBy ) {

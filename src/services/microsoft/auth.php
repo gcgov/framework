@@ -22,16 +22,15 @@ class auth {
 	/**
 	 * @param  string  $suppliedToken
 	 *
-	 * @return \League\OAuth2\Client\Token\AccessTokenInterface|\League\OAuth2\Client\Token\AccessToken
+	 * @return \TheNetworg\OAuth2\Client\Token\AccessToken
 	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
-	public function getAccessToken( string $suppliedToken ) : \League\OAuth2\Client\Token\AccessTokenInterface|\League\OAuth2\Client\Token\AccessToken {
+	public function getAccessToken( string $suppliedToken ) : \TheNetworg\OAuth2\Client\Token\AccessToken {
 		$this->provider->defaultEndPointVersion = \TheNetworg\OAuth2\Client\Provider\Azure::ENDPOINT_VERSION_2_0;
 		$this->provider->scope                  = 'openid profile email offline_access';
 
 		try {
-			/** @var \TheNetworg\OAuth2\Client\Token\AccessToken $token */
-			return $this->provider->getAccessToken( 'jwt_bearer', [
+			$token = $this->provider->getAccessToken( 'jwt_bearer', [
 				'scope'               => $this->provider->scope,
 				'assertion'           => $suppliedToken,
 				'requested_token_use' => 'on_behalf_of',
@@ -40,6 +39,12 @@ class auth {
 		catch( \Exception $e ) {
 			throw new \gcgov\framework\exceptions\serviceException( 'Microsoft authentication failed', 400, $e );
 		}
+
+		if( !( $token instanceof \TheNetworg\OAuth2\Client\Token\AccessToken ) ) {
+			throw new \gcgov\framework\exceptions\serviceException( 'Microsoft provider returned an unexpected token implementation', 500 );
+		}
+
+		return $token;
 	}
 
 
@@ -47,7 +52,7 @@ class auth {
 	 * @return \gcgov\framework\services\microsoft\components\tokenInfomation
 	 */
 	public function verify() : \gcgov\framework\services\microsoft\components\tokenInfomation {
-		$suppliedToken = str_replace( 'Bearer ', '', $_SERVER[ 'HTTP_AUTHORIZATION' ] );
+		$suppliedToken = str_replace( 'Bearer ', '', (string) ( $_SERVER[ 'HTTP_AUTHORIZATION' ] ?? '' ) );
 		$token         = $this->getAccessToken( $suppliedToken );
 
 		$claims  = $token->getIdTokenClaims();

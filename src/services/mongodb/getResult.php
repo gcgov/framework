@@ -11,9 +11,9 @@ class getResult extends \andrewsauder\jsonDeserialize\jsonDeserialize implements
 
 
 	/**
-	 * @param int|string|null $limit
-	 * @param int|string|null $page
-	 * @param mixed|null      $data
+	 * @param int|string|null   $limit
+	 * @param int|string|null   $page
+	 * @param array<int, mixed> $data
 	 */
 	public function __construct( int|string|null $limit = 10, int|string|null $page = 1, array $data = [] ) {
 		$this->page  = isset( $page ) && is_numeric( $page ) ? (int)$page : 1;
@@ -108,7 +108,10 @@ class getResult extends \andrewsauder\jsonDeserialize\jsonDeserialize implements
 	 * @return int
 	 */
 	public function getTotalPageCount(): int {
-		return ceil( $this->totalDocumentCount / $this->limit );
+		if( $this->limit <= 0 ) {
+			return 0;
+		}
+		return (int) ceil( $this->totalDocumentCount / $this->limit );
 	}
 
 }

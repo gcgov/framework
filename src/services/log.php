@@ -64,7 +64,15 @@ final class log {
 		}
 
 		if( empty( $channel ) ) {
-			$channel = \gcgov\framework\config::getAppConfig()?->app?->title ?? 'app';
+			try {
+				$channel = \gcgov\framework\config::getAppConfig()->app->title;
+				if( $channel === '' ) {
+					$channel = 'app';
+				}
+			}
+			catch( \gcgov\framework\exceptions\configException $e ) {
+				$channel = 'app';
+			}
 		}
 
 		$handlers = [

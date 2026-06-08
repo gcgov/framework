@@ -143,7 +143,7 @@ class _meta
 
 		}
 		catch( \ReflectionException $e ) {
-			log::error( 'MongoService', 'Generate attribute data failed: ' . $e->getMessage(), $e->getTrace() );
+			log::error( 'MongoService', 'Generate attribute data failed: ' . $e->getMessage(), [ 'trace' => $e->getTrace() ] );
 		}
 	}
 
