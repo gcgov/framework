@@ -31,5 +31,20 @@
 		"ext-pdo": "*",
 		"ext-sodium": "*",
 		"spatie/typescript-transformer": "^2.4"
+	},
+	"config": {
+		"allow-plugins": {
+			"phpstan/extension-installer": true
+		}
+	},
+	"require-dev": {
+		"phpstan/phpstan": "^2.1",
+		"phpunit/phpunit": "^11.5",
+		"jetbrains/phpstorm-attributes": "^1.0"
+	},
+	"scripts": {
+		"phpstan": "phpstan analyse --memory-limit=512M",
+		"test": "phpunit",
+		"ci": ["@phpstan", "@test"]
 	}
 }

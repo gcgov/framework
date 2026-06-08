@@ -3,3 +3,6 @@ composer.phar
 /.idea
 composer.lock
 composer-local.json
+.phpunit.cache/
+.phpunit.result.cache
+.phpstan-cache/

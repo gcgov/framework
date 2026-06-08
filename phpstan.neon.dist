@@ -1,0 +1,26 @@
+parameters:
+	level: 0
+	paths:
+		- src
+	tmpDir: .phpstan-cache
+	treatPhpDocTypesAsCertain: false
+
+	# Type information for user-app classes that the framework calls into.
+	# These classes are defined in each app that consumes the framework
+	# (see gcgov/framework-app-template for the reference implementation).
+	# scanFiles registers the symbols without analysing the stub itself.
+	scanFiles:
+		- phpstan-stubs/app.php
+
+	# These files contain framework-side late-static-binding patterns and
+	# PHP 8.4 property-hook concerns that PHPStan cannot reason about
+	# without runtime context (LSB hooks _beforeSave/_afterSave/_getCollectionName
+	# are expected to be supplied by user model subclasses, and unset() on
+	# properties that subclasses may turn into property hooks). Excluded here
+	# so the rest of the framework can be analysed cleanly; the patterns
+	# inside these files are documented for follow-up consideration.
+	excludePaths:
+		- src/services/mongodb/dispatcher.php
+		- src/services/mongodb/factory.php
+		- src/services/mongodb/embeddable.php
+		- src/services/mongodb/models/auth/user.php

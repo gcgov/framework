@@ -14,7 +14,7 @@ class complexFieldPath {
 	private array $complexPathParts = [];
 
 
-	public function __construct( string $fieldPath, bool $useArrayFilter = true, ObjectId $arrayFilterValue = null ) {
+	public function __construct( string $fieldPath, bool $useArrayFilter = true, ?ObjectId $arrayFilterValue = null ) {
 		$this->fieldPath        = $fieldPath;
 		$this->useArrayFilter   = $useArrayFilter;
 		$this->arrayFilterValue = $arrayFilterValue;

@@ -67,8 +67,11 @@ final class metaAttributeCache {
 
 	/**
 	 * Avoid serialize instance
+	 *
+	 * @return string[]
 	 */
-	final public function __sleep() {
+	final public function __sleep(): array {
+		return [];
 	}
 
 	/**

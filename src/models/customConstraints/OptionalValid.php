@@ -13,7 +13,7 @@ class OptionalValid extends Constraint {
 	public string $message = 'The field "{{ string }}" is invalid';
 
 	#[HasNamedArguments]
-	public function __construct( string $expression, bool $negate=false, array $groups = null, mixed $payload = null ) {
+	public function __construct( string $expression, bool $negate=false, ?array $groups = null, mixed $payload = null ) {
 		$this->expression = $expression;
 		$this->negate = $negate;
 		parent::__construct([], $groups, $payload);

@@ -27,7 +27,7 @@ class jwtAuth {
 	private string $keyPath = '';
 
 
-	public function __construct( string $guid=null ) {
+	public function __construct( ?string $guid = null ) {
 
 		//standard config
 		if( file_exists( config::getSrvDir().'/jwtCertificates/' ) ) {
@@ -114,7 +114,7 @@ class jwtAuth {
 	 *
 	 * @return \Lcobucci\JWT\Token\Plain
 	 */
-	public function createAccessToken( \gcgov\framework\models\authUser $authUser, \DateInterval $duration = null ): \Lcobucci\JWT\Token\Plain {
+	public function createAccessToken( \gcgov\framework\models\authUser $authUser, ?\DateInterval $duration = null ): \Lcobucci\JWT\Token\Plain {
 		if( !( $duration instanceof \DateInterval ) ) {
 			$duration = new \DateInterval( 'PT1H' );
 		}
@@ -157,7 +157,7 @@ class jwtAuth {
 	 * @return \Lcobucci\JWT\Token\Plain
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
-	public function createRefreshToken( \gcgov\framework\models\authUser $authUser, \DateInterval $duration = null ): \Lcobucci\JWT\Token\Plain {
+	public function createRefreshToken( \gcgov\framework\models\authUser $authUser, ?\DateInterval $duration = null ): \Lcobucci\JWT\Token\Plain {
 		if( !( $duration instanceof \DateInterval ) ) {
 			$duration = new \DateInterval( 'P1M' );
 		}

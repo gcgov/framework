@@ -40,7 +40,7 @@ class helpers {
 	 */
 	public static function jsonToObject( string|\stdClass $json, $modelExceptionMessage = 'Malformed JSON', $modelExceptionCode = 400 ) : \stdClass|array {
 		if( $json === null ) {
-			throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, $modelExceptionCode, $e );
+			throw new \gcgov\framework\exceptions\modelException( $modelExceptionMessage, $modelExceptionCode );
 		}
 
 		if( is_string( $json ) ) {
