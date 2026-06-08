@@ -6,3 +6,4 @@ composer-local.json
 .phpunit.cache/
 .phpunit.result.cache
 .phpstan-cache/
+/srv/
