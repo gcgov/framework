@@ -4,7 +4,6 @@ namespace gcgov\framework;
 
 use gcgov\framework\exceptions\routeException;
 
-
 final class framework {
 
 	public function __construct() {
@@ -21,7 +20,7 @@ final class framework {
 		//appConfig
 		\app\app::_before();
 		$app = new \app\app();
-		$serviceNamespaces = $app->registerFrameworkServiceNamespaces();
+        $serviceNamespaces = $app->registerFrameworkServiceNamespaces();
 
 		//router
 		\app\router::_before();
@@ -37,7 +36,7 @@ final class framework {
 		//renderer and controller (renderer handles calling controller lifecycle methods)
 		\app\renderer::_before();
 		$renderer = new \gcgov\framework\renderer();
-		$content  = $renderer->render( $routeHandler ?? $routeException );
+		$content  = $renderer->render( $routeHandler ?? $routeException ?? null );
 		\app\renderer::_after();
 
 		//appConfig

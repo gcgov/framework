@@ -41,10 +41,10 @@ class authUser {
 	}
 
 
-	/**
-	 * @return $this
-	 */
-	final public static function getInstance(): static {
+    /**
+     * @return static
+     */
+	final public static function getInstance(): authUser {
 		$calledClass = get_called_class();
 
 		if( !isset( self::$instance ) ) {

@@ -19,12 +19,16 @@ final class renderer {
 	}
 
 
-	/**
-	 * @param \gcgov\framework\models\routeHandler|\gcgov\framework\exceptions\routeException $routeHandlerOrException
-	 *
-	 * @return string
-	 */
-	public function render( routeHandler|routeException $routeHandlerOrException ): string {
+    /**
+     * @param \gcgov\framework\models\routeHandler|\gcgov\framework\exceptions\routeException|null $routeHandlerOrException
+     *
+     * @return string
+     */
+	public function render( routeHandler|routeException|null $routeHandlerOrException ): string {
+        if($routeHandlerOrException===null) {
+            return '';
+        }
+
 		if( $routeHandlerOrException instanceof routeHandler ) {
 			$controllerResponse = $this->getContentFromController( $routeHandlerOrException );
 		}

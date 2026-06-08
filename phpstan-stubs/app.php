@@ -9,9 +9,16 @@
 
 namespace app;
 
-class app {
+class app implements \gcgov\framework\interfaces\app {
 	public static function _before(): void {}
 	public static function _after(): void {}
+
+
+    public function registerFrameworkServiceNamespaces(): array
+    {
+        return [];
+    }
+
 }
 
 class router {
