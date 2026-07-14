@@ -23,7 +23,7 @@
 		"symfony/expression-language": "^7.1",
 		"symfony/property-access": "^7.1",
 		"zircote/swagger-php": "^6.1",
-		"hybridauth/hybridauth": "^3.8",
+		"hybridauth/hybridauth": "^3.13",
 		"swaggest/json-diff": "^3.11",
 		"google/cloud-kms": "^2.1",
 		"ext-mongodb": "*",
