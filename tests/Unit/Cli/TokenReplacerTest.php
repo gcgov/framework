@@ -42,16 +42,28 @@ final class TokenReplacerTest extends TestCase {
 		$this->assertSame( 'title: {app_title}', file_get_contents( $this->tempRootDir . '/readme.md' ) );
 	}
 
-	public function testVendorAndSrvAreExcluded(): void {
+	public function testVendorIsExcluded(): void {
 		file_put_contents( $this->tempRootDir . '/vendor/some/package/file.json', '{"a":"{app_title}"}' );
-		file_put_contents( $this->tempRootDir . '/srv/php.ini', 'path={app_title}' );
 		file_put_contents( $this->tempRootDir . '/web.config', '<x>{app_title}</x>' );
 
 		$modified = tokenReplacer::replaceInTree( $this->tempRootDir, [ '{app_title}' => 'X' ] );
 
 		$this->assertSame( [ str_replace( '\\', '/', $this->tempRootDir ) . '/web.config' ], $modified );
 		$this->assertStringContainsString( '{app_title}', (string)file_get_contents( $this->tempRootDir . '/vendor/some/package/file.json' ) );
-		$this->assertStringContainsString( '{app_title}', (string)file_get_contents( $this->tempRootDir . '/srv/php.ini' ) );
+	}
+
+	public function testSrvPhpIniFilesAreReplaced(): void {
+		// regression: the scaffold's per-environment php.ini files live under srv/
+		// (srv/app.local-cli/php.ini etc.) and MUST receive token replacement
+		mkdir( $this->tempRootDir . '/srv/app.local-cli', 0777, true );
+		file_put_contents( $this->tempRootDir . '/srv/app.local-cli/php.ini', 'xdebug.output_dir ="{app_absolute_path}\srv\profile"' . "\n" . 'guid={app_guid}' );
+
+		$modified = tokenReplacer::replaceInTree( $this->tempRootDir, [ '{app_absolute_path}' => 'E:\Web\api', '{app_guid}' => 'abc-123' ] );
+
+		$this->assertSame( [ str_replace( '\\', '/', $this->tempRootDir ) . '/srv/app.local-cli/php.ini' ], $modified );
+		$contents = (string)file_get_contents( $this->tempRootDir . '/srv/app.local-cli/php.ini' );
+		$this->assertStringContainsString( 'xdebug.output_dir ="E:\Web\api\srv\profile"', $contents );
+		$this->assertStringContainsString( 'guid=abc-123', $contents );
 	}
 
 	public function testBackslashesAreEscapedInJsonFilesOnly(): void {

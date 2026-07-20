@@ -11,8 +11,9 @@ final class tokenReplacer {
 	/** File extensions eligible for token replacement */
 	public const array EXTENSIONS = [ 'ini', 'json', 'php', 'config', 'bat', 'ps1' ];
 
-	/** Directory names never descended into */
-	public const array EXCLUDED_DIRECTORIES = [ 'vendor', '.git', 'node_modules', 'srv', 'logs' ];
+	/** Directory names never descended into. Note srv/ is deliberately INCLUDED in replacement:
+	 *  the scaffold's per-environment php.ini files (srv/app.{env}[-cli]/php.ini) carry tokens. */
+	public const array EXCLUDED_DIRECTORIES = [ 'vendor', '.git', 'node_modules' ];
 
 
 	/**

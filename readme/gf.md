@@ -133,8 +133,9 @@ Missing variant files are skipped with a note; it is an error only if no variant
 Interactive replacement for `scripts/setup.ps1`. Run once after scaffolding a project from
 `gcgov/framework-app-template` (after `composer install`): prompts for the project values,
 generates the app GUID, then replaces the `{placeholder}` tokens across the project's
-`.ini/.json/.php/.config/.bat/.ps1` files (`vendor/`, `.git/`, `node_modules/`, `srv/`, `logs/`
-are excluded). Pressing enter skips a value and leaves its token for a later re-run.
+`.ini/.json/.php/.config/.bat/.ps1` files — including the per-environment `php.ini` files under
+`srv/` (`vendor/`, `.git/`, `node_modules/` are excluded). Pressing enter skips a value and
+leaves its token for a later re-run.
 
 ---
 
