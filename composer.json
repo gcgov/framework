@@ -22,6 +22,7 @@
 		"thenetworg/oauth2-azure": "^2.1",
 		"guzzlehttp/guzzle": "^7.0",
 		"andrewsauder/json-deserialize": "^3.0",
+		"chrome-php/chrome": "^1.16",
 		"symfony/validator": "^7.1",
 		"symfony/expression-language": "^7.1",
 		"symfony/property-access": "^7.1",
@@ -37,6 +38,9 @@
 		"ext-sodium": "*",
 		"ext-openssl": "*",
 		"spatie/typescript-transformer": "^2.4"
+	},
+	"suggest": {
+		"ext-zip": "Required by `gf chrome:install` / `gf chrome:update` to extract the chrome-headless-shell download"
 	},
 	"config": {
 		"allow-plugins": {

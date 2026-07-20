@@ -362,6 +362,7 @@ work without setup. Config DTOs are `jsonDeserialize`-hydrated from the two JSON
 | `services\http::statusText($code)` | HTTP status text. |
 | `services\formatting::fileName() / xlsxTabName() / getDateIntervalHumanText()` | Sanitizers/formatters. |
 | `services\jwtAuth\jwtAuth` | JWT create/validate for access & refresh tokens; JWKS. Used by auth plugins — don't hand-roll auth. |
+| `services\chrome\chrome::getExecutablePath() / ::getBrowserFactory()` | Headless Chrome: path to the gf-installed chrome-headless-shell binary, or a ready `\HeadlessChromium\BrowserFactory` (chrome-php/chrome). Throws `serviceException` until `gf chrome:install` has run. |
 | `new services\pdodb\pdodb($readOnly=true, $databaseName='')` | Thin PDO wrapper using `sqlDatabases` config (read vs write account). |
 | `services\microsoft\*` | **Deprecated** — use `andrewsauder/microsoftServices` instead. |
 
@@ -471,8 +472,14 @@ The framework ships a symfony/console-based command line tool exposed as a compo
 consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `readme/gf.md`.
 
 - **Commands** (canonical names; `gf db restore` auto-resolves to `db:restore`): `cli`, `cli:list`,
-  `cert:generate-auth`, `db:restore`, `db:run`, `env`, `setup`, `deploy`, `completion`,
-  `completion:powershell`. Bare `gf` lists everything.
+  `cert:generate-auth`, `chrome:install`, `chrome:update`, `db:restore`, `db:run`, `env`, `setup`,
+  `deploy`, `completion`, `completion:powershell`. Bare `gf` lists everything.
+- **chrome-headless-shell**: `chrome:install`/`chrome:update` download the Chrome for Testing
+  Stable build for the current platform into `srv/chrome/{version}/` (manifest:
+  `srv/chrome/installation.json`; needs ext-zip; `gf setup` auto-installs, `--skip-chrome` opts
+  out; update prunes old versions). Apps consume it via `services\chrome\chrome` (§9); shared
+  logic lives in `services/chrome/chromeInstallation.php`, download orchestration in
+  `src/cli/chromeInstaller.php` (injectable Guzzle client — tests are network-free).
 - **Architecture** (`src/cli/`): `application` (command registration + provider discovery),
   `appContext` (app-root locator: composer autoload path first, then cwd walk-up; lazy config
   access via `loadEnvironmentConfig($variant)` — never boots the request lifecycle),

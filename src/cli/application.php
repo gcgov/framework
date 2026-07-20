@@ -29,6 +29,8 @@ final class application extends \Symfony\Component\Console\Application {
 			                    new commands\cliCommand(),
 			                    new commands\cliListCommand(),
 			                    new commands\certGenerateAuthCommand(),
+			                    new commands\chromeInstallCommand(),
+			                    new commands\chromeUpdateCommand(),
 			                    new commands\dbRestoreCommand(),
 			                    new commands\dbRunCommand(),
 			                    new commands\envCommand(),

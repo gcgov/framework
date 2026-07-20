@@ -54,7 +54,8 @@ final class setupCommand extends Command {
 
 
 	protected function configure(): void {
-		$this->setHelp( 'Run once after scaffolding a project from gcgov/framework-app-template. Prompts for the project configuration values and replaces the {placeholder} tokens across the project files. Press enter at any prompt to skip that value (the token stays in place for a later re-run).' );
+		$this->addOption( 'skip-chrome', null, \Symfony\Component\Console\Input\InputOption::VALUE_NONE, 'Skip downloading chrome-headless-shell' );
+		$this->setHelp( 'Run once after scaffolding a project from gcgov/framework-app-template. Prompts for the project configuration values and replaces the {placeholder} tokens across the project files. Press enter at any prompt to skip that value (the token stays in place for a later re-run). Also downloads chrome-headless-shell into srv/chrome (skip with --skip-chrome).' );
 	}
 
 
@@ -116,6 +117,16 @@ final class setupCommand extends Command {
 			$io->section( 'Updated files' );
 			foreach( $modifiedFiles as $file ) {
 				$io->text( '  ' . $file );
+			}
+		}
+
+		if( !$input->getOption( 'skip-chrome' ) ) {
+			$io->section( 'chrome-headless-shell' );
+			try {
+				( new \gcgov\framework\cli\chromeInstaller( $context->getSrvDir() ) )->install( $io );
+			}
+			catch( \Throwable $e ) {
+				$io->warning( 'chrome-headless-shell was not installed: ' . $e->getMessage() . ' You can install it later with `vendor/bin/gf chrome:install`.' );
 			}
 		}
 

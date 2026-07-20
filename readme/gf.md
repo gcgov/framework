@@ -22,6 +22,8 @@ spelling also works — `gf db restore` resolves to `db:restore` automatically.
 | `gf cli <route>` | `app/cli/*.bat` + `app/cli/index.php` | Run an application CLI route |
 | `gf cli:list` | — | List the application's CLI routes |
 | `gf cert:generate-auth` | `scripts/create-jwt-keys.ps1` | Generate JWT signing keypairs |
+| `gf chrome:install` | manual Chrome installs | Download chrome-headless-shell into srv/chrome |
+| `gf chrome:update` | — | Update chrome-headless-shell to current Stable + remove old versions |
 | `gf db:restore` | `db/restore-live-to-local.ps1` | Copy a source environment's mongo databases into a target environment |
 | `gf db:run <script.js>` | ad-hoc `mongosh "<uri with password>" script.js` | Run a mongosh script using config-managed connections |
 | `gf env <env>` | manual `Copy-Item` steps | Activate an environment's config file variants |
@@ -85,6 +87,47 @@ replacing existing keys (regenerating invalidates every issued JWT). `--yes` ski
 
 ---
 
+## Headless Chrome: `gf chrome:install` and `gf chrome:update`
+
+```
+gf chrome:install            # download the current Stable chrome-headless-shell (~100-150 MB)
+gf chrome:install --force    # reinstall the current version
+gf chrome:update             # move to the newest Stable + delete superseded versions
+```
+
+- The current **Stable** version is discovered from the Chrome for Testing feed
+  (`https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json`)
+  and the build matching your platform (`win64`, `win32`, `linux64`, `mac-x64`, `mac-arm64`) is
+  downloaded automatically.
+- Installs into `{appRoot}/srv/chrome/{version}/chrome-headless-shell-{platform}/` with a
+  `srv/chrome/installation.json` manifest recording the active version; the directory is
+  git-ignored automatically. Installation is atomic — an interrupted download never leaves a
+  half-installed version.
+- `gf setup` runs the install automatically (`--skip-chrome` to opt out). `chrome:update` is
+  idempotent and safe to run on a schedule.
+- Requires the PHP **zip** extension (`extension=zip` in php.ini on Windows, `php-zip` on Linux).
+- macOS note: if Gatekeeper ever blocks the binary, clear the quarantine attribute with
+  `xattr -d com.apple.quarantine <path>`.
+
+Application code uses the installed binary through the framework's chrome service — no paths in
+app code:
+
+```php
+use gcgov\framework\services\chrome\chrome;
+
+$executablePath = chrome::getExecutablePath();          // full path to chrome-headless-shell
+$browser        = chrome::getBrowserFactory()->createBrowser();   // \HeadlessChromium\BrowserFactory
+$page           = $browser->createPage();
+$page->navigate( 'https://example.com' )->waitForNavigation();
+$page->pdf()->saveToFile( '/tmp/example.pdf' );
+```
+
+Both methods throw a `serviceException` telling you to run `gf chrome:install` when no
+installation exists. The `chrome-php/chrome` library is a framework dependency, so
+`\HeadlessChromium\*` classes are always available to apps.
+
+---
+
 ## Databases: `gf db:restore` and `gf db:run`
 
 Connection strings come from the environment variant config files
@@ -136,6 +179,10 @@ generates the app GUID, then replaces the `{placeholder}` tokens across the proj
 `.ini/.json/.php/.config/.bat/.ps1` files — including the per-environment `php.ini` files under
 `srv/` (`vendor/`, `.git/`, `node_modules/` are excluded). Pressing enter skips a value and
 leaves its token for a later re-run.
+
+Setup finishes by downloading chrome-headless-shell (the `gf chrome:install` step); a failure
+there — offline machine, missing php-zip — only prints a warning and never fails setup. Pass
+`--skip-chrome` to skip it entirely.
 
 ---
 
