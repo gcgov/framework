@@ -14,8 +14,28 @@ class auth {
 	private \TheNetworg\OAuth2\Client\Provider\Azure $provider;
 
 
+	/**
+	 * @throws \gcgov\framework\exceptions\serviceException
+	 */
 	public function __construct() {
-		$this->provider = new \TheNetworg\OAuth2\Client\Provider\Azure( (array) config::getEnvironmentConfig()->microsoft );
+		$microsoftConfig = config::getEnvironmentConfig()->microsoft;
+
+		$options = (array) $microsoftConfig;
+
+		//prefer certificate credential authentication when configured; the provider builds the
+		//client assertion internally from the private key and thumbprint
+		if( $microsoftConfig->useCertificateAuthentication() ) {
+			try {
+				unset( $options[ 'clientSecret' ] );
+				$options[ 'clientCertificatePrivateKey' ] = clientAssertion::getDecryptedPrivateKeyPem( $microsoftConfig->getPrivateKeyContents(), $microsoftConfig->privateKeyPassphrase );
+				$options[ 'clientCertificateThumbprint' ] = clientAssertion::getCertificateThumbprint( $microsoftConfig->getCertificateContents() );
+			}
+			catch( \gcgov\framework\exceptions\configException $e ) {
+				throw new serviceException( $e->getMessage(), 500, $e );
+			}
+		}
+
+		$this->provider = new \TheNetworg\OAuth2\Client\Provider\Azure( $options );
 	}
 
 
@@ -83,17 +103,30 @@ class auth {
 	 * @throws \gcgov\framework\exceptions\serviceException
 	 */
 	public function getApplicationAccessToken() : string {
+		$microsoftConfig = config::getEnvironmentConfig()->microsoft;
+
+		$tokenEndpoint = 'https://login.microsoftonline.com/' . $microsoftConfig->tenant . '/oauth2/token';
+
+		$formParams = [
+			'client_id'  => $microsoftConfig->clientId,
+			'resource'   => 'https://graph.microsoft.com/',
+			'grant_type' => 'client_credentials',
+		];
+
+		//prefer certificate credential authentication when configured
+		if( $microsoftConfig->useCertificateAuthentication() ) {
+			$formParams[ 'client_assertion_type' ] = clientAssertion::CLIENT_ASSERTION_TYPE;
+			$formParams[ 'client_assertion' ]      = clientAssertion::create( $tokenEndpoint );
+		}
+		else {
+			$formParams[ 'client_secret' ] = $microsoftConfig->clientSecret;
+		}
+
 		//get application access token
 		try {
 			$guzzle = new \GuzzleHttp\Client();
-			$url    = 'https://login.microsoftonline.com/' . config::getEnvironmentConfig()->microsoft->tenant . '/oauth2/token?api-version=1.0';
-			$token  = json_decode( $guzzle->post( $url, [
-				'form_params' => [
-					'client_id'     => config::getEnvironmentConfig()->microsoft->clientId,
-					'client_secret' => config::getEnvironmentConfig()->microsoft->clientSecret,
-					'resource'      => 'https://graph.microsoft.com/',
-					'grant_type'    => 'client_credentials',
-				],
+			$token  = json_decode( $guzzle->post( $tokenEndpoint . '?api-version=1.0', [
+				'form_params' => $formParams,
 			] )->getBody()->getContents() );
 
 			return $token->access_token;

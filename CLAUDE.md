@@ -339,7 +339,9 @@ work without setup. Config DTOs are `jsonDeserialize`-hydrated from the two JSON
   "mongoDatabases": [ { "default": true, "database": "", "uri": "mongodb+srv://...", "logging": true,
                         "audit": false, "include_meta": true, "encryption": { /* optional */ } } ],
   "sqlDatabases":  [ { "default": true, "name": "", "dsn": "", "readAccount": {}, "writeAccount": {} } ],
-  "microsoft":     { "clientId": "", "clientSecret": "", "tenant": "", "driveId": "", "fromAddress": "" },
+  "microsoft":     { "clientId": "", "clientSecret": "", "certificatePath": "", "privateKeyPath": "", "privateKeyPassphrase": "", "tenant": "", "driveId": "", "fromAddress": "" },
+                   // clientSecret OR certificate credential auth: set certificatePath+privateKeyPath (PEM; absolute or
+                   // relative to app root) to authenticate with a client assertion instead of a secret — see readme/microsoft-certificate-auth.md
   "jwtAuth":       { "tokenIssuedBy": "", "tokenPermittedFor": "", "redirectAfterLoginUrl": "", "redirectAfterLogoutUrl": "" },
   "appDictionary": { }   // free-form key/values plugins read (e.g. cronMonitorUrl)
 }
@@ -360,7 +362,8 @@ work without setup. Config DTOs are `jsonDeserialize`-hydrated from the two JSON
 | `services\formatting::fileName() / xlsxTabName() / getDateIntervalHumanText()` | Sanitizers/formatters. |
 | `services\jwtAuth\jwtAuth` | JWT create/validate for access & refresh tokens; JWKS. Used by auth plugins — don't hand-roll auth. |
 | `new services\pdodb\pdodb($readOnly=true, $databaseName='')` | Thin PDO wrapper using `sqlDatabases` config (read vs write account). |
-| `services\microsoft\*` | **Deprecated** — use `andrewsauder/microsoftServices` instead. |
+| `services\microsoft\clientAssertion` | Signed JWT client assertions for Entra ID certificate credential auth (`create()`, `CLIENT_ASSERTION_TYPE`, thumbprint/x5t helpers). See `readme/microsoft-certificate-auth.md`. |
+| `services\microsoft\*` (auth/mail/files) | **Deprecated** — use `andrewsauder/microsoftServices` instead. Certificate-aware when `microsoft.certificatePath`/`privateKeyPath` are configured. |
 
 The authenticated-user contract is `\gcgov\framework\interfaces\auth\user`; the framework ships a default Mongo
 implementation `\gcgov\framework\services\mongodb\models\auth\user` (`getFromOauth`, `verifyUsernamePassword`,

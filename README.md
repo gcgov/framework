@@ -248,6 +248,11 @@ Service** and **Microsoft Auth Token Exchange** extensions before rolling a new 
 ### Microsoft Services
 Deprecated - use https://github.com/andrewsauder/microsoftServices instead
 
+`\gcgov\framework\services\microsoft\clientAssertion` is not deprecated: it builds the signed JWT
+client assertions used for Entra ID **certificate credential authentication** — the replacement for
+expiring client secret strings. See [readme/microsoft-certificate-auth.md](readme/microsoft-certificate-auth.md)
+for certificate creation, app registration, `environment.json` configuration, and rotation.
+
 ### MongoDB
 Comprehensive database modeling system `\gcgov\framework\services\mongodb`.
 

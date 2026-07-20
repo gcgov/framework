@@ -37,9 +37,51 @@ final class EnvironmentConfigModelsTest extends TestCase {
 		$ms = new microsoft();
 		$this->assertSame( '', $ms->clientId );
 		$this->assertSame( '', $ms->clientSecret );
+		$this->assertSame( '', $ms->certificatePath );
+		$this->assertSame( '', $ms->privateKeyPath );
+		$this->assertSame( '', $ms->privateKeyPassphrase );
 		$this->assertSame( '', $ms->tenant );
 		$this->assertSame( '', $ms->driveId );
 		$this->assertSame( '', $ms->fromAddress );
+		$this->assertFalse( $ms->useCertificateAuthentication() );
+	}
+
+	public function testMicrosoftUseCertificateAuthenticationRequiresBothPaths(): void {
+		$ms = new microsoft();
+		$ms->certificatePath = '/srv/microsoftCertificates/app.crt';
+		$this->assertFalse( $ms->useCertificateAuthentication() );
+
+		$ms->privateKeyPath = '/srv/microsoftCertificates/app.key';
+		$this->assertTrue( $ms->useCertificateAuthentication() );
+	}
+
+	public function testMicrosoftCertificateContentsReadFromDisk(): void {
+		$certificatePath = tempnam( sys_get_temp_dir(), 'cert' );
+		$privateKeyPath  = tempnam( sys_get_temp_dir(), 'key' );
+		file_put_contents( $certificatePath, "-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----\n" );
+		file_put_contents( $privateKeyPath, "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----\n" );
+
+		try {
+			$ms = new microsoft();
+			$ms->certificatePath = $certificatePath;
+			$ms->privateKeyPath  = $privateKeyPath;
+
+			$this->assertStringContainsString( 'BEGIN CERTIFICATE', $ms->getCertificateContents() );
+			$this->assertStringContainsString( 'BEGIN PRIVATE KEY', $ms->getPrivateKeyContents() );
+		}
+		finally {
+			unlink( $certificatePath );
+			unlink( $privateKeyPath );
+		}
+	}
+
+	public function testMicrosoftCertificateContentsThrowsWhenFileMissing(): void {
+		$ms = new microsoft();
+		$ms->certificatePath = '/nonexistent/path/app.crt';
+		$ms->privateKeyPath  = '/nonexistent/path/app.key';
+
+		$this->expectException( \gcgov\framework\exceptions\configException::class );
+		$ms->getCertificateContents();
 	}
 
 	public function testJwtAuthDefaults(): void {
