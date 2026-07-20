@@ -1,0 +1,44 @@
+#!/usr/bin/env php
+<?php
+/**
+ * gf — the gcgov/framework command line tool
+ *
+ * Installed automatically at vendor/bin/gf (and vendor/bin/gf.bat on Windows)
+ * in every application that requires gcgov/framework. Run `gf` with no
+ * arguments to list all available commands. See readme/gf.md for the full
+ * reference.
+ */
+
+// Resolve the composer autoloader, in priority order:
+//  1. $GLOBALS['_composer_autoload_path'] — set by composer's bin proxy (composer >=2.2).
+//     When run as vendor/bin/gf inside an application this is the APPLICATION's
+//     autoloader, so \app\* classes are autoloadable.
+//  2. Framework development mode: running `php bin/gf` inside the framework repo itself.
+//  3. Walk up from the current working directory looking for vendor/autoload.php.
+$autoloadPath = null;
+
+if( isset( $GLOBALS[ '_composer_autoload_path' ] ) ) {
+	$autoloadPath = $GLOBALS[ '_composer_autoload_path' ];
+}
+elseif( file_exists( __DIR__ . '/../vendor/autoload.php' ) ) {
+	$autoloadPath = __DIR__ . '/../vendor/autoload.php';
+}
+else {
+	$dir = getcwd();
+	while( $dir!==false && $dir!==dirname( $dir ) ) {
+		if( file_exists( $dir . '/vendor/autoload.php' ) ) {
+			$autoloadPath = $dir . '/vendor/autoload.php';
+			break;
+		}
+		$dir = dirname( $dir );
+	}
+}
+
+if( $autoloadPath===null ) {
+	fwrite( STDERR, 'gf: could not locate vendor/autoload.php. Run gf from a project that requires gcgov/framework (after composer install).' . PHP_EOL );
+	exit( 1 );
+}
+
+require $autoloadPath;
+
+exit( ( new \gcgov\framework\cli\application( $autoloadPath ) )->run() );

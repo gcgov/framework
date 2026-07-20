@@ -144,6 +144,21 @@ final class router {
 
 
 	/**
+	 * Build the full merged route table (service routes first, then app routes) without
+	 * dispatching a request. Used by the gf CLI to enumerate routes.
+	 *
+	 * @param string[] $serviceNamespaces Namespaces returned by \app\app::registerFrameworkServiceNamespaces()
+	 *
+	 * @return \gcgov\framework\models\route[]
+	 * @throws \gcgov\framework\exceptions\routeException
+	 * @throws \gcgov\framework\exceptions\configException Missing/invalid app/config/environment.json
+	 */
+	public static function getMergedRoutes( array $serviceNamespaces ): array {
+		return ( new self( $serviceNamespaces ) )->getRoutes();
+	}
+
+
+	/**
 	 * @return \gcgov\framework\models\route[]
 	 */
 	private function getRoutes(): array {

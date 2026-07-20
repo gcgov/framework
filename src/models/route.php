@@ -33,6 +33,9 @@ class route {
 	/** @var bool Authentication token can be provided in url */
 	public bool $allowShortLivedUrlTokens = false;
 
+	/** @var string Optional human readable description of the route; surfaced by `gf cli:list` and shell completion */
+	public string $description = '';
+
 
 	/**
 	 * Create a route
@@ -43,8 +46,10 @@ class route {
 	 * @param string       $method         Method inside the $class to call when this URL is triggered. Ie: 'getOne'. Method must have paramters that match the route pattern placeholders. In this example, getOne method must accept one parameter. Ie: getOne( string  $_id )
 	 * @param bool         $authentication Whether authentication is required to access this route. Functionality to respond to this must be implemented in \app\router\authentication()
 	 * @param array        $requiredRoles  If authentication is required, the roles required of the use to access this route. Functionality to respond to this must be implemented in \app\router\authentication(). If not using roles for a route or at all, just skip including this parameter.
+	 * @param bool         $allowShortLivedUrlTokens Authentication token can be provided in url
+	 * @param string       $description    Optional human readable description of the route; surfaced by `gf cli:list` and shell completion
 	 */
-	public function __construct( string|array $httpMethod = '', string $route = '', string $class = '', string $method = '', bool $authentication = false, array $requiredRoles = [], bool $allowShortLivedUrlTokens=false ) {
+	public function __construct( string|array $httpMethod = '', string $route = '', string $class = '', string $method = '', bool $authentication = false, array $requiredRoles = [], bool $allowShortLivedUrlTokens=false, string $description='' ) {
 		$this->httpMethod               = $httpMethod;
 		$this->route                    = $route;
 		$this->class                    = $class;
@@ -52,6 +57,7 @@ class route {
 		$this->authentication           = $authentication;
 		$this->requiredRoles            = $requiredRoles;
 		$this->allowShortLivedUrlTokens = $allowShortLivedUrlTokens;
+		$this->description              = $description;
 	}
 
 }

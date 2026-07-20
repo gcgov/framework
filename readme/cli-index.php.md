@@ -1,4 +1,11 @@
-# /app/cli/index.php
+# CLI entry
+
+> **Preferred**: use the framework's `gf` tool — `vendor/bin/gf cli {url-path}` — which needs no
+> per-app entry file or batch wrappers, adds route listing/completion (`gf cli:list`), Xdebug via
+> `--debug`, and real exit codes for schedulers. See [gf.md](gf.md). The file below is the legacy
+> entry and remains supported for existing apps.
+
+# /app/cli/index.php (legacy)
 CLI requests should point to `/app/cli/index.php`
 
 ```php
@@ -20,3 +27,6 @@ Create a Windows batch file to load the app (cli.bat)
 
 Call the batch file to run the app via CLI
 `> cli.bat /structure/cleanup`
+
+The gf equivalent of both steps is simply:
+`> vendor\bin\gf cli /structure/cleanup`

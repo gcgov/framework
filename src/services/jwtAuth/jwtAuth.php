@@ -47,7 +47,7 @@ class jwtAuth {
 
 		//guid config
 		if( !file_exists( $this->keyPath . 'guids.json' ) ) {
-			throw new configException( 'Missing ' . $this->keyPath . 'guids.json. Have you run vendor/gcgov/framework/scrips/create-jwt-keys.ps1?' );
+			throw new configException( 'Missing ' . $this->keyPath . 'guids.json. Have you run `vendor/bin/gf cert:generate-auth`?' );
 		}
 		$this->guids = json_decode( file_get_contents( $this->keyPath . 'guids.json' ) );
 

@@ -1,3 +1,7 @@
+# DEPRECATED: use the cross-platform `vendor/bin/gf cert:generate-auth` command instead
+# (uses the PHP OpenSSL extension - no openssl binary required).
+# This script is kept for backward compatibility and will be removed in a future release.
+
 Push-Location $PSScriptRoot
 
 if($PSScriptRoot.ToString().IndexOf("vendor") -ne -1) {

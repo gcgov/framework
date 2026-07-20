@@ -43,6 +43,17 @@ final class RouteTest extends TestCase {
 		$this->assertTrue( $route->allowShortLivedUrlTokens );
 	}
 
+	public function testRouteDescriptionDefaultsToEmptyAndIsBackwardCompatible(): void {
+		// 7-arg construction (pre-description signature) must keep working
+		$route = new route( 'CLI', '/cli/cleanup', '\app\controllers\cli\maintenance', 'cleanup', false, [], false );
+		$this->assertSame( '', $route->description );
+	}
+
+	public function testRouteDescriptionIsAssignable(): void {
+		$route = new route( 'CLI', '/cli/cleanup', '\app\controllers\cli\maintenance', 'cleanup', false, [], false, 'Clean up temp records' );
+		$this->assertSame( 'Clean up temp records', $route->description );
+	}
+
 	public function testRouteHttpMethodCanBeArray(): void {
 		$route = new route( [ 'GET', 'HEAD' ], '/widgets' );
 		$this->assertSame( [ 'GET', 'HEAD' ], $route->httpMethod );

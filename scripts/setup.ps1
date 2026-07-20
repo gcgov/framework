@@ -1,3 +1,6 @@
+# DEPRECATED: use the cross-platform `vendor/bin/gf setup` command instead.
+# This script is kept for backward compatibility and will be removed in a future release.
+
 Write-Host $pwd
 if ($PSScriptRoot.ToString().IndexOf("vendor") -ne -1)
 {

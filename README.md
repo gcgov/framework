@@ -210,11 +210,31 @@ new route( 'CLI', 'structure/cleanup', '\app\controllers\structure', 'cleanup', 
 1. `\app\app::_after()`
 
 
-## CLI
-Using the framework scaffolding project, you can run the app from CLI with `> app/cli/{env}.bat {url-path}` Ex: `> app/cli/local.bat /structure/cleanup`
+## Command line: gf
+The framework ships a multiplatform command line tool at `vendor/bin/gf` (Windows: `vendor\bin\gf.bat`).
+Run `gf` with no arguments to list every available command. Highlights:
 
-To enable XDebug on the CLI execution, run `> app/cli/local-debug.bat {url-path}`
-Ex: `> app/cli/local-debug.bat /structure/cleanup`
+```
+gf cli /structure/cleanup        # run a CLI route (replaces app/cli/{env}.bat)
+gf cli /structure/cleanup --debug# run with Xdebug (replaces local-debug.bat)
+gf cli:list                      # list the app's CLI routes
+gf cert:generate-auth            # JWT signing keys (replaces create-jwt-keys.ps1)
+gf db:restore --from=prod        # pull a source env's mongo dbs into the local env
+gf db:run db/script.js           # run a mongosh script with config-managed credentials
+gf env local                     # activate environment config file variants
+gf setup                         # bootstrap a scaffolded app (replaces setup.ps1)
+gf deploy                        # tag-based deployment (replaces update-production.ps1)
+```
+
+Tab completion is available for bash/zsh/fish (`gf completion --help`) and PowerShell
+(`gf completion:powershell`), including dynamic completion of the app's CLI route names.
+Apps and plugins can add their own gf commands via a `cli\commandProvider` class.
+
+**See [readme/gf.md](readme/gf.md) for the full reference and the migration guide.**
+
+The legacy per-app entry (`> app/cli/{env}.bat {url-path}`, `local-debug.bat` for XDebug) keeps
+working, but new apps should use gf. The `scripts/*.ps1` files shipped with the framework are
+deprecated in favor of `gf setup` and `gf cert:generate-auth`.
 
 ## Framework Services
 

@@ -1,0 +1,2 @@
+# the gf entry script must keep LF line endings (shebang + php shell interop)
+bin/gf text eol=lf

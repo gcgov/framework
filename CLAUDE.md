@@ -27,17 +27,19 @@ project** rather than guessing.
 ## 2. Repo layout (this package)
 
 ```
+bin/gf                     # entry script for the gf CLI (composer bin → vendor/bin/gf in apps)
 src/
 ├── framework.php          # entry point: runApp() drives the whole lifecycle
 ├── router.php             # framework router: merges service + app routes, runs auth guards
 ├── renderer.php           # invokes the matched controller, serializes the response
 ├── config.php             # static config + path resolver (app dir, srv dir, app.json, environment.json)
+├── cli/                   # the gf command line tool (§16): application, appContext, commands/*
 ├── interfaces/            # contracts an app must implement (app, router, render, controller, auth\user, ...)
 ├── models/                # route, routeHandler, controller*Response, authUser, config/* DTOs, customConstraints
 ├── services/              # log, guid, http, formatting, request, jwtAuth, pdodb, microsoft(deprecated), mongodb/*
 ├── exceptions/            # configException, routeException, controllerException, modelException, serviceException, ...
 └── traits/                # userTrait
-readme/                    # long-form docs (mongodb.md is the authoritative Mongo reference)
+readme/                    # long-form docs (mongodb.md is the authoritative Mongo reference; gf.md for the CLI)
 tests/Unit/                # PHPUnit tests mirroring src/ (see §14)
 phpstan.neon.dist          # PHPStan level config; phpstan-stubs/ holds stubs
 ```
@@ -134,7 +136,8 @@ new \gcgov\framework\models\route(
     string       $method,       // 'getOne'  — must accept the route placeholders as params
     bool         $authentication = false,
     array        $requiredRoles = [],          // e.g. [ constants::ROLE_STRUCTURE_READ ]
-    bool         $allowShortLivedUrlTokens = false  // permit ?fileAccessToken=... instead of Authorization header
+    bool         $allowShortLivedUrlTokens = false, // permit ?fileAccessToken=... instead of Authorization header
+    string       $description = ''          // optional; shown by `gf cli:list` + shell completion
 );
 ```
 Example (from `readme/router.php.md`):
@@ -391,7 +394,9 @@ $result = \app\models\widget::getPagedResponse($_GET['limit'] ?? 10, $_GET['page
 return new controllerPagedDataResponse($result);   // adds X-Page / X-Total-Count headers
 ```
 
-**A CLI task**: register a `'CLI'` route and run via the CLI entry (`app/cli/{env}.bat /path`); no auth.
+**A CLI task**: register a `'CLI'` route (give it a `description:`) and run it with
+`vendor/bin/gf cli /path` (legacy per-app entry: `app/cli/{env}.bat /path`); no auth.
+List routes with `gf cli:list`; debug with `gf cli /path --debug`.
 
 ---
 
@@ -435,6 +440,9 @@ at a time (oauth-server OR auth-ms-front).
 - Config via a singleton (`getInstance()`) the app tweaks in `app::_before()` (see oauth-server's `oauthConfig`),
   and/or `environment.json.appDictionary`.
 - Return `false` from a plugin `authentication()` only to deny; return `true` to allow.
+- Optional: contribute gf commands with `src/cli/commandProvider.php` =
+  `\gcgov\framework\services\<name>\cli\commandProvider implements \gcgov\framework\cli\commandProvider`
+  returning symfony/console command instances (namespace the command names, e.g. `docs:regenerate`). See §16.
 
 ---
 
@@ -452,4 +460,35 @@ at a time (oauth-server OR auth-ms-front).
 - Full narrative + app file system: `README.md`.
 - Core file examples: `readme/{index.php,cli-index.php,app.php,router.php,renderer.php}.md`.
 - **Mongo (authoritative, deep)**: `readme/mongodb.md`.
+- **gf CLI (authoritative)**: `readme/gf.md`.
 - A real, minimal consuming controller: the user-crud plugin's `src/controllers/user.php`.
+
+---
+
+## 16. The gf CLI (`bin/gf`, `src/cli/`)
+
+The framework ships a symfony/console-based command line tool exposed as a composer bin: every
+consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `readme/gf.md`.
+
+- **Commands** (canonical names; `gf db restore` auto-resolves to `db:restore`): `cli`, `cli:list`,
+  `cert:generate-auth`, `db:restore`, `db:run`, `env`, `setup`, `deploy`, `completion`,
+  `completion:powershell`. Bare `gf` lists everything.
+- **Architecture** (`src/cli/`): `application` (command registration + provider discovery),
+  `appContext` (app-root locator: composer autoload path first, then cwd walk-up; lazy config
+  access via `loadEnvironmentConfig($variant)` — never boots the request lifecycle),
+  `routeCatalog` (CLI-route enumeration via `router::getMergedRoutes()`), `phpProcess`,
+  `environmentFiles`, `tokenReplacer`, `mongoTools`, `cliException` (user-facing errors),
+  `internal/run-route.php` (child-process route runner; maps response status ≥400 → exit 1).
+- **Command tiers**: no context (list/help/completion — must work anywhere, including this repo);
+  root-only (env, db:*, cert:*, deploy, setup — config JSON only, no `\app` boot);
+  app-boot (cli, cli:list — `assertAppLoadable()`; `\app\app::_before()` is deliberately NOT called).
+- **`gf cli <route>`** always spawns a fresh PHP child process (Xdebug flags need fresh INI;
+  isolates `exit()`; interpreter picked via `--php` > `GF_PHP` > environment.json `phpPath` > current).
+- **Expandability**: apps (`\app\cli\commandProvider`) and plugins
+  (`{ns}\cli\commandProvider`) implement `\gcgov\framework\cli\commandProvider::getCommands()`.
+  Discovery is fail-safe — errors never break gf (visible with `-v`).
+- When adding a command: lowercase lowerCamelCase class in `src/cli/commands/`, `#[AsCommand]`
+  attribute, register it in `application::__construct()`, throw `cliException` for user errors,
+  add a mirrored test in `tests/Unit/Cli/` (external binaries are exercised via pure
+  arg-builder methods, e.g. `dbRestoreCommand::buildDumpCommand()`).
+- The legacy `scripts/*.ps1` are deprecated wrappers kept for backward compatibility.
