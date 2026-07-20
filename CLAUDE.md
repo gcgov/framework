@@ -472,8 +472,8 @@ The framework ships a symfony/console-based command line tool exposed as a compo
 consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `readme/gf.md`.
 
 - **Commands** (canonical names; `gf db restore` auto-resolves to `db:restore`): `cli`, `cli:list`,
-  `cert:generate-auth`, `chrome:install`, `chrome:update`, `db:restore`, `db:run`, `env`, `setup`,
-  `deploy`, `completion`, `completion:powershell`. Bare `gf` lists everything.
+  `cert:generate-auth`, `chrome:install`, `chrome:update`, `chrome:status`, `db:restore`, `db:run`,
+  `env`, `setup`, `deploy`, `completion`, `completion:powershell`. Bare `gf` lists everything.
 - **chrome-headless-shell**: `chrome:install`/`chrome:update` download the Chrome for Testing
   Stable build for the current platform into `srv/chrome/{version}/` (manifest:
   `srv/chrome/installation.json`; needs ext-zip; `gf setup` auto-installs, `--skip-chrome` opts

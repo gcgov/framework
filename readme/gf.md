@@ -24,6 +24,7 @@ spelling also works — `gf db restore` resolves to `db:restore` automatically.
 | `gf cert:generate-auth` | `scripts/create-jwt-keys.ps1` | Generate JWT signing keypairs |
 | `gf chrome:install` | manual Chrome installs | Download chrome-headless-shell into srv/chrome |
 | `gf chrome:update` | — | Update chrome-headless-shell to current Stable + remove old versions |
+| `gf chrome:status` | — | Show whether chrome-headless-shell is installed and what version |
 | `gf db:restore` | `db/restore-live-to-local.ps1` | Copy a source environment's mongo databases into a target environment |
 | `gf db:run <script.js>` | ad-hoc `mongosh "<uri with password>" script.js` | Run a mongosh script using config-managed connections |
 | `gf env <env>` | manual `Copy-Item` steps | Activate an environment's config file variants |
@@ -93,7 +94,14 @@ replacing existing keys (regenerating invalidates every issued JWT). `--yes` ski
 gf chrome:install            # download the current Stable chrome-headless-shell (~100-150 MB)
 gf chrome:install --force    # reinstall the current version
 gf chrome:update             # move to the newest Stable + delete superseded versions
+gf chrome:status             # installed? version, platform, executable path
+gf chrome:status --check-latest   # also compare against the current Stable release
 ```
+
+`chrome:status` exits `0` when a working installation exists and `1` otherwise, so scripts can
+gate on it (`gf chrome:status && ...`). An outdated-but-working installation still exits `0` —
+`--check-latest` reports "update available" without failing (it is the only part of the command
+that touches the network, and a network failure there only warns).
 
 - The current **Stable** version is discovered from the Chrome for Testing feed
   (`https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json`)
