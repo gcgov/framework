@@ -4,6 +4,7 @@ namespace gcgov\framework\services\chrome;
 
 use gcgov\framework\config;
 use gcgov\framework\exceptions\serviceException;
+use HeadlessChromium\BrowserFactory;
 
 /**
  * Headless Chrome service for applications.
@@ -39,8 +40,8 @@ class chrome {
 	 *
 	 * @throws \gcgov\framework\exceptions\serviceException When no installation exists
 	 */
-	public static function getBrowserFactory(): \HeadlessChromium\BrowserFactory {
-		return new \HeadlessChromium\BrowserFactory( self::getExecutablePath() );
+	public static function getBrowserFactory(): BrowserFactory {
+		return new BrowserFactory( self::getExecutablePath() );
 	}
 
 }
