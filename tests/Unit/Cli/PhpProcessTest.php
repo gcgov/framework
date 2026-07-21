@@ -24,13 +24,13 @@ final class PhpProcessTest extends TestCase {
 	}
 
 	public function testFindPhpBinaryFallsBackToRunningInterpreter(): void {
-		$binary = phpProcess::findPhpBinary();
-		$this->assertNotSame( '', $binary );
-		$this->assertFileExists( $binary );
+		$command = phpProcess::findPhpBinary();
+		$this->assertNotSame( [], $command );
+		$this->assertFileExists( $command[ 0 ] );
 	}
 
 	public function testFindPhpBinaryUsesExplicitOption(): void {
-		$this->assertSame( PHP_BINARY, phpProcess::findPhpBinary( PHP_BINARY ) );
+		$this->assertSame( [ PHP_BINARY ], phpProcess::findPhpBinary( PHP_BINARY ) );
 	}
 
 	public function testFindPhpBinaryResolvesDirectory(): void {
@@ -38,9 +38,44 @@ final class PhpProcessTest extends TestCase {
 		mkdir( $tempDir );
 		touch( $tempDir . '/php' );
 		try {
-			$this->assertSame( $tempDir . '/php', phpProcess::findPhpBinary( $tempDir ) );
+			$this->assertSame( [ $tempDir . '/php' ], phpProcess::findPhpBinary( $tempDir ) );
 		} finally {
 			unlink( $tempDir . '/php' );
+			rmdir( $tempDir );
+		}
+	}
+
+	public function testFindPhpBinaryParsesBinaryWithArguments(): void {
+		$tempDir = sys_get_temp_dir() . '/gcgov-phpprocess-test-' . uniqid();
+		mkdir( $tempDir );
+		$binary = $tempDir . '/php.exe';
+		$iniFile = $tempDir . '/php.ini';
+		touch( $binary );
+		touch( $iniFile );
+		try {
+			$this->assertSame(
+				[ $binary, '-c', $iniFile ],
+				phpProcess::findPhpBinary( $binary . ' -c ' . $iniFile )
+			);
+		} finally {
+			unlink( $binary );
+			unlink( $iniFile );
+			rmdir( $tempDir );
+		}
+	}
+
+	public function testFindPhpBinaryParsesQuotedBinaryWithSpaces(): void {
+		$tempDir = sys_get_temp_dir() . '/gcgov phpprocess test ' . uniqid();
+		mkdir( $tempDir );
+		$binary = $tempDir . '/php.exe';
+		touch( $binary );
+		try {
+			$this->assertSame(
+				[ $binary, '-n' ],
+				phpProcess::findPhpBinary( '"' . $binary . '" -n' )
+			);
+		} finally {
+			unlink( $binary );
 			rmdir( $tempDir );
 		}
 	}
@@ -48,6 +83,11 @@ final class PhpProcessTest extends TestCase {
 	public function testFindPhpBinaryThrowsOnBadPath(): void {
 		$this->expectException( cliException::class );
 		phpProcess::findPhpBinary( '/nonexistent/php-binary-path' );
+	}
+
+	public function testFindPhpBinaryThrowsWhenBinaryWithArgumentsNotFound(): void {
+		$this->expectException( cliException::class );
+		phpProcess::findPhpBinary( '/nonexistent/php.exe -c /nonexistent/php.ini' );
 	}
 
 }

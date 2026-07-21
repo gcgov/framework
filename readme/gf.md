@@ -52,7 +52,9 @@ gf cli /cli/generate-shifts --debug     # run with Xdebug (replaces local-debug.
 - **Exit codes**: `0` on success, `1` when the response status is 400+ — so Task Scheduler /
   cron can detect failures. (The legacy `.bat` entry always exited 0.)
 - **Interpreter selection** (first match wins): `--php=<binary or directory>`, the `GF_PHP`
-  environment variable, `phpPath` in `environment.json`, the PHP running gf.
+  environment variable, `phpPath` in `environment.json`, the PHP running gf. Any of these may
+  include trailing arguments after the binary, e.g. `C:\path\php.exe -c C:\path\php.ini`
+  (quote a binary or argument that contains spaces).
 - `--debug` adds `-dxdebug.mode=debug -dxdebug.start_with_request=yes` with
   `--debug-host` (default `127.0.0.1`) and `--debug-port` (default `9003`).
 - `gf` locates the application root from its own install location, so it works from any

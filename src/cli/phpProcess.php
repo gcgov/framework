@@ -12,16 +12,23 @@ use Symfony\Component\Process\PhpExecutableFinder;
 final class phpProcess {
 
 	/**
-	 * Resolve the PHP binary to run app code with. Priority:
+	 * Resolve the PHP command to run app code with, returned as a command array
+	 * `[ binary, ...arguments ]` ready to prepend to a Symfony Process command line.
+	 * Priority:
 	 *  1. --php option
 	 *  2. GF_PHP environment variable
 	 *  3. environmentConfig->phpPath (a directory per the setup convention — php/php.exe appended;
-	 *     a full binary path is also accepted)
+	 *     a full binary path, optionally followed by CLI arguments, is also accepted)
 	 *  4. Symfony PhpExecutableFinder / PHP_BINARY (the interpreter running gf)
 	 *
+	 * Sources 1-3 may include trailing arguments after the binary, e.g.
+	 * `C:\path\php.exe -c C:\path\php.ini` — the binary and each argument become separate
+	 * command-array elements so Symfony Process escapes them individually.
+	 *
+	 * @return string[] Command array — first element is the binary, remaining elements are arguments.
 	 * @throws \gcgov\framework\cli\cliException
 	 */
-	public static function findPhpBinary( ?string $optionValue = null, ?environmentConfig $environmentConfig = null ): string {
+	public static function findPhpBinary( ?string $optionValue = null, ?environmentConfig $environmentConfig = null ): array {
 		$candidates = [];
 
 		if( $optionValue!==null && $optionValue!=='' ) {
@@ -47,17 +54,59 @@ final class phpProcess {
 
 		$found = ( new PhpExecutableFinder() )->find( false );
 		if( $found!==false ) {
-			return $found;
+			return [ $found ];
 		}
 
-		return PHP_BINARY;
+		return [ PHP_BINARY ];
 	}
 
 
 	/**
-	 * Accepts a php binary path or a directory containing php/php.exe.
+	 * Resolve a PHP command string into a `[ binary, ...arguments ]` array. Accepts:
+	 *  - a php binary path
+	 *  - a directory containing php/php.exe
+	 *  - a binary path followed by CLI arguments, e.g. "C:\path\php.exe -c C:\path\php.ini"
+	 *    (unquoted paths containing spaces are supported by greedily accumulating leading
+	 *    tokens until they resolve to a real file; quote paths/arguments containing spaces)
+	 *
+	 * @return string[]|null Command array, or null when the binary can't be found.
 	 */
-	private static function resolveBinary( string $path ): ?string {
+	private static function resolveBinary( string $path ): ?array {
+		$path = trim( $path );
+		if( $path==='' ) {
+			return null;
+		}
+
+		// Fast path: the whole string is a binary or a directory containing one, with no arguments.
+		$binary = self::resolveBinaryFile( $path );
+		if( $binary!==null ) {
+			return [ $binary ];
+		}
+
+		// Split a leading binary from trailing CLI arguments.
+		$tokens          = self::tokenize( $path );
+		$binaryCandidate = '';
+		foreach( $tokens as $index => $token ) {
+			// An option flag (e.g. -c) after a non-empty candidate marks the start of the arguments.
+			if( $binaryCandidate!=='' && str_starts_with( $token, '-' ) ) {
+				break;
+			}
+			$binaryCandidate = $binaryCandidate==='' ? $token : $binaryCandidate . ' ' . $token;
+			$binary          = self::resolveBinaryFile( $binaryCandidate );
+			if( $binary!==null ) {
+				return array_merge( [ $binary ], array_slice( $tokens, $index + 1 ) );
+			}
+		}
+
+		return null;
+	}
+
+
+	/**
+	 * Resolve a single path to a php binary: the path itself if it's a file, or php/php.exe
+	 * inside it if it's a directory.
+	 */
+	private static function resolveBinaryFile( string $path ): ?string {
 		if( is_file( $path ) ) {
 			return $path;
 		}
@@ -71,6 +120,19 @@ final class phpProcess {
 		}
 
 		return null;
+	}
+
+
+	/**
+	 * Split a command string into tokens on whitespace, keeping single- or double-quoted
+	 * spans (e.g. paths containing spaces) intact and stripping their surrounding quotes.
+	 *
+	 * @return string[]
+	 */
+	private static function tokenize( string $path ): array {
+		preg_match_all( '/"[^"]*"|\'[^\']*\'|\S+/', $path, $matches );
+
+		return array_map( static fn( string $token ): string => trim( $token, '"\'' ), $matches[ 0 ] );
 	}
 
 
