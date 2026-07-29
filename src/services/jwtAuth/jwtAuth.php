@@ -154,6 +154,23 @@ class jwtAuth {
 
 
 	/**
+	 * Mint a refresh token and persist its backing userRefreshToken row.
+	 *
+	 * The token is a split selector/verifier: the JWT `sub` claim carries the
+	 * row `_id` (the lookup selector) while the `jti` claim carries a separate
+	 * secret whose bcrypt hash is stored in the row's `token` field (the
+	 * verifier). validateRefreshToken() looks the row up by `sub` and
+	 * password_verify()s `jti` against the stored hash.
+	 *
+	 * NOTE: callers that rotate refresh tokens (delete-on-use, e.g. the
+	 * oauth-server `refresh_token` grant) make each token single-use. Presenting
+	 * an already-rotated token then fails validation and surfaces as
+	 * "Refresh token invalid" — this can happen benignly with concurrent
+	 * clients (e.g. multiple browser tabs sharing one persisted token) or an
+	 * interrupted/retried exchange. A rotation grace window / reuse detection at
+	 * the calling layer is a possible future hardening; see the oauth-server
+	 * README "Refresh token rotation".
+	 *
 	 * @param \gcgov\framework\models\authUser $authUser
 	 * @param \DateInterval|null $duration Defaults to 1 month. Pass a date interval to create a different length token. BE RESPONSIBLE!
 	 *
@@ -242,6 +259,17 @@ class jwtAuth {
 
 
 	/**
+	 * Validate an encoded refresh token and return the associated user id.
+	 *
+	 * After the JWT signature/claims pass, the backing userRefreshToken row is
+	 * looked up by the `sub` selector and the `jti` secret is verified against
+	 * the stored hash. A missing row — because the token was already rotated
+	 * away (deleted on use) or purged by removeOutdatedRefreshTokens() once
+	 * expired — makes validateRefreshTokenIdentity() throw, which is surfaced
+	 * here as `Exception('Refresh token invalid', 401)`. See createRefreshToken()
+	 * and the oauth-server README "Refresh token rotation" for the
+	 * concurrent/duplicate-presentation hazard this creates for clients.
+	 *
 	 * @param string $token Encoded token
 	 *
 	 * @return \MongoDB\BSON\ObjectId
