@@ -80,6 +80,48 @@ final class PhpProcessTest extends TestCase {
 		}
 	}
 
+	public function testRequiredIniFlagsForceArgcArgv(): void {
+		$this->assertSame( [ '-dregister_argc_argv=1' ], phpProcess::requiredIniFlags() );
+	}
+
+	public function testFindPhpBinarySwapsCgiBinaryForCliBinaryBesideIt(): void {
+		$tempDir = sys_get_temp_dir() . '/gcgov-phpprocess-test-' . uniqid();
+		mkdir( $tempDir );
+		$cgiBinary = $tempDir . '/php-cgi.exe';
+		$cliBinary = $tempDir . '/php.exe';
+		$iniFile   = $tempDir . '/php.ini';
+		touch( $cgiBinary );
+		touch( $cliBinary );
+		touch( $iniFile );
+		try {
+			$this->assertSame( [ $cliBinary ], phpProcess::findPhpBinary( $cgiBinary ) );
+			$this->assertSame(
+				[ $cliBinary, '-c', $iniFile ],
+				phpProcess::findPhpBinary( $cgiBinary . ' -c ' . $iniFile )
+			);
+		} finally {
+			unlink( $cgiBinary );
+			unlink( $cliBinary );
+			unlink( $iniFile );
+			rmdir( $tempDir );
+		}
+	}
+
+	public function testFindPhpBinaryThrowsWhenOnlyNonCliBinaryAvailable(): void {
+		$tempDir = sys_get_temp_dir() . '/gcgov-phpprocess-test-' . uniqid();
+		mkdir( $tempDir );
+		$cgiBinary = $tempDir . '/php-cgi.exe';
+		touch( $cgiBinary );
+		try {
+			$this->expectException( cliException::class );
+			$this->expectExceptionMessageMatches( '/not the CLI interpreter/' );
+			phpProcess::findPhpBinary( $cgiBinary );
+		} finally {
+			unlink( $cgiBinary );
+			rmdir( $tempDir );
+		}
+	}
+
 	public function testFindPhpBinaryThrowsOnBadPath(): void {
 		$this->expectException( cliException::class );
 		phpProcess::findPhpBinary( '/nonexistent/php-binary-path' );

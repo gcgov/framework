@@ -55,6 +55,13 @@ gf cli /cli/generate-shifts --debug     # run with Xdebug (replaces local-debug.
   environment variable, `phpPath` in `environment.json`, the PHP running gf. Any of these may
   include trailing arguments after the binary, e.g. `C:\path\php.exe -c C:\path\php.ini`
   (quote a binary or argument that contains spaces).
+- **It must be the CLI binary.** `php-cgi.exe` (what an IIS FastCGI handler mapping points at),
+  `php-fpm`, and `php-win.exe` cannot run routes — they define neither `$argv`/`$argc` nor
+  `STDERR`. gf swaps such a path for the `php`/`php.exe` sitting beside it and errors out with
+  an explanation when there isn't one.
+- The child is always started with `-dregister_argc_argv=1`, so a `php.ini` derived from
+  `php.ini-production` (which sets `register_argc_argv = Off`) can't leave the route runner
+  without its arguments.
 - `--debug` adds `-dxdebug.mode=debug -dxdebug.start_with_request=yes` with
   `--debug-host` (default `127.0.0.1`) and `--debug-port` (default `9003`).
 - `gf` locates the application root from its own install location, so it works from any
@@ -262,7 +269,7 @@ Useful helpers for custom commands (all in `\gcgov\framework\cli`):
 - `appContext->loadEnvironmentConfig($variant)` — parse an environment variant file
 - `environmentFiles::apply($root, $env)` — the `gf env` copy step
 - `mongoTools::findBinary()/redactUri()/uriWithDatabase()`
-- `phpProcess::findPhpBinary()/xdebugFlags()`
+- `phpProcess::findPhpBinary()/requiredIniFlags()/xdebugFlags()`
 - throw `cliException` for user-facing errors
 
 ---

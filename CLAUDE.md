@@ -491,6 +491,9 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
   app-boot (cli, cli:list — `assertAppLoadable()`; `\app\app::_before()` is deliberately NOT called).
 - **`gf cli <route>`** always spawns a fresh PHP child process (Xdebug flags need fresh INI;
   isolates `exit()`; interpreter picked via `--php` > `GF_PHP` > environment.json `phpPath` > current).
+  The interpreter must be the CLI binary — `php-cgi`/`php-fpm`/`php-win` are swapped for the
+  `php`/`php.exe` beside them, else rejected; the child always gets `-dregister_argc_argv=1`, and
+  `internal/run-route.php` assumes neither `$argv` nor `STDERR` exists until it has checked.
 - **Expandability**: apps (`\app\cli\commandProvider`) and plugins
   (`{ns}\cli\commandProvider`) implement `\gcgov\framework\cli\commandProvider::getCommands()`.
   Discovery is fail-safe — errors never break gf (visible with `-v`).

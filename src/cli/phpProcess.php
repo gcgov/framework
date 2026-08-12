@@ -12,6 +12,14 @@ use Symfony\Component\Process\PhpExecutableFinder;
 final class phpProcess {
 
 	/**
+	 * Binary names that are not the PHP CLI interpreter (or, in php-win's case, a CLI build
+	 * without console streams). App code cannot be run with them: $argv/$argc and
+	 * STDIN/STDOUT/STDERR are unavailable, so the child dies before the route starts.
+	 */
+	private const NON_CLI_BINARY_NAMES = [ 'php-cgi', 'php-fpm', 'php-win' ];
+
+
+	/**
 	 * Resolve the PHP command to run app code with, returned as a command array
 	 * `[ binary, ...arguments ]` ready to prepend to a Symfony Process command line.
 	 * Priority:
@@ -24,6 +32,10 @@ final class phpProcess {
 	 * Sources 1-3 may include trailing arguments after the binary, e.g.
 	 * `C:\path\php.exe -c C:\path\php.ini` — the binary and each argument become separate
 	 * command-array elements so Symfony Process escapes them individually.
+	 *
+	 * A non-CLI binary (php-cgi/php-fpm/php-win — the path IIS FastCGI is configured with)
+	 * is swapped for the CLI binary sitting beside it, or reported as an error when there
+	 * isn't one.
 	 *
 	 * @return string[] Command array — first element is the binary, remaining elements are arguments.
 	 * @throws \gcgov\framework\cli\cliException
@@ -47,17 +59,57 @@ final class phpProcess {
 		foreach( $candidates as $candidate => $sourceDescription ) {
 			$resolved = self::resolveBinary( (string)$candidate );
 			if( $resolved!==null ) {
-				return $resolved;
+				return self::requireCliBinary( $resolved, $sourceDescription );
 			}
 			throw new cliException( 'PHP binary from ' . $sourceDescription . ' not found or not executable: ' . $candidate );
 		}
 
 		$found = ( new PhpExecutableFinder() )->find( false );
 		if( $found!==false ) {
-			return [ $found ];
+			return self::requireCliBinary( [ $found ], 'the PHP interpreter running gf' );
 		}
 
-		return [ PHP_BINARY ];
+		return self::requireCliBinary( [ PHP_BINARY ], 'the PHP interpreter running gf' );
+	}
+
+
+	/**
+	 * `-d` ini overrides every gf-spawned PHP child needs, regardless of the php.ini the
+	 * resolved interpreter loads. php.ini-production ships `register_argc_argv = Off`, which
+	 * leaves $argv/$argc undefined in the child — the route runner can't read its arguments.
+	 *
+	 * @return string[]
+	 */
+	public static function requiredIniFlags(): array {
+		return [ '-dregister_argc_argv=1' ];
+	}
+
+
+	/**
+	 * Ensure the resolved command runs the CLI interpreter. php-cgi/php-fpm/php-win are
+	 * silently swapped for the php/php.exe beside them (a phpPath copied from an IIS FastCGI
+	 * handler mapping is the common case); when no CLI binary is there, fail with an
+	 * actionable message instead of letting the child process die on undefined $argv/STDERR.
+	 *
+	 * @param  string[]  $command
+	 *
+	 * @return string[]
+	 * @throws \gcgov\framework\cli\cliException
+	 */
+	private static function requireCliBinary( array $command, string $sourceDescription ): array {
+		$binary = $command[ 0 ] ?? '';
+		if( !in_array( strtolower( pathinfo( $binary, PATHINFO_FILENAME ) ), self::NON_CLI_BINARY_NAMES, true ) ) {
+			return $command;
+		}
+
+		$cliBinary = self::resolveBinaryFile( dirname( $binary ) );
+		if( $cliBinary!==null ) {
+			$command[ 0 ] = $cliBinary;
+
+			return $command;
+		}
+
+		throw new cliException( 'PHP binary from ' . $sourceDescription . ' is not the CLI interpreter: ' . $binary . '. gf runs application code through the PHP CLI binary (php/php.exe) — php-cgi, php-fpm, and php-win cannot run CLI routes ($argv and STDERR are unavailable there). No CLI binary was found beside it, so point --php, GF_PHP, or environment.json phpPath at php.exe or the directory containing it.' );
 	}
 
 
