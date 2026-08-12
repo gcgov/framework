@@ -53,7 +53,7 @@ final class cliCommand extends Command {
 			// environment.json missing — the child process will report it through the framework lifecycle
 		}
 
-		$commandLine = phpProcess::findPhpBinary( $input->getOption( 'php' ), $environmentConfig );
+		$commandLine = array_merge( phpProcess::findPhpBinary( $input->getOption( 'php' ), $environmentConfig ), phpProcess::requiredIniFlags() );
 
 		if( $input->getOption( 'debug' ) ) {
 			$commandLine = array_merge( $commandLine, phpProcess::xdebugFlags( (string)$input->getOption( 'debug-host' ), (int)$input->getOption( 'debug-port' ) ) );

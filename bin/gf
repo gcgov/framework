@@ -35,7 +35,15 @@ else {
 }
 
 if( $autoloadPath===null ) {
-	fwrite( STDERR, 'gf: could not locate vendor/autoload.php. Run gf from a project that requires gcgov/framework (after composer install).' . PHP_EOL );
+	// STDERR is only defined under the CLI SAPI with real console handles.
+	$errorStream = defined( 'STDERR' ) ? STDERR : @fopen( 'php://stderr', 'wb' );
+	$message     = 'gf: could not locate vendor/autoload.php. Run gf from a project that requires gcgov/framework (after composer install).';
+	if( is_resource( $errorStream ) ) {
+		fwrite( $errorStream, $message . PHP_EOL );
+	}
+	else {
+		error_log( $message );
+	}
 	exit( 1 );
 }
 
