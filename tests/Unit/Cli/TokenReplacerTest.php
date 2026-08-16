@@ -85,6 +85,28 @@ final class TokenReplacerTest extends TestCase {
 		$this->assertSame( '{"title":"{app_title}"}', file_get_contents( $this->tempRootDir . '/a.json' ) );
 	}
 
+	public function testDockerTemplateExtensionsAreEligible(): void {
+		file_put_contents( $this->tempRootDir . '/default.conf.template', 'server_name {app_server_name};' );
+		file_put_contents( $this->tempRootDir . '/docker-compose.yml', 'image: {app_title}' );
+		file_put_contents( $this->tempRootDir . '/config.yaml', 'title: {app_title}' );
+		file_put_contents( $this->tempRootDir . '/.env.example', 'APP_TITLE={app_title}' );
+		file_put_contents( $this->tempRootDir . '/nginx.conf', 'root {app_absolute_path};' );
+
+		$modified = tokenReplacer::replaceInTree( $this->tempRootDir, [
+			'{app_server_name}'   => 'api.example.com',
+			'{app_title}'         => 'Widget API',
+			'{app_absolute_path}' => '/var/www/api',
+		] );
+
+		$this->assertContains( str_replace( '\\', '/', $this->tempRootDir ) . '/default.conf.template', $modified );
+		$this->assertContains( str_replace( '\\', '/', $this->tempRootDir ) . '/docker-compose.yml', $modified );
+		$this->assertContains( str_replace( '\\', '/', $this->tempRootDir ) . '/config.yaml', $modified );
+		$this->assertContains( str_replace( '\\', '/', $this->tempRootDir ) . '/.env.example', $modified );
+		$this->assertContains( str_replace( '\\', '/', $this->tempRootDir ) . '/nginx.conf', $modified );
+		$this->assertStringContainsString( 'server_name api.example.com;', (string)file_get_contents( $this->tempRootDir . '/default.conf.template' ) );
+	}
+
+
 	public function testFormatRelativeUrl(): void {
 		$this->assertSame( '/api/', tokenReplacer::formatRelativeUrl( 'api' ) );
 		$this->assertSame( '/api/', tokenReplacer::formatRelativeUrl( '/api/' ) );

@@ -165,8 +165,17 @@ final class appContext {
 			throw new cliException( 'Missing environment config file: ' . $file . '.' . $hint );
 		}
 
+		\gcgov\framework\services\environment\dotEnvLoader::loadOnce( $this->rootDir );
+
 		try {
-			return environmentConfig::jsonDeserialize( (string)file_get_contents( $file ) );
+			$json = \gcgov\framework\services\environment\envVarResolver::resolveJson( (string)file_get_contents( $file ), $file );
+		}
+		catch( \gcgov\framework\services\environment\environmentException $e ) {
+			throw new cliException( 'Failed to resolve environment variables in ' . $file . ': ' . $e->getMessage(), 0, $e );
+		}
+
+		try {
+			return environmentConfig::jsonDeserialize( $json );
 		}
 		catch( \andrewsauder\jsonDeserialize\exceptions\jsonDeserializeException $e ) {
 			throw new cliException( 'Failed to parse ' . $file . ': ' . $e->getMessage(), 0, $e );

@@ -293,5 +293,17 @@ Files an app can delete once migrated: `app/cli/local.bat`, `app/cli/local-debug
 `db/restore-live-to-local.ps1`, `update-production.ps1` — and `app/cli/index.php` once no
 scheduler entry references it (gf ships its own route runner).
 
-Move any secrets that were hardcoded in those scripts into the environment variant config
-files (`environment-{env}.json`), which the `db:*` commands read.
+Reference any secrets that were hardcoded in those scripts via `%env(...)%` in the environment
+variant config files (`environment-{env}.json`) — the `db:*` commands and the request lifecycle
+both resolve them. Keep the actual values in the process environment, Docker/Kubernetes secrets,
+or a gitignored `.env` file. See **[Environment variables in config](environment-variables.md)**.
+
+For example, instead of a plaintext URI in `environment-prod.json`:
+
+```jsonc
+"uri": "%env(MONGO_URI)%"                    // fail loud if unset
+"uri": "%env(trim:file:MONGO_URI_FILE)%"     // …or read a Docker secret file
+```
+
+`.env` files (`{app-root}/.env`, then `.env.local`) are loaded automatically before config is
+resolved; the real process environment always wins over them.

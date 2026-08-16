@@ -42,6 +42,12 @@ Required configuration files:
 
 If either file is missing, the framework throws a config exception during request handling.
 
+Both config files support **Symfony-style `%env(...)%` environment-variable references**, so
+secrets (Mongo URIs, client secrets, SMTP credentials) can be injected from the process
+environment, Docker/Kubernetes secrets, or a `.env` file instead of being stored in the files.
+Existing plain-JSON config keeps working unchanged. See
+**[readme/environment-variables.md](readme/environment-variables.md)**.
+
 ## System Architecture
 
 ### Application File System

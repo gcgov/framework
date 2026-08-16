@@ -146,7 +146,16 @@ final class config {
 		if( !file_exists( $appConfigFile ) ) {
 			throw new \gcgov\framework\exceptions\configException( 'Missing app config file at ' . $appConfigFile );
 		}
-		self::$appConfig = appConfig::jsonDeserialize( file_get_contents( $appConfigFile ) );
+
+		\gcgov\framework\services\environment\dotEnvLoader::loadOnce( self::getRootDir() );
+		try {
+			$json = \gcgov\framework\services\environment\envVarResolver::resolveJson( (string)file_get_contents( $appConfigFile ), $appConfigFile );
+		}
+		catch( \gcgov\framework\services\environment\environmentException $e ) {
+			throw new \gcgov\framework\exceptions\configException( $e->getMessage(), 500, $e );
+		}
+
+		self::$appConfig = appConfig::jsonDeserialize( $json );
 	}
 
 
@@ -172,7 +181,16 @@ final class config {
 		if( !file_exists( $environmentConfigFile ) ) {
 			throw new \gcgov\framework\exceptions\configException( 'Missing environment config file at ' . $environmentConfigFile );
 		}
-		self::$environmentConfig = environmentConfig::jsonDeserialize( file_get_contents( $environmentConfigFile ) );
+
+		\gcgov\framework\services\environment\dotEnvLoader::loadOnce( self::getRootDir() );
+		try {
+			$json = \gcgov\framework\services\environment\envVarResolver::resolveJson( (string)file_get_contents( $environmentConfigFile ), $environmentConfigFile );
+		}
+		catch( \gcgov\framework\services\environment\environmentException $e ) {
+			throw new \gcgov\framework\exceptions\configException( $e->getMessage(), 500, $e );
+		}
+
+		self::$environmentConfig = environmentConfig::jsonDeserialize( $json );
 	}
 
 }

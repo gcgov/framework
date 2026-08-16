@@ -115,6 +115,40 @@ final class AppContextTest extends TestCase {
 		$context->loadEnvironmentConfig();
 	}
 
+
+	public function testLoadEnvironmentConfigResolvesEnvVars(): void {
+		$_ENV[ 'TEST_MONGO_URI' ] = 'mongodb://resolved:27017/widgets';
+		putenv( 'TEST_MONGO_URI=mongodb://resolved:27017/widgets' );
+		try {
+			file_put_contents( $this->tempRootDir . '/app/config/environment-docker.json', json_encode( [
+				'type'           => 'prod',
+				'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => '%env(TEST_MONGO_URI)%' ] ],
+			] ) );
+			$context = appContext::locate( $this->tempRootDir );
+			$this->assertNotNull( $context );
+			$environmentConfig = $context->loadEnvironmentConfig( 'docker' );
+			$this->assertSame( 'mongodb://resolved:27017/widgets', $environmentConfig->mongoDatabases[ 0 ]->uri );
+		}
+		finally {
+			unset( $_ENV[ 'TEST_MONGO_URI' ] );
+			putenv( 'TEST_MONGO_URI' );
+		}
+	}
+
+
+	public function testLoadEnvironmentConfigThrowsCliExceptionWhenEnvVarMissing(): void {
+		unset( $_ENV[ 'TEST_MISSING_URI' ] );
+		putenv( 'TEST_MISSING_URI' );
+		file_put_contents( $this->tempRootDir . '/app/config/environment-docker.json', json_encode( [
+			'type'           => 'prod',
+			'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => '%env(TEST_MISSING_URI)%' ] ],
+		] ) );
+		$context = appContext::locate( $this->tempRootDir );
+		$this->assertNotNull( $context );
+		$this->expectException( cliException::class );
+		$context->loadEnvironmentConfig( 'docker' );
+	}
+
 	public function testGetEnvironmentVariantsListsVariantFiles(): void {
 		touch( $this->tempRootDir . '/app/config/environment-local.json' );
 		touch( $this->tempRootDir . '/app/config/environment-prod.json' );
