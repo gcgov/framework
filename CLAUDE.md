@@ -326,21 +326,24 @@ returning group keys, and tag constraints with `groups: [...]`.
 work without setup. Config DTOs are `jsonDeserialize`-hydrated from the two JSON files.
 
 ### Environment variables in config — `%env(...)%`
-Both JSON files (and the gf CLI's `environment-{variant}.json`) support **Symfony-style
-`%env(...)%` references**, resolved at load time by
+Both JSON files support **Symfony-style `%env(...)%` references**, resolved at load time by
 `\gcgov\framework\services\environment\envVarResolver` (see `readme/environment-variables.md`).
-This keeps secrets out of the committed/gitignored config and lets them come from the process
+This keeps secrets out of the committed config and lets them come from the process
 environment, Docker/K8s secrets, or a `.env` file — the basis of Docker hosting.
-- **Fully backwards compatible**: a file with no `%env(` substring is loaded byte-for-byte as
-  before. You opt in by writing `%env(...)%`.
+- A file with no `%env(` substring is loaded byte-for-byte as before. You opt in by writing `%env(...)%`.
 - Whole-value ref → typed result (`"%env(int:SMTP_PORT)%"` → `587`); embedded ref → string
   substitution. Processors (right-to-left): `string,bool,not,int,float,trim,file,base64,json,default`.
 - `file` reads the file at the variable's value (Docker secrets: `%env(trim:file:MONGO_URI_FILE)%`).
 - `default:` is a **literal** fallback (deviation from Symfony), must be innermost, greedy
   argument so colons are legal: `%env(default:mongodb://mongodb:27017:MONGO_URI)%`.
 - `.env` loading (via `symfony/dotenv`, `dotEnvLoader::loadOnce()`): `{root}/.env` then
-  `.env.local`; **real environment always wins** over both. No `APP_ENV` cascade — env
-  selection stays with `gf env <name>`.
+  `.env.local`; **real environment always wins** over both. No `APP_ENV` cascade — an
+  environment IS the variable set the process is given; nothing is activated or copied (v7).
+- gf variant reads (`db:restore --from=prod`, `db:run --env=prod`, `gf env prod`) resolve the
+  same committed `environment.json` with a gitignored `app/config/{variant}.env` **overlay**
+  (parsed via `dotEnvLoader::parseFile()`, precedence: overlay > real env > `.env.local` >
+  `.env` > `default:`). Overlays must define every environment-specific variable — missing ones
+  silently fall back to local values; validate with `gf env <name>`.
 - Missing required var → `configException` (runtime) / `cliException` (gf), naming the variable.
 
 **`app.json`** → `\gcgov\framework\models\appConfig`:
@@ -500,10 +503,13 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
   `src/cli/chromeInstaller.php` (injectable Guzzle client — tests are network-free).
 - **Architecture** (`src/cli/`): `application` (command registration + provider discovery),
   `appContext` (app-root locator: composer autoload path first, then cwd walk-up; lazy config
-  access via `loadEnvironmentConfig($variant)` — never boots the request lifecycle),
+  access via `loadEnvironmentConfig($variant)` — resolves `environment.json`, applying the
+  `app/config/{variant}.env` overlay when a variant is named; never boots the request lifecycle),
   `routeCatalog` (CLI-route enumeration via `router::getMergedRoutes()`), `phpProcess`,
-  `environmentFiles`, `tokenReplacer`, `mongoTools`, `cliException` (user-facing errors),
+  `tokenReplacer`, `mongoTools`, `cliException` (user-facing errors),
   `internal/run-route.php` (child-process route runner; maps response status ≥400 → exit 1).
+  `gf env` validates config resolution (it stopped copying files in v7); `gf setup` prompts only
+  for `{token}`s present in the tree (`setupCommand::filterPromptsToPresentTokens`).
 - **Command tiers**: no context (list/help/completion — must work anywhere, including this repo);
   root-only (env, db:*, cert:*, deploy, setup — config JSON only, no `\app` boot);
   app-boot (cli, cli:list — `assertAppLoadable()`; `\app\app::_before()` is deliberately NOT called).

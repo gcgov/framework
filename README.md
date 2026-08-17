@@ -85,20 +85,16 @@ automatically start with some extra folders and tools.
 │...
 ├── www
 │   │...
-│   ├── web.config
-│   ├── web-local.config
-│   └── web-prod.config
 ├── app
 │   │...
 │   └── config
-│       └── environment-local.json
-│       └── environment-prod.json
-├── scripts
-│   ├── create-jwt-keys.ps1
-│   └── setup.ps1
+│       ├── app.json
+│       ├── environment.json          # committed; secrets/per-env values via %env(...)
+│       └── prod.env.example          # copy to prod.env (gitignored) for gf db:*/env variant reads
+├── docker
+│   └── nginx
+│       └── default.conf.template
 ├── srv
-│   ├── {env}
-│   │   └── php.ini
 │   ├── tmp
 │   │   ├── files
 │   │   ├── opcache
@@ -107,11 +103,11 @@ automatically start with some extra folders and tools.
 │   │   └── tmp
 │   └── jwtCertificates
 ├── db
-│   ├── backup
-│   ├── restore-live-to-local.ps1
 │   └── local-createuser.js
 ├── logs
-└── update-production.ps1
+├── .env.example                      # copy to .env (gitignored) for local development
+├── Dockerfile
+└── docker-compose.yml
 ```
 
 ### Core Files and Application Namespacing
@@ -227,7 +223,7 @@ gf cli:list                      # list the app's CLI routes
 gf cert:generate-auth            # JWT signing keys (replaces create-jwt-keys.ps1)
 gf db:restore --from=prod        # pull a source env's mongo dbs into the local env
 gf db:run db/script.js           # run a mongosh script with config-managed credentials
-gf env local                     # activate environment config file variants
+gf env prod                      # validate that the prod.env overlay fully resolves environment.json
 gf setup                         # bootstrap a scaffolded app (replaces setup.ps1)
 gf deploy                        # tag-based deployment (replaces update-production.ps1)
 ```

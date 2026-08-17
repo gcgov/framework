@@ -153,25 +153,53 @@ final class appContext {
 
 
 	/**
-	 * Parse app/config/environment{-$variant}.json directly — no \app boot, no ext-mongodb.
-	 * $variant '' loads the active environment.json.
+	 * Parse app/config/environment.json directly — no \app boot, no ext-mongodb.
+	 *
+	 * $variant ''     → resolve against the ambient environment ({root}/.env is loaded
+	 *                   first; the real process environment wins).
+	 * $variant 'name' → resolve the SAME environment.json with the variables from
+	 *                   app/config/{name}.env applied as an overlay that takes precedence
+	 *                   over the ambient environment — a foreign-environment read (used by
+	 *                   db:restore/db:run/env) without activating anything. Variables
+	 *                   missing from the overlay fall back to ambient values, so overlay
+	 *                   files should define every environment-specific variable.
 	 *
 	 * @throws \gcgov\framework\cli\cliException
 	 */
 	public function loadEnvironmentConfig( string $variant = '' ): environmentConfig {
-		$file = $this->getEnvironmentConfigPath( $variant );
+		$file       = $this->getEnvironmentConfigPath();
+		$legacyFile = $this->getConfigDir() . '/environment-' . $variant . '.json';
+		$legacyHint = $variant!=='' && file_exists( $legacyFile )
+			? ' A legacy ' . basename( $legacyFile ) . ' exists — this framework version reads variant values from app/config/{name}.env overlay files instead; see readme/gf.md "Migrating a v6 app to v7".'
+			: '';
+
 		if( !file_exists( $file ) ) {
-			$hint = $variant==='' ? ' Run `gf env <environment>` to activate an environment first.' : '';
-			throw new cliException( 'Missing environment config file: ' . $file . '.' . $hint );
+			throw new cliException( 'Missing environment config file: ' . $file . '. Commit an environment.json that references environment variables with %env(...) and supply values via the process environment or a .env file.' . $legacyHint );
+		}
+
+		$overlayVars = [];
+		$source      = $file;
+		if( $variant!=='' ) {
+			$overlayPath = $this->getEnvironmentOverlayPath( $variant );
+			if( !file_exists( $overlayPath ) ) {
+				throw new cliException( 'Missing environment overlay file: ' . $overlayPath . '. Create it with the "' . $variant . '" environment\'s variable values (see app/config/prod.env.example in the app template).' . $legacyHint );
+			}
+			try {
+				$overlayVars = \gcgov\framework\services\environment\dotEnvLoader::parseFile( $overlayPath );
+			}
+			catch( \gcgov\framework\services\environment\environmentException $e ) {
+				throw new cliException( $e->getMessage(), 0, $e );
+			}
+			$source = $this->describeEnvironmentConfigSource( $variant );
 		}
 
 		\gcgov\framework\services\environment\dotEnvLoader::loadOnce( $this->rootDir );
 
 		try {
-			$json = \gcgov\framework\services\environment\envVarResolver::resolveJson( (string)file_get_contents( $file ), $file );
+			$json = \gcgov\framework\services\environment\envVarResolver::resolveJson( (string)file_get_contents( $file ), $source, $overlayVars );
 		}
 		catch( \gcgov\framework\services\environment\environmentException $e ) {
-			throw new cliException( 'Failed to resolve environment variables in ' . $file . ': ' . $e->getMessage(), 0, $e );
+			throw new cliException( 'Failed to resolve environment variables in ' . $source . ': ' . $e->getMessage(), 0, $e );
 		}
 
 		try {
@@ -183,22 +211,38 @@ final class appContext {
 	}
 
 
-	public function getEnvironmentConfigPath( string $variant = '' ): string {
-		$suffix = $variant==='' ? '' : '-' . $variant;
+	public function getEnvironmentConfigPath(): string {
+		return $this->getConfigDir() . '/environment.json';
+	}
 
-		return $this->getConfigDir() . '/environment' . $suffix . '.json';
+
+	/** The per-variant overlay env file read by loadEnvironmentConfig($variant). */
+	public function getEnvironmentOverlayPath( string $variant ): string {
+		return $this->getConfigDir() . '/' . $variant . '.env';
+	}
+
+
+	/** Human-readable description of where a variant's config comes from, for error/guard messages. */
+	public function describeEnvironmentConfigSource( string $variant = '' ): string {
+		if( $variant==='' ) {
+			return $this->getEnvironmentConfigPath();
+		}
+
+		return $this->getEnvironmentConfigPath() . ' (overlay: ' . $this->getEnvironmentOverlayPath( $variant ) . ')';
 	}
 
 
 	/**
-	 * Environment variant names available in app/config (environment-{name}.json).
+	 * Environment variant names available in app/config ({name}.env overlay files).
+	 * glob's `*` does not match a leading dot, and `*.env` does not match `*.env.example`,
+	 * so a stray `.env` or the committed example file never appear as variants.
 	 *
 	 * @return string[]
 	 */
 	public function getEnvironmentVariants(): array {
 		$variants = [];
-		foreach( glob( $this->getConfigDir() . '/environment-*.json' ) ?: [] as $file ) {
-			$variants[] = substr( basename( $file, '.json' ), strlen( 'environment-' ) );
+		foreach( glob( $this->getConfigDir() . '/*.env' ) ?: [] as $file ) {
+			$variants[] = basename( $file, '.env' );
 		}
 		sort( $variants );
 

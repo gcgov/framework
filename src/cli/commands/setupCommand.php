@@ -73,9 +73,15 @@ final class setupCommand extends Command {
 		$io->title( 'gcgov/framework application setup' );
 		$io->text( [ 'Application root: ' . $context->rootDir, 'To skip replacing a value, press enter.', '' ] );
 
-		$prompts = self::PROMPTS;
-		if( $io->confirm( 'Do you want to define Microsoft Azure App ids during set up?', false ) ) {
-			$prompts = array_merge( $prompts, self::MICROSOFT_PROMPTS );
+		// Only prompt for values whose {token} actually appears in the project tree, so
+		// templates that no longer carry a token (e.g. the prod_* config set) stop asking for it.
+		$prompts = self::filterPromptsToPresentTokens( self::PROMPTS, $context->rootDir );
+		$microsoftPrompts = self::filterPromptsToPresentTokens( self::MICROSOFT_PROMPTS, $context->rootDir );
+		if( count( $microsoftPrompts )>0 && $io->confirm( 'Do you want to define Microsoft Azure App ids during set up?', false ) ) {
+			$prompts = array_merge( $prompts, $microsoftPrompts );
+		}
+		if( count( $prompts )===0 ) {
+			$io->text( 'No {placeholder} tokens found in the project — it appears to be already set up.' );
 		}
 
 		$inputs = [];
@@ -84,7 +90,7 @@ final class setupCommand extends Command {
 		}
 
 		// review/edit loop
-		while( true ) {
+		while( count( $prompts )>0 ) {
 			$io->section( 'Review' );
 			$index = 1;
 			$keysByIndex = [];
@@ -130,9 +136,53 @@ final class setupCommand extends Command {
 			}
 		}
 
-		$io->success( 'Setup complete. Next: `gf env local`, then `gf cert:generate-auth`.' );
+		$io->success( 'Setup complete. Next: `cp .env.example .env`, then `gf cert:generate-auth`.' );
 
 		return Command::SUCCESS;
+	}
+
+
+	/**
+	 * The {token}s a prompt key feeds. Most keys map 1:1; the base-path prompts also
+	 * produce the derived relative-url token (see buildReplacementTable()).
+	 *
+	 * @return string[]
+	 */
+	public static function tokensForPromptKey( string $key ): array {
+		return match ( $key ) {
+			'app_base_path'      => [ '{app_base_path}', '{app_relative_url}' ],
+			'prod_app_base_path' => [ '{prod_app_base_path}', '{prod_app_relative_url}' ],
+			default              => [ '{' . $key . '}' ],
+		};
+	}
+
+
+	/**
+	 * Keep only the prompts whose token(s) actually appear somewhere in the project's
+	 * token-eligible files, so setup never asks for values it cannot place.
+	 *
+	 * @param array<string, string> $prompts prompt key => label
+	 *
+	 * @return array<string, string>
+	 */
+	public static function filterPromptsToPresentTokens( array $prompts, string $rootDir ): array {
+		$haystack = '';
+		foreach( tokenReplacer::findEligibleFiles( $rootDir ) as $filePath ) {
+			$contents = file_get_contents( $filePath );
+			if( $contents!==false ) {
+				$haystack .= $contents;
+			}
+		}
+
+		return array_filter( $prompts, function( string $key ) use ( $haystack ): bool {
+			foreach( self::tokensForPromptKey( $key ) as $token ) {
+				if( str_contains( $haystack, $token ) ) {
+					return true;
+				}
+			}
+
+			return false;
+		}, ARRAY_FILTER_USE_KEY );
 	}
 
 

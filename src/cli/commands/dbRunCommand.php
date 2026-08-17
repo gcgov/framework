@@ -19,7 +19,7 @@ final class dbRunCommand extends Command {
 	protected function configure(): void {
 		$this->addArgument( 'script', InputArgument::REQUIRED, 'Path to the .js script to execute with mongosh' );
 		$this->addArgument( 'mongoshArgs', InputArgument::IS_ARRAY | InputArgument::OPTIONAL, 'Extra arguments passed through to mongosh (prefix with --)' );
-		$this->addOption( 'env', null, InputOption::VALUE_REQUIRED, 'Environment variant to read the connection from (reads app/config/environment-{env}.json). Omit to use the active environment.json.', '', envCommand::suggestEnvironments( ... ) );
+		$this->addOption( 'env', null, InputOption::VALUE_REQUIRED, 'Environment variant to read the connection from (resolves app/config/environment.json with the app/config/{env}.env overlay). Omit to use the active environment.', '', envCommand::suggestEnvironments( ... ) );
 		$this->addOption( 'db', null, InputOption::VALUE_REQUIRED, 'Database name from the mongoDatabases config to run against. Default: the entry marked default (or the only entry).' );
 		$this->setHelp( 'Replaces per-script mongosh invocations with hardcoded connection strings, e.g.: gf db:run db/create-admin.js --env=local. Everything after -- is forwarded to mongosh.' );
 	}

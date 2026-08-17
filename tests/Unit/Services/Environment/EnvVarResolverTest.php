@@ -203,6 +203,47 @@ final class EnvVarResolverTest extends TestCase {
 	}
 
 
+	public function testOverlayBeatsAmbientEnvironment(): void {
+		$this->setEnv( 'MONGO_URI', 'mongodb://local:27017' );
+		$result = envVarResolver::resolveJson( '{"uri":"%env(MONGO_URI)%"}', 'test', [ 'MONGO_URI' => 'mongodb://prod:27017' ] );
+		$this->assertSame( 'mongodb://prod:27017', $result->uri );
+	}
+
+
+	public function testOverlayMissFallsBackToAmbient(): void {
+		$this->setEnv( 'MONGO_URI', 'mongodb://local:27017' );
+		$result = envVarResolver::resolveJson( '{"uri":"%env(MONGO_URI)%","db":"%env(MONGO_DATABASE)%"}', 'test', [ 'MONGO_DATABASE' => 'prodDb' ] );
+		$this->assertSame( 'mongodb://local:27017', $result->uri );
+		$this->assertSame( 'prodDb', $result->db );
+	}
+
+
+	public function testOverlayValueSuppressesDefault(): void {
+		$result = envVarResolver::resolveJson( '{"uri":"%env(default:mongodb://fallback:27017:MONGO_URI)%"}', 'test', [ 'MONGO_URI' => 'mongodb://overlay:27017' ] );
+		$this->assertSame( 'mongodb://overlay:27017', $result->uri );
+	}
+
+
+	public function testEmptyOverlayValueResolvesToEmptyStringAndSuppressesDefault(): void {
+		$result = envVarResolver::resolveJson( '{"secret":"%env(default:fallback:CLIENT_SECRET)%"}', 'test', [ 'CLIENT_SECRET' => '' ] );
+		$this->assertSame( '', $result->secret );
+	}
+
+
+	public function testEmptyOverlayArrayIsIdenticalToTwoArgCall(): void {
+		$this->setEnv( 'MONGO_URI', 'mongodb://ambient:27017' );
+		$json = '{"uri":"%env(MONGO_URI)%","port":"%env(int:default:587:SMTP_PORT)%"}';
+		$this->assertEquals( envVarResolver::resolveJson( $json, 'test' ), envVarResolver::resolveJson( $json, 'test', [] ) );
+	}
+
+
+	public function testOverlayWorksWithProcessorsAndEmbeddedRefs(): void {
+		$result = envVarResolver::resolveJson( '{"port":"%env(int:SMTP_PORT)%","url":"https://%env(HOSTNAME_X)%/api"}', 'test', [ 'SMTP_PORT' => '2525', 'HOSTNAME_X' => 'prod.example.com' ] );
+		$this->assertSame( 2525, $result->port );
+		$this->assertSame( 'https://prod.example.com/api', $result->url );
+	}
+
+
 	public function testServerHttpKeysAreNotUsedForLookup(): void {
 		// A malicious request header must not satisfy an env reference.
 		$_SERVER[ 'HTTP_MONGO_URI' ] = 'mongodb://attacker';

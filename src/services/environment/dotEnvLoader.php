@@ -16,8 +16,11 @@ use Symfony\Component\Dotenv\Dotenv;
  * is enabled so that call sites reading through `getenv()` (e.g. `GF_PHP` in the
  * gf CLI) also observe values loaded from .env files.
  *
- * There is deliberately no APP_ENV cascade: environment selection stays with
- * gf's env-file copying (`gf env <name>`), not with dotenv.
+ * There is deliberately no APP_ENV cascade: environment selection is simply
+ * which variables the process environment (or .env) supplies. The gf CLI reads
+ * a *foreign* environment's values via per-variant overlay files
+ * (app/config/{name}.env, parsed with parseFile() — never loaded into the
+ * process environment).
  */
 final class dotEnvLoader {
 
@@ -55,6 +58,33 @@ final class dotEnvLoader {
 		}
 
 		$dotenv->load( ...$files );
+	}
+
+
+	/**
+	 * Parse a dotenv-format file into an array WITHOUT mutating the process
+	 * environment. Used by the gf CLI to build the overlay for foreign-environment
+	 * reads (e.g. app/config/prod.env for `db:restore --from=prod`).
+	 *
+	 * @return array<string, string>
+	 * @throws \gcgov\framework\services\environment\environmentException
+	 */
+	public static function parseFile( string $path ): array {
+		if( !is_file( $path ) || !is_readable( $path ) ) {
+			throw new environmentException( 'Environment file "' . $path . '" does not exist or is not readable.' );
+		}
+
+		$contents = file_get_contents( $path );
+		if( $contents===false ) {
+			throw new environmentException( 'Failed reading environment file "' . $path . '".' );
+		}
+
+		try {
+			return ( new Dotenv() )->parse( $contents, $path );
+		}
+		catch( \Symfony\Component\Dotenv\Exception\FormatException $e ) {
+			throw new environmentException( 'Invalid syntax in environment file "' . $path . '": ' . $e->getMessage(), 0, $e );
+		}
 	}
 
 

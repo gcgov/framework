@@ -21,6 +21,30 @@ final class DbRestoreCommandTest extends TestCase {
 		return $mongoDatabase;
 	}
 
+	public function testFindIdenticalPairsFlagsSameUriAndDatabase(): void {
+		$pairs = [
+			[ $this->makeDatabase( 'widgets', 'mongodb://host:27017/' ), $this->makeDatabase( 'widgets', 'mongodb://host:27017' ) ],
+			[ $this->makeDatabase( 'audit', 'mongodb://prod:27017' ), $this->makeDatabase( 'audit', 'mongodb://local:27017' ) ],
+		];
+
+		$identical = dbRestoreCommand::findIdenticalPairs( $pairs );
+
+		$this->assertCount( 1, $identical, 'trailing-slash uri difference must still count as identical' );
+		$this->assertSame( 'widgets', $identical[ 0 ][ 0 ]->database );
+	}
+
+	public function testFindIdenticalPairsAllowsSameClusterDifferentDatabase(): void {
+		$pairs = [
+			[ $this->makeDatabase( 'appProd', 'mongodb://host:27017' ), $this->makeDatabase( 'appLocal', 'mongodb://host:27017' ) ],
+		];
+
+		$this->assertSame( [], dbRestoreCommand::findIdenticalPairs( $pairs ) );
+	}
+
+	public function testFindIdenticalPairsEmptyInput(): void {
+		$this->assertSame( [], dbRestoreCommand::findIdenticalPairs( [] ) );
+	}
+
 	public function testPairDatabasesMatchesByName(): void {
 		$source = [ $this->makeDatabase( 'widgets', 'mongodb://prod/widgets' ), $this->makeDatabase( 'audit', 'mongodb://prod/audit' ) ];
 		$target = [ $this->makeDatabase( 'audit', 'mongodb://local/audit' ), $this->makeDatabase( 'widgets', 'mongodb://local/widgets' ) ];

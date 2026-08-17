@@ -27,7 +27,7 @@ spelling also works — `gf db restore` resolves to `db:restore` automatically.
 | `gf chrome:status` | — | Show whether chrome-headless-shell is installed and what version |
 | `gf db:restore` | `db/restore-live-to-local.ps1` | Copy a source environment's mongo databases into a target environment |
 | `gf db:run <script.js>` | ad-hoc `mongosh "<uri with password>" script.js` | Run a mongosh script using config-managed connections |
-| `gf env <env>` | manual `Copy-Item` steps | Activate an environment's config file variants |
+| `gf env [<env>]` | manual `Copy-Item` steps | List environment variants; validate that config resolves (active env or a `{env}.env` overlay) |
 | `gf setup` | `scripts/setup.ps1` | Bootstrap a freshly scaffolded application |
 | `gf deploy` | `update-production.ps1` | Tag-based production deployment |
 | `gf completion` / `gf completion:powershell` | — | Shell tab completion |
@@ -147,12 +147,21 @@ installation exists. The `chrome-php/chrome` library is a framework dependency, 
 
 ## Databases: `gf db:restore` and `gf db:run`
 
-Connection strings come from the environment variant config files
-(`app/config/environment-{env}.json` → `mongoDatabases[]`) — never hardcode credentials in
-scripts again.
+Connection strings come from `app/config/environment.json` (`mongoDatabases[]`) — never
+hardcode credentials in scripts again. A variant name (`--from=prod`, `--env=prod`) resolves
+that same `environment.json` with the variables from the gitignored overlay file
+`app/config/{name}.env` applied on top of your local environment (see
+[Environments](#environments-gf-env) below):
+
+```ini
+# app/config/prod.env (gitignored; start from prod.env.example)
+APP_TYPE=prod
+MONGO_URI=mongodb+srv://user:pass@prod-cluster/
+MONGO_DATABASE=app
+```
 
 ```
-gf db:restore                        # dump prod -> restore into the active environment.json (--drop)
+gf db:restore                        # dump prod -> restore into the active environment (--drop)
 gf db:restore --from=prod --to=local
 gf db:restore --db=AppsSchedule      # only the named database(s)
 gf db:restore --keep-dump --dump-dir=db/backup
@@ -160,7 +169,11 @@ gf db:restore --keep-dump --dump-dir=db/backup
 
 - Source/target databases are paired by database name (falling back to the two `default`
   entries); differing names are remapped with `--nsFrom/--nsTo`.
-- Restoring **into** an environment whose `type` is `prod` is refused unless `--allow-prod`.
+- Restoring **into** the variant named `prod`, or into an environment whose resolved `type` is
+  `prod`, is refused unless `--allow-prod`.
+- A pair whose source and target resolve to the **same uri and database** is refused outright —
+  that almost always means an incomplete `{name}.env` overlay silently fell back to your local
+  values. Validate the overlay first with `gf env prod`.
 - Requires the [MongoDB Database Tools](https://www.mongodb.com/try/download/database-tools)
   (`mongodump`, `mongorestore`) on PATH.
 - The plan (with passwords redacted) is shown and confirmed before anything runs; `--yes` skips.
@@ -177,14 +190,37 @@ Requires [mongosh](https://www.mongodb.com/try/download/shell) on PATH.
 
 ## Environments: `gf env`
 
+Environment selection is **environment-variable driven**: the committed
+`app/config/environment.json` references variables with `%env(...)%`, and whichever values the
+process environment (container env, Docker secrets, or `{root}/.env`) supplies *are* the
+environment. There is nothing to activate or copy.
+
+`gf env` is the validator for that model:
+
 ```
-gf env local        # environment-local.json -> environment.json,
-                    # composer-local.json    -> composer.json,
-                    # www/web-local.config   -> www/web.config
-gf env prod --dry-run
+gf env              # list app/config/*.env variants + validate the ACTIVE environment
+gf env prod         # resolve environment.json with the app/config/prod.env overlay and validate it
 ```
 
-Missing variant files are skipped with a note; it is an error only if no variant exists at all.
+`gf env <name>` prints the resolved summary (type, serverName, urls, databases with redacted
+URIs) and exits non-zero naming the first unresolvable variable. Run it before trusting a
+variant with `db:restore`/`db:run` — a variable missing from the overlay silently falls back to
+your local value, so **an overlay file must define every environment-specific variable**.
+
+### Migrating a v6 app to v7
+
+v6's committed `environment-{env}.json` variants and the `gf env` copy step are gone. To move
+an app onto v7:
+
+1. Commit a single `app/config/environment.json` (remove it from `.gitignore`) with every
+   secret and every per-environment value referenced via `%env(...)%` — see
+   [environment-variables.md](environment-variables.md) and the app template's copy.
+2. For each old variant, create a gitignored `app/config/{env}.env` holding that environment's
+   variable values (start from the template's `prod.env.example`); gitignore
+   `app/config/*.env`. Local values go in `{root}/.env` (from `.env.example`).
+3. Delete `environment-{env}.json`, `composer-{env}.json`, and `www/web-{env}.config`; commit
+   `composer.json` (and a static `www/web.config`, if the app still runs on IIS).
+4. Bump `gcgov/framework` to `^v7.0`; verify with `gf env` and `gf env prod`.
 
 ---
 
@@ -208,15 +244,17 @@ there — offline machine, missing php-zip — only prints a warning and never f
 Cross-platform replacement for the per-app `update-production.ps1`:
 
 ```
-gf deploy                        # interactive tag picker, env=prod
+gf deploy                        # interactive tag picker
 gf deploy --tag=v2.4.1 --yes     # non-interactive
-gf deploy --env=local --no-composer
+gf deploy --no-composer
 ```
 
 Steps: `git fetch/pull` → pick a tag (newest first, `--tags=N` to widen) → confirm →
-`git checkout tags/<tag>` → `git submodule sync/update` → `gf env <env>` copy step → write
+`git checkout tags/<tag>` → `git submodule sync/update` → write
 `version.json` (`{"version": "<tag>", "inherit": true}`) → `composer update`.
-Any failing step aborts the deploy with that step's exit code.
+Any failing step aborts the deploy with that step's exit code. Configuration is committed
+(`environment.json` + `%env()` values from the server's environment), so there is no
+config-activation step.
 
 ---
 
@@ -230,7 +268,8 @@ Any failing step aborts the deploy with that step's exit code.
   ```
 
 Completion is dynamic: `gf cli <TAB>` suggests the application's actual CLI routes (with
-descriptions), `gf env <TAB>` suggests the environment variants present in `app/config/`.
+descriptions), `gf env <TAB>` (and `db:restore --from=<TAB>` etc.) suggests the variant overlay
+files (`app/config/*.env`) present in the app.
 
 ---
 
@@ -266,8 +305,8 @@ down gf itself (run with `-v` to see discovery errors).
 Useful helpers for custom commands (all in `\gcgov\framework\cli`):
 
 - `appContext::require()` / `appContext::locate()` — application root + config access
-- `appContext->loadEnvironmentConfig($variant)` — parse an environment variant file
-- `environmentFiles::apply($root, $env)` — the `gf env` copy step
+- `appContext->loadEnvironmentConfig($variant)` — resolve `environment.json` (with the `{variant}.env` overlay when a variant is named)
+- `dotEnvLoader::parseFile($path)` — parse a dotenv file to an array without touching the process env
 - `mongoTools::findBinary()/redactUri()/uriWithDatabase()`
 - `phpProcess::findPhpBinary()/requiredIniFlags()/xdebugFlags()`
 - throw `cliException` for user-facing errors
@@ -286,19 +325,21 @@ Useful helpers for custom commands (all in `\gcgov\framework\cli`):
 | `db\restore-live-to-local.ps1` | `vendor/bin/gf db:restore --from=prod` |
 | `mongosh "mongodb://user:pass@..." db\fix.js` | `vendor/bin/gf db:run db/fix.js --env=prod` |
 | `update-production.ps1` | `vendor/bin/gf deploy` |
-| `Copy-Item composer-local.json composer.json` (+ 2 more) | `vendor/bin/gf env local` |
+| `Copy-Item composer-local.json composer.json` (+ 2 more) | nothing — config is committed and environment-variable driven (v7); `gf env` validates it |
 
 Files an app can delete once migrated: `app/cli/local.bat`, `app/cli/local-debug.bat`,
 `app/cli/prod.bat`, `scripts/setup.ps1`, `scripts/create-jwt-keys.ps1`,
 `db/restore-live-to-local.ps1`, `update-production.ps1` — and `app/cli/index.php` once no
 scheduler entry references it (gf ships its own route runner).
 
-Reference any secrets that were hardcoded in those scripts via `%env(...)%` in the environment
-variant config files (`environment-{env}.json`) — the `db:*` commands and the request lifecycle
-both resolve them. Keep the actual values in the process environment, Docker/Kubernetes secrets,
-or a gitignored `.env` file. See **[Environment variables in config](environment-variables.md)**.
+Reference any secrets that were hardcoded in those scripts via `%env(...)%` in the committed
+`app/config/environment.json` — the `db:*` commands and the request lifecycle both resolve
+them. Keep the actual values in the process environment, Docker/Kubernetes secrets, or a
+gitignored `.env` file (per-variant values for the `db:*` commands go in gitignored
+`app/config/{env}.env` overlays). See **[Environment variables in config](environment-variables.md)**
+and **[Migrating a v6 app to v7](#migrating-a-v6-app-to-v7)** above.
 
-For example, instead of a plaintext URI in `environment-prod.json`:
+For example, instead of a plaintext URI:
 
 ```jsonc
 "uri": "%env(MONGO_URI)%"                    // fail loud if unset

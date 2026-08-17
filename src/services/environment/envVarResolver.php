@@ -46,13 +46,22 @@ final class envVarResolver {
 	/**
 	 * Resolve every `%env(...)%` reference in $json.
 	 *
-	 * @param  string  $json               Raw config JSON.
-	 * @param  string  $sourceDescription  Human-readable source (e.g. the file path) for error messages.
+	 * @param  string                 $json               Raw config JSON.
+	 * @param  string                 $sourceDescription  Human-readable source (e.g. the file path) for error messages.
+	 * @param  array<string, string>  $overlayVars        Variables that take precedence over the ambient
+	 *                                                    environment during this resolution. Used by the gf CLI
+	 *                                                    to resolve a *foreign* environment's config (e.g.
+	 *                                                    `app/config/prod.env` for `db:restore --from=prod`) —
+	 *                                                    an explicit variant request must beat the local
+	 *                                                    environment. A variable missing from the overlay falls
+	 *                                                    back to the ambient lookup, so an incomplete overlay
+	 *                                                    silently picks up local values — overlay files should
+	 *                                                    define every environment-specific variable.
 	 *
 	 * @return string|\stdClass  The original string (fast path / undecodable), or the resolved object tree.
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
-	public static function resolveJson( string $json, string $sourceDescription ): string|\stdClass {
+	public static function resolveJson( string $json, string $sourceDescription, array $overlayVars = [] ): string|\stdClass {
 		// Fast path: configs that do not opt in take a byte-identical route, preserving
 		// full backwards compatibility (including today's malformed-JSON error behavior).
 		if( !str_contains( $json, '%env(' ) ) {
@@ -66,7 +75,7 @@ final class envVarResolver {
 			return $json;
 		}
 
-		$resolved = self::resolveNode( $decoded, $sourceDescription );
+		$resolved = self::resolveNode( $decoded, $sourceDescription, $overlayVars );
 
 		return $resolved instanceof \stdClass ? $resolved : $json;
 	}
@@ -75,27 +84,28 @@ final class envVarResolver {
 	/**
 	 * Recursively resolve string leaves within the decoded tree.
 	 *
-	 * @param  mixed   $node
-	 * @param  string  $sourceDescription
+	 * @param  mixed                  $node
+	 * @param  string                 $sourceDescription
+	 * @param  array<string, string>  $overlayVars
 	 *
 	 * @return mixed
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
-	private static function resolveNode( mixed $node, string $sourceDescription ): mixed {
+	private static function resolveNode( mixed $node, string $sourceDescription, array $overlayVars ): mixed {
 		if( $node instanceof \stdClass ) {
 			foreach( get_object_vars( $node ) as $key => $value ) {
-				$node->$key = self::resolveNode( $value, $sourceDescription );
+				$node->$key = self::resolveNode( $value, $sourceDescription, $overlayVars );
 			}
 
 			return $node;
 		}
 
 		if( is_array( $node ) ) {
-			return array_map( static fn( $value ) => self::resolveNode( $value, $sourceDescription ), $node );
+			return array_map( static fn( $value ) => self::resolveNode( $value, $sourceDescription, $overlayVars ), $node );
 		}
 
 		if( is_string( $node ) ) {
-			return self::resolveString( $node, $sourceDescription );
+			return self::resolveString( $node, $sourceDescription, $overlayVars );
 		}
 
 		return $node;
@@ -105,22 +115,24 @@ final class envVarResolver {
 	/**
 	 * Resolve `%env(...)%` occurrences in a single string leaf.
 	 *
+	 * @param  array<string, string>  $overlayVars
+	 *
 	 * @return mixed  Typed value when the whole string is one reference; a string otherwise.
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
-	private static function resolveString( string $value, string $sourceDescription ): mixed {
+	private static function resolveString( string $value, string $sourceDescription, array $overlayVars ): mixed {
 		if( !str_contains( $value, '%env(' ) ) {
 			return $value;
 		}
 
 		// Whole-string reference → typed result.
 		if( preg_match( '/^%env\(([^)]+)\)%$/', $value, $matches )===1 ) {
-			return self::resolveExpression( $matches[ 1 ], $sourceDescription );
+			return self::resolveExpression( $matches[ 1 ], $sourceDescription, $overlayVars );
 		}
 
 		// Embedded reference(s) → string substitution.
-		$result = preg_replace_callback( '/%env\(([^)]+)\)%/', static function( array $matches ) use ( $sourceDescription ): string {
-			$resolved = self::resolveExpression( $matches[ 1 ], $sourceDescription );
+		$result = preg_replace_callback( '/%env\(([^)]+)\)%/', static function( array $matches ) use ( $sourceDescription, $overlayVars ): string {
+			$resolved = self::resolveExpression( $matches[ 1 ], $sourceDescription, $overlayVars );
 			if( is_bool( $resolved ) ) {
 				return $resolved ? 'true' : 'false';
 			}
@@ -140,10 +152,12 @@ final class envVarResolver {
 	/**
 	 * Resolve one `%env(...)%` expression (the text between the parentheses).
 	 *
+	 * @param  array<string, string>  $overlayVars
+	 *
 	 * @return mixed
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
-	private static function resolveExpression( string $expression, string $sourceDescription ): mixed {
+	private static function resolveExpression( string $expression, string $sourceDescription, array $overlayVars = [] ): mixed {
 		$lastColon = strrpos( $expression, ':' );
 		if( $lastColon===false ) {
 			$varName       = $expression;
@@ -179,7 +193,7 @@ final class envVarResolver {
 		}
 
 		// Environment lookup (with optional literal default fallback).
-		$raw = self::lookupEnv( $varName );
+		$raw = self::lookupEnv( $varName, $overlayVars );
 		if( $raw===null ) {
 			if( $default===null ) {
 				throw new environmentException( 'Required environment variable "' . $varName . '" is not set (referenced as "%env(' . $expression . ')%" in ' . $sourceDescription . '). Set it in the process environment, a Docker secret, or a .env file.' );
@@ -288,11 +302,17 @@ final class envVarResolver {
 
 	/**
 	 * Look up an environment variable value.
-	 * Precedence: $_ENV → $_SERVER (excluding HTTP_* request headers) → getenv().
+	 * Precedence: overlay → $_ENV → $_SERVER (excluding HTTP_* request headers) → getenv().
 	 * Returns null only when the variable is genuinely unset (a set-but-empty
-	 * variable resolves to '').
+	 * variable — overlay included — resolves to '', which also suppresses `default:`).
+	 *
+	 * @param  array<string, string>  $overlayVars
 	 */
-	private static function lookupEnv( string $name ): ?string {
+	private static function lookupEnv( string $name, array $overlayVars = [] ): ?string {
+		if( array_key_exists( $name, $overlayVars ) ) {
+			return (string)$overlayVars[ $name ];
+		}
+
 		if( array_key_exists( $name, $_ENV ) ) {
 			return (string)$_ENV[ $name ];
 		}

@@ -58,15 +58,65 @@ final class CommandsTest extends TestCase {
 		$this->assertStringNotContainsString( '/widget', $display );
 	}
 
-	public function testEnvCommandCopiesVariantFiles(): void {
-		file_put_contents( $this->tempRootDir . '/app/config/environment-local.json', '{"type":"local"}' );
+	public function testEnvCommandValidatesVariantOverlay(): void {
+		file_put_contents( $this->tempRootDir . '/app/config/environment.json', '{"type":"%env(default:local:TEST_ENVCMD_TYPE)%","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_URI)%"}]}' );
+		file_put_contents( $this->tempRootDir . '/app/config/prod.env', "TEST_ENVCMD_TYPE=prod\nTEST_ENVCMD_URI=mongodb://user:secret@prod:27017\n" );
 
 		$commandTester = new CommandTester( new envCommand() );
-		$exitCode      = $commandTester->execute( [ 'environment' => 'local' ] );
+		$exitCode      = $commandTester->execute( [ 'environment' => 'prod' ] );
 
 		$this->assertSame( 0, $exitCode );
-		$this->assertSame( '{"type":"local"}', file_get_contents( $this->tempRootDir . '/app/config/environment.json' ) );
-		$this->assertStringContainsString( 'copied', $commandTester->getDisplay() );
+		$display = $commandTester->getDisplay();
+		$this->assertStringContainsString( 'type: prod', $display );
+		$this->assertStringContainsString( 'widgets', $display );
+		$this->assertStringNotContainsString( 'secret', $display, 'mongo uri credentials must be redacted' );
+		$this->assertStringContainsString( 'Resolved successfully', $display );
+	}
+
+	public function testEnvCommandFailsNamingTheMissingVariable(): void {
+		file_put_contents( $this->tempRootDir . '/app/config/environment.json', '{"type":"prod","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_MISSING_URI)%"}]}' );
+		file_put_contents( $this->tempRootDir . '/app/config/prod.env', "IRRELEVANT=1\n" );
+
+		$commandTester = new CommandTester( new envCommand() );
+		$exitCode      = $commandTester->execute( [ 'environment' => 'prod' ] );
+
+		$this->assertSame( 1, $exitCode );
+		$this->assertStringContainsString( 'TEST_ENVCMD_MISSING_URI', $commandTester->getDisplay() );
+	}
+
+	public function testEnvCommandBareListsVariantsAndChecksActiveEnvironment(): void {
+		file_put_contents( $this->tempRootDir . '/app/config/environment.json', '{"type":"local"}' );
+		touch( $this->tempRootDir . '/app/config/prod.env' );
+		touch( $this->tempRootDir . '/app/config/staging.env' );
+
+		$commandTester = new CommandTester( new envCommand() );
+		$exitCode      = $commandTester->execute( [] );
+
+		$this->assertSame( 0, $exitCode );
+		$display = $commandTester->getDisplay();
+		$this->assertStringContainsString( 'prod.env', $display );
+		$this->assertStringContainsString( 'staging.env', $display );
+		$this->assertStringContainsString( 'Resolved successfully', $display );
+	}
+
+	public function testSetupPromptFilteringKeepsOnlyPresentTokens(): void {
+		file_put_contents( $this->tempRootDir . '/app/config/app.json', '{"title":"{app_title}"}' );
+		file_put_contents( $this->tempRootDir . '/app/router.php', '<?php $p = "{app_relative_url}";' );
+
+		$filtered = setupCommand::filterPromptsToPresentTokens( [
+			'app_title'          => 'Title',
+			'app_base_path'      => 'Base path',       // present via derived {app_relative_url}
+			'prod_app_root_url'  => 'PROD root url',   // absent
+			'prod_app_base_path' => 'PROD base path',  // absent
+		], $this->tempRootDir );
+
+		$this->assertSame( [ 'app_title', 'app_base_path' ], array_keys( $filtered ) );
+	}
+
+	public function testTokensForPromptKeyMapsBasePathToBothTokens(): void {
+		$this->assertSame( [ '{app_base_path}', '{app_relative_url}' ], setupCommand::tokensForPromptKey( 'app_base_path' ) );
+		$this->assertSame( [ '{prod_app_base_path}', '{prod_app_relative_url}' ], setupCommand::tokensForPromptKey( 'prod_app_base_path' ) );
+		$this->assertSame( [ '{app_title}' ], setupCommand::tokensForPromptKey( 'app_title' ) );
 	}
 
 	public function testCertGenerateAuthCreatesKeypairsAndGuidsJson(): void {

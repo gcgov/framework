@@ -4,7 +4,6 @@ namespace gcgov\framework\cli\commands;
 
 use gcgov\framework\cli\appContext;
 use gcgov\framework\cli\cliException;
-use gcgov\framework\cli\environmentFiles;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -14,11 +13,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
-#[AsCommand( name: 'deploy', description: 'Deploy the application: pull, check out a release tag, activate the environment config, write version.json, composer update (replaces update-production.ps1)' )]
+#[AsCommand( name: 'deploy', description: 'Deploy the application: pull, check out a release tag, write version.json, composer update (replaces update-production.ps1)' )]
 final class deployCommand extends Command {
 
 	protected function configure(): void {
-		$this->addOption( 'env', null, InputOption::VALUE_REQUIRED, 'Environment whose config variants to activate after checkout', 'prod', envCommand::suggestEnvironments( ... ) );
 		$this->addOption( 'tag', null, InputOption::VALUE_REQUIRED, 'Tag to deploy. Omit to pick interactively from the most recent tags.' );
 		$this->addOption( 'tags', null, InputOption::VALUE_REQUIRED, 'How many recent tags to offer in the interactive picker', '15' );
 		$this->addOption( 'no-composer', null, InputOption::VALUE_NONE, 'Skip the composer update step' );
@@ -48,8 +46,6 @@ final class deployCommand extends Command {
 			}
 		}
 
-		$environment = (string)$input->getOption( 'env' );
-
 		$io->section( 'Fetching' );
 		$this->runStep( [ $gitBinary, 'fetch', '--all', '--tags', '--prune' ], $context->rootDir, $output );
 		$this->runStep( [ $gitBinary, 'pull' ], $context->rootDir, $output );
@@ -69,7 +65,7 @@ final class deployCommand extends Command {
 			$io->warning( "The working tree has uncommitted changes:\n" . $dirtyFiles );
 		}
 
-		if( !$input->getOption( 'yes' ) && !$io->confirm( 'Deploy tag ' . $tag . ' with environment "' . $environment . '"?', false ) ) {
+		if( !$input->getOption( 'yes' ) && !$io->confirm( 'Deploy tag ' . $tag . '?', false ) ) {
 			$io->text( 'Aborted. No changes made.' );
 
 			return Command::FAILURE;
@@ -83,11 +79,6 @@ final class deployCommand extends Command {
 		$this->runStep( [ $gitBinary, 'submodule', 'sync', '--recursive' ], $context->rootDir, $output );
 		$this->runStep( [ $gitBinary, 'submodule', 'update', '--init', '--recursive' ], $context->rootDir, $output );
 
-		$io->section( 'Activating environment "' . $environment . '"' );
-		foreach( environmentFiles::apply( $context->rootDir, $environment ) as $result ) {
-			$io->text( $result[ 'status' ] . ( str_starts_with( $result[ 'status' ], 'skipped' ) ? '' : ': ' . $result[ 'source' ] . ' -> ' . $result[ 'target' ] ) );
-		}
-
 		file_put_contents( $context->rootDir . '/version.json', json_encode( [ 'version' => $tag, 'inherit' => true ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
 		$io->text( 'Wrote version.json (version ' . $tag . ')' );
 
@@ -96,7 +87,7 @@ final class deployCommand extends Command {
 			$this->runStep( [ $composerBinary, 'update', '--no-interaction' ], $context->rootDir, $output );
 		}
 
-		$io->success( 'Deployed ' . $tag . ' (' . $environment . ').' );
+		$io->success( 'Deployed ' . $tag . '.' );
 
 		return Command::SUCCESS;
 	}

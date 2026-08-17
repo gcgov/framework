@@ -19,14 +19,14 @@ use Symfony\Component\Process\Process;
 final class dbRestoreCommand extends Command {
 
 	protected function configure(): void {
-		$this->addOption( 'from', null, InputOption::VALUE_REQUIRED, 'Source environment variant (reads app/config/environment-{from}.json)', 'prod', envCommand::suggestEnvironments( ... ) );
-		$this->addOption( 'to', null, InputOption::VALUE_REQUIRED, 'Target environment variant. Omit to use the active app/config/environment.json.', '', envCommand::suggestEnvironments( ... ) );
+		$this->addOption( 'from', null, InputOption::VALUE_REQUIRED, 'Source environment variant (resolves app/config/environment.json with the app/config/{from}.env overlay)', 'prod', envCommand::suggestEnvironments( ... ) );
+		$this->addOption( 'to', null, InputOption::VALUE_REQUIRED, 'Target environment variant (resolved with the app/config/{to}.env overlay). Omit to use the active environment.', '', envCommand::suggestEnvironments( ... ) );
 		$this->addOption( 'db', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Restrict to the named database(s). Repeatable. Default: every database in the source config.' );
 		$this->addOption( 'dump-dir', null, InputOption::VALUE_REQUIRED, 'Directory to write the mongodump output to. Default: srv/tmp/mongodump-{timestamp}.' );
 		$this->addOption( 'keep-dump', null, InputOption::VALUE_NONE, 'Keep the dump directory after a successful restore' );
 		$this->addOption( 'yes', 'y', InputOption::VALUE_NONE, 'Skip the confirmation prompt' );
 		$this->addOption( 'allow-prod', null, InputOption::VALUE_NONE, 'Allow restoring INTO an environment whose type is "prod" (refused otherwise)' );
-		$this->setHelp( 'Cross-platform replacement for the per-app restore-live-to-local.ps1: connection strings come from the environment variant config files instead of being hardcoded. Requires the MongoDB Database Tools (mongodump/mongorestore) on PATH.' );
+		$this->setHelp( 'Cross-platform replacement for the per-app restore-live-to-local.ps1: connection strings come from app/config/environment.json, resolved per variant with the app/config/{name}.env overlay files, instead of being hardcoded. Validate an overlay first with `gf env <name>`. Requires the MongoDB Database Tools (mongodump/mongorestore) on PATH.' );
 	}
 
 
@@ -43,13 +43,24 @@ final class dbRestoreCommand extends Command {
 		$sourceConfig = $context->loadEnvironmentConfig( $fromVariant );
 		$targetConfig = $context->loadEnvironmentConfig( $toVariant );
 
+		// Guard by variant NAME first: the resolved `type` comes from an env var, so an
+		// incomplete overlay (e.g. prod.env missing APP_TYPE) must not defeat the refusal.
+		if( $toVariant==='prod' && !$input->getOption( 'allow-prod' ) ) {
+			throw new cliException( 'Refusing to restore into the environment variant named "prod". Pass --allow-prod if you really mean it.' );
+		}
 		if( $targetConfig->type==='prod' && !$input->getOption( 'allow-prod' ) ) {
-			throw new cliException( 'Refusing to restore into an environment with type "prod" (' . $context->getEnvironmentConfigPath( $toVariant ) . '). Pass --allow-prod if you really mean it.' );
+			throw new cliException( 'Refusing to restore into an environment with type "prod" (' . $context->describeEnvironmentConfigSource( $toVariant ) . '). Pass --allow-prod if you really mean it.' );
 		}
 
 		$pairs = self::pairDatabases( $sourceConfig->mongoDatabases, $targetConfig->mongoDatabases, $input->getOption( 'db' ) );
 		if( count( $pairs[ 'matched' ] )===0 ) {
 			throw new cliException( 'No database pairs to restore. Source config databases: ' . implode( ', ', array_map( fn( mongoDatabase $db ) => $db->database, $sourceConfig->mongoDatabases ) ) );
+		}
+
+		$identicalPairs = self::findIdenticalPairs( $pairs[ 'matched' ] );
+		if( count( $identicalPairs )>0 ) {
+			[ $sourceDb ] = $identicalPairs[ 0 ];
+			throw new cliException( 'Source and target resolve to the same database (' . $sourceDb->database . ' @ ' . mongoTools::redactUri( $sourceDb->uri ) . '). If you used a {variant}.env overlay, it is probably incomplete — every environment-specific variable must be set in it (missing ones silently fall back to your local values). Validate with `gf env ' . $fromVariant . '`.' );
 		}
 		foreach( $pairs[ 'unmatched' ] as $unmatchedName ) {
 			$io->warning( 'Source database "' . $unmatchedName . '" has no matching database in the target config — skipped.' );
@@ -149,6 +160,25 @@ final class dbRestoreCommand extends Command {
 		}
 
 		return [ 'matched' => $matched, 'unmatched' => $unmatched ];
+	}
+
+
+	/**
+	 * Pairs whose source and target are the SAME database (same normalized uri AND same
+	 * database name) — dumping and restoring onto itself is never useful and usually means
+	 * an incomplete {variant}.env overlay fell back to the local environment's values.
+	 * Same-cluster clones under a different database name stay legal.
+	 *
+	 * @param array<int, array{0: mongoDatabase, 1: mongoDatabase}> $matchedPairs
+	 *
+	 * @return array<int, array{0: mongoDatabase, 1: mongoDatabase}>
+	 */
+	public static function findIdenticalPairs( array $matchedPairs ): array {
+		return array_values( array_filter( $matchedPairs, function( array $pair ): bool {
+			[ $sourceDb, $targetDb ] = $pair;
+
+			return rtrim( $sourceDb->uri, '/' )===rtrim( $targetDb->uri, '/' ) && $sourceDb->database===$targetDb->database;
+		} ) );
 	}
 
 
