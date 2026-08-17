@@ -59,8 +59,8 @@ final class CommandsTest extends TestCase {
 	}
 
 	public function testEnvCommandValidatesVariantOverlay(): void {
-		file_put_contents( $this->tempRootDir . '/app/config/environment.json', '{"type":"%env(default:local:TEST_ENVCMD_TYPE)%","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_URI)%"}]}' );
-		file_put_contents( $this->tempRootDir . '/app/config/prod.env', "TEST_ENVCMD_TYPE=prod\nTEST_ENVCMD_URI=mongodb://user:secret@prod:27017\n" );
+		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"%env(default:local:TEST_ENVCMD_TYPE)%","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_URI)%"}]}' );
+		file_put_contents( $this->tempRootDir . '/prod.env', "TEST_ENVCMD_TYPE=prod\nTEST_ENVCMD_URI=mongodb://user:secret@prod:27017\n" );
 
 		$commandTester = new CommandTester( new envCommand() );
 		$exitCode      = $commandTester->execute( [ 'environment' => 'prod' ] );
@@ -74,8 +74,8 @@ final class CommandsTest extends TestCase {
 	}
 
 	public function testEnvCommandFailsNamingTheMissingVariable(): void {
-		file_put_contents( $this->tempRootDir . '/app/config/environment.json', '{"type":"prod","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_MISSING_URI)%"}]}' );
-		file_put_contents( $this->tempRootDir . '/app/config/prod.env', "IRRELEVANT=1\n" );
+		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"prod","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_MISSING_URI)%"}]}' );
+		file_put_contents( $this->tempRootDir . '/prod.env', "IRRELEVANT=1\n" );
 
 		$commandTester = new CommandTester( new envCommand() );
 		$exitCode      = $commandTester->execute( [ 'environment' => 'prod' ] );
@@ -85,9 +85,9 @@ final class CommandsTest extends TestCase {
 	}
 
 	public function testEnvCommandBareListsVariantsAndChecksActiveEnvironment(): void {
-		file_put_contents( $this->tempRootDir . '/app/config/environment.json', '{"type":"local"}' );
-		touch( $this->tempRootDir . '/app/config/prod.env' );
-		touch( $this->tempRootDir . '/app/config/staging.env' );
+		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local"}' );
+		touch( $this->tempRootDir . '/prod.env' );
+		touch( $this->tempRootDir . '/staging.env' );
 
 		$commandTester = new CommandTester( new envCommand() );
 		$exitCode      = $commandTester->execute( [] );

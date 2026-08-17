@@ -82,7 +82,7 @@ final class renderer {
 			}
 			catch( modelException $e ) {
 				\error_log( $e );
-				if(config::getEnvironmentConfig()->logging->renderer) {
+				if(config::getLogging()->renderer) {
 					\gcgov\framework\services\log::debug( 'Renderer', $e->getMessage(), $e->getTrace() );
 				}
 
@@ -90,7 +90,7 @@ final class renderer {
 			}
 			catch( controllerException $e ) {
 				\error_log( $e );
-				if(config::getEnvironmentConfig()->logging->renderer) {
+				if(config::getLogging()->renderer) {
 					\gcgov\framework\services\log::debug( 'Renderer', $e->getMessage(), $e->getTrace() );
 				}
 
@@ -98,7 +98,7 @@ final class renderer {
 			}
 			catch( \Exception|\Error|\ErrorException $e ) {
 				\error_log( $e );
-				if(config::getEnvironmentConfig()->logging->renderer) {
+				if(config::getLogging()->renderer) {
 					\gcgov\framework\services\log::error( 'Renderer', $e->getMessage(), [ $e ] );
 				}
 
@@ -107,7 +107,7 @@ final class renderer {
 		}
 		catch( \ReflectionException $e ) {
 			error_log( $e );
-			if(config::getEnvironmentConfig()->logging->renderer) {
+			if(config::getLogging()->renderer) {
 				\gcgov\framework\services\log::error( 'Renderer', $e->getMessage(), [ $e ] );
 			}
 
@@ -128,7 +128,7 @@ final class renderer {
 			}
 		}
 		else {
-			if(config::getEnvironmentConfig()->logging->renderer) {
+			if(config::getLogging()->renderer) {
 				\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $filename . ' on line ' . $lineNumber );
 			}
 		}
@@ -190,7 +190,7 @@ final class renderer {
 			}
 		}
 		else {
-			if(config::getEnvironmentConfig()->logging->renderer) {
+			if(config::getLogging()->renderer) {
 				\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $fileBasename . ' on line ' . $lineNumber );
 			}
 		}
@@ -240,7 +240,7 @@ final class renderer {
 			}
 		}
 		else {
-			if(config::getEnvironmentConfig()->logging->renderer) {
+			if(config::getLogging()->renderer) {
 				\gcgov\framework\services\log::warning( 'Renderer', 'Cannot set content-type header or additional headers. Headers already sent in ' . $fileBasename . ' on line ' . $lineNumber );
 			}
 		}

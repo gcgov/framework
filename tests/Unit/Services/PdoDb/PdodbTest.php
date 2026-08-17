@@ -7,7 +7,7 @@ namespace gcgov\framework\tests\Unit\Services\PdoDb;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use gcgov\framework\services\pdodb\pdodb;
-use gcgov\framework\models\environmentConfig;
+use gcgov\framework\models\unifiedConfig;
 use gcgov\framework\models\config\environment\sqlDatabase;
 use gcgov\framework\models\config\environment\sqlDatabaseUser;
 
@@ -88,9 +88,9 @@ final class PdodbTest extends TestCase {
 	 * @param  list<sqlDatabase>  $databases
 	 */
 	private function primeEnvWith( array $databases ): void {
-		$env = new environmentConfig();
+		$env = new unifiedConfig();
 		$env->sqlDatabases = $databases;
-		$prop = new \ReflectionProperty( \gcgov\framework\config::class, 'environmentConfig' );
+		$prop = new \ReflectionProperty( \gcgov\framework\config::class, 'unifiedConfig' );
 		$prop->setValue( null, $env );
 	}
 

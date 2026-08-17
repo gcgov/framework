@@ -31,7 +31,7 @@ class user
 	public function __construct() {
 		parent::__construct();
 		$this->_id = new \MongoDB\BSON\ObjectId();
-		if( config::getAppConfig()->settings->forceMfaForPasswordUsers ) {
+		if( config::getSettings()->forceMfaForPasswordUsers ) {
 			$this->mfaRequired = true;
 		}
 	}
@@ -170,7 +170,7 @@ class user
 
 
 	protected function _beforeBsonSerialize(): void {
-		if( config::getAppConfig()->settings->forceMfaForPasswordUsers ) {
+		if( config::getSettings()->forceMfaForPasswordUsers ) {
 			$this->mfaRequired = true;
 		}
 
@@ -196,7 +196,7 @@ class user
 
 
 	protected function _afterBsonUnserialize( $rawBsonData ): void {
-		if( config::getAppConfig()->settings->forceMfaForPasswordUsers ) {
+		if( config::getSettings()->forceMfaForPasswordUsers ) {
 			$this->mfaRequired = true;
 		}
 	}

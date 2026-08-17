@@ -83,12 +83,12 @@ final class log {
 
 	private static function isMongoLoggingEnabled(): bool {
 		try {
-			$envConfig = config::getEnvironmentConfig();
+			$mongoDatabases = config::getMongoDatabases();
 		}
 		catch( \gcgov\framework\exceptions\configException $e ) {
 			return false;
 		}
-		return isset( $envConfig->mongoDatabases[ 0 ] ) && $envConfig->mongoDatabases[ 0 ]->logging;
+		return isset( $mongoDatabases[ 0 ] ) && $mongoDatabases[ 0 ]->logging;
 	}
 
 
@@ -102,7 +102,7 @@ final class log {
 
 		if( $channel === '' ) {
 			try {
-				$channel = \gcgov\framework\config::getAppConfig()->app->title;
+				$channel = \gcgov\framework\config::getApp()->title;
 				if( $channel === '' ) {
 					$channel = 'app';
 				}

@@ -3,6 +3,9 @@
 namespace gcgov\framework\models;
 
 
+use gcgov\framework\models\config\app\app;
+use gcgov\framework\models\config\app\email;
+use gcgov\framework\models\config\app\settings;
 use gcgov\framework\models\config\environment\jwtAuth;
 use gcgov\framework\models\config\environment\logging;
 use gcgov\framework\models\config\environment\microsoft;
@@ -10,7 +13,25 @@ use gcgov\framework\models\config\environment\payjunction;
 use gcgov\framework\models\config\environment\sqlDatabase;
 use JetBrains\PhpStorm\Deprecated;
 
-class environmentConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
+/**
+ * The application's unified configuration, hydrated from the single {root}/config.json
+ * (the v7 merge of the former app/config/app.json and app/config/environment.json).
+ *
+ * Application code normally reads configuration through the static accessors on
+ * \gcgov\framework\config; this model is the hydration target and what the gf CLI
+ * returns for per-variant overlay reads (appContext::loadConfig('prod')).
+ */
+class unifiedConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
+
+	// --- application identity (formerly app.json) ---
+
+	public app      $app;
+
+	public email    $email;
+
+	public settings $settings;
+
+	// --- environment (formerly environment.json) ---
 
 	public string $type = '';
 
@@ -39,16 +60,20 @@ class environmentConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 	public jwtAuth $jwtAuth;
 
 	public payjunction $payjunction;
+
 	public logging $logging;
 
 	public array $appDictionary = [];
 
 
 	public function __construct() {
+		$this->app         = new app();
+		$this->email       = new email();
+		$this->settings    = new settings();
 		$this->microsoft   = new microsoft();
 		$this->jwtAuth     = new jwtAuth();
 		$this->payjunction = new payjunction();
-		$this->logging = new logging();
+		$this->logging     = new logging();
 	}
 
 	protected function _afterJsonDeserialize(): void {
@@ -56,17 +81,10 @@ class environmentConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 		// constructor, leaving typed-non-nullable properties uninitialized.
 		// Use reflection so we can ask the engine about init state without
 		// PHPStan narrowing the check away.
-		if( !( new \ReflectionProperty( $this, 'microsoft' ) )->isInitialized( $this ) ) {
-			$this->microsoft = new microsoft();
-		}
-		if( !( new \ReflectionProperty( $this, 'jwtAuth' ) )->isInitialized( $this ) ) {
-			$this->jwtAuth = new jwtAuth();
-		}
-		if( !( new \ReflectionProperty( $this, 'payjunction' ) )->isInitialized( $this ) ) {
-			$this->payjunction = new payjunction();
-		}
-		if( !( new \ReflectionProperty( $this, 'logging' ) )->isInitialized( $this ) ) {
-			$this->logging = new logging();
+		foreach( [ 'app' => app::class, 'email' => email::class, 'settings' => settings::class, 'microsoft' => microsoft::class, 'jwtAuth' => jwtAuth::class, 'payjunction' => payjunction::class, 'logging' => logging::class ] as $property => $class ) {
+			if( !( new \ReflectionProperty( $this, $property ) )->isInitialized( $this ) ) {
+				$this->$property = new $class();
+			}
 		}
 	}
 

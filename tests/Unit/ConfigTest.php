@@ -7,7 +7,7 @@ namespace gcgov\framework\tests\Unit;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use gcgov\framework\config;
-use gcgov\framework\models\environmentConfig;
+use gcgov\framework\models\unifiedConfig;
 
 #[CoversClass(config::class)]
 final class ConfigTest extends TestCase {
@@ -32,8 +32,8 @@ final class ConfigTest extends TestCase {
 		$this->assertSame( $this->tempRootDir . '/app/models/', config::getModelsDir() );
 	}
 
-	public function testGetConfigDirAppendsConfig(): void {
-		$this->assertSame( $this->tempRootDir . '/app/config/', config::getConfigDir() );
+	public function testGetConfigFilePathIsRootConfigJson(): void {
+		$this->assertSame( $this->tempRootDir . '/config.json', config::getConfigFilePath() );
 	}
 
 	public function testGetServicesDirAppendsServices(): void {
@@ -52,14 +52,26 @@ final class ConfigTest extends TestCase {
 		$this->assertSame( $this->tempRootDir . '/srv/tmp/tmp', config::getTempDir() );
 	}
 
-	public function testEnvironmentConfigCanBeInjectedAndReadBack(): void {
-		$env = new environmentConfig();
-		$env->basePath = 'custom';
+	public function testUnifiedConfigIsExposedThroughStaticAccessors(): void {
+		$unified                 = new unifiedConfig();
+		$unified->type           = 'local';
+		$unified->basePath       = 'custom';
+		$unified->rootUrl        = 'https://example.gov/';
+		$unified->app->title     = 'Widget API';
+		$unified->appDictionary  = [ 'key' => 'value' ];
 
-		$prop = new \ReflectionProperty( config::class, 'environmentConfig' );
-		$prop->setValue( null, $env );
+		$prop = new \ReflectionProperty( config::class, 'unifiedConfig' );
+		$prop->setValue( null, $unified );
 
-		$this->assertSame( $env, config::getEnvironmentConfig() );
+		$this->assertSame( '/custom', config::getBasePath() );
+		$this->assertSame( 'https://example.gov', config::getRootUrl() );
+		$this->assertSame( 'https://example.gov/custom', config::getBaseUrl() );
+		$this->assertTrue( config::isLocal() );
+		$this->assertSame( 'Widget API', config::getApp()->title );
+		$this->assertSame( [ 'key' => 'value' ], config::getAppDictionary() );
+		$this->assertSame( $unified->logging, config::getLogging() );
+		$this->assertSame( $unified->email, config::getEmail() );
+		$this->assertSame( $unified->settings, config::getSettings() );
 	}
 
 	public function testIsFinalClass(): void {

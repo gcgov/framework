@@ -37,13 +37,13 @@ class jwtAuth {
 			$this->keyPath = dirname( __FILE__ ) . '/jwtCertificates/';
 		}
 
-		//env config
-		$envConfig = config::getEnvironmentConfig();
-		if( !isset( $envConfig->jwtAuth ) || empty( $envConfig->jwtAuth->tokenIssuedBy ) || empty( $envConfig->jwtAuth->tokenPermittedFor ) ) {
-			throw new configException( 'Missing "auth" section of /app/config/environment.json' );
+		//jwt config
+		$jwtAuthConfig = config::getJwtAuth();
+		if( empty( $jwtAuthConfig->tokenIssuedBy ) || empty( $jwtAuthConfig->tokenPermittedFor ) ) {
+			throw new configException( 'Missing "jwtAuth" section of /config.json' );
 		}
-		$this->issuedBy     = $envConfig->jwtAuth->tokenIssuedBy;
-		$this->permittedFor = $envConfig->jwtAuth->tokenPermittedFor;
+		$this->issuedBy     = $jwtAuthConfig->tokenIssuedBy;
+		$this->permittedFor = $jwtAuthConfig->tokenPermittedFor;
 
 		//guid config
 		if( !file_exists( $this->keyPath . 'guids.json' ) ) {

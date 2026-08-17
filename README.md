@@ -37,12 +37,12 @@ Controllers should implement `\gcgov\framework\interfaces\controller`.
 
 Required configuration files:
 
-* `/app/config/app.json`
-* `/app/config/environment.json`
+* `/config.json` — the unified configuration at the application root (merged app + environment sections,
+  secrets and per-environment values referenced via `%env(...)%`)
 
-If either file is missing, the framework throws a config exception during request handling.
+If it is missing, the framework throws a config exception during request handling.
 
-Both config files support **Symfony-style `%env(...)%` environment-variable references**, so
+config.json supports **Symfony-style `%env(...)%` environment-variable references**, so
 secrets (Mongo URIs, client secrets, SMTP credentials) can be injected from the process
 environment, Docker/Kubernetes secrets, or a `.env` file instead of being stored in the files.
 Existing plain-JSON config keeps working unchanged. See
@@ -56,19 +56,14 @@ All apps utilizing the framework for an entire lifecycle should use this file st
 
 ```
 /api
+├── config.json
 ├── app
 │   ├── app.php
 │   ├── constants.php
 │   ├── renderer.php
 │   ├── router.php
 │   ├── cli
-│   │   ├── index.php
-│   │   ├── local.bat
-│   │   ├── local-debug.bat
-│   │   └── prod.bat
-│   ├── config
-│   │   ├── app.json
-│   │   └── environment.json
+│   │   └── index.php
 │   ├── controllers
 │   │   └── {controller.php}
 │   └── models
@@ -83,14 +78,12 @@ automatically start with some extra folders and tools.
 ```
 /api
 │...
+├── config.json                       # committed unified config; secrets/per-env values via %env(...)
+├── prod.env.example                  # copy to prod.env (gitignored) for gf db:*/env variant reads
 ├── www
 │   │...
 ├── app
 │   │...
-│   └── config
-│       ├── app.json
-│       ├── environment.json          # committed; secrets/per-env values via %env(...)
-│       └── prod.env.example          # copy to prod.env (gitignored) for gf db:*/env variant reads
 ├── docker
 │   └── nginx
 │       └── default.conf.template
@@ -223,7 +216,7 @@ gf cli:list                      # list the app's CLI routes
 gf cert:generate-auth            # JWT signing keys (replaces create-jwt-keys.ps1)
 gf db:restore --from=prod        # pull a source env's mongo dbs into the local env
 gf db:run db/script.js           # run a mongosh script with config-managed credentials
-gf env prod                      # validate that the prod.env overlay fully resolves environment.json
+gf env prod                      # validate that the prod.env overlay fully resolves config.json
 gf setup                         # bootstrap a scaffolded app (replaces setup.ps1)
 gf deploy                        # tag-based deployment (replaces update-production.ps1)
 ```
@@ -342,7 +335,7 @@ For full reference, configuration options, attributes, and detailed examples, se
 
 
 ### PDODB
-Initiate PDO connections using SQL connection details in app/config/environment.json. It is only a small wrapper around 
+Initiate PDO connections using SQL connection details in config.json (`sqlDatabases`). It is only a small wrapper around 
 the native PDO class.
 
 Read user connection: `new gcgov\framework\services\pdodb\pdodb(true, $databaseName)`

@@ -32,7 +32,7 @@ src/
 ├── framework.php          # entry point: runApp() drives the whole lifecycle
 ├── router.php             # framework router: merges service + app routes, runs auth guards
 ├── renderer.php           # invokes the matched controller, serializes the response
-├── config.php             # static config + path resolver (app dir, srv dir, app.json, environment.json)
+├── config.php             # static config + path resolver (app dir, srv dir, the unified {root}/config.json)
 ├── cli/                   # the gf command line tool (§16): application, appContext, commands/*
 ├── interfaces/            # contracts an app must implement (app, router, render, controller, auth\user, ...)
 ├── models/                # route, routeHandler, controller*Response, authUser, config/* DTOs, customConstraints
@@ -64,16 +64,18 @@ An app that runs a full request lifecycle must supply, in its `/app` directory:
 | `/app/renderer.php` | `\app\renderer` | `\gcgov\framework\interfaces\render` |
 | `/app/controllers/*.php` | e.g. `\app\controllers\widget` | `\gcgov\framework\interfaces\controller` |
 
-Required config files (missing either throws `configException` at request time):
-- `/app/config/app.json`
-- `/app/config/environment.json`
+Required config file (missing it throws `configException` at request time):
+- `/config.json` — the unified configuration at the application ROOT (v7 merge of the former
+  `app/config/app.json` + `app/config/environment.json`), with secrets/per-env values via `%env(...)%`.
 
-Typical app tree (scaffolding template adds more — `srv/`, `db/`, `scripts/`, `www/web.config`, etc.):
+Typical app tree (scaffolding template adds more — `srv/`, `db/`, `docker/`, `Dockerfile`, etc.):
 ```
 /api
+├── config.json                  # unified config (committed; %env(...) refs)
+├── {env}.env                    # gitignored per-variant overlays for gf db:*/env (e.g. prod.env)
+├── .env                         # gitignored local values (from .env.example)
 ├── app/{app,router,renderer,constants}.php
 │   ├── cli/index.php            # CLI entry
-│   ├── config/{app,environment}.json
 │   ├── controllers/{name}.php
 │   └── models/{name}.php
 └── www/index.php                # HTTP entry (web root)
@@ -147,7 +149,7 @@ $routes[] = new route('POST',   'structure/{_id}', '\app\controllers\structure',
 $routes[] = new route('CLI',    '/cli/cleanup',    '\app\controllers\cli\import','cleanup',false);
 ```
 If the app is not served at the domain root, prepend a base path (commonly
-`config::getEnvironmentConfig()->getBasePath()`, which is what plugin routers use).
+`config::getBasePath()`, which is what plugin routers use).
 
 ### Authentication guard flow (`framework\router::route()`)
 For a matched route with `authentication === true`:
@@ -311,7 +313,7 @@ returning group keys, and tag constraints with `groups: [...]`.
 `getFile()`, `deleteFile()`. Pair with `controllerFileResponse` to serve them.
 
 ### Auditing & encryption (config-driven, per database)
-- **Audit**: enable per-DB in `environment.json` (`audit`, `auditForward`, optional separate audit DB). Writes
+- **Audit**: enable per-DB in `config.json` (`audit`, `auditForward`, optional separate audit DB). Writes
   JSON-patch diffs of changes.
 - **Queryable encryption**: optional `encryption` block per DB (GCP KMS). Encrypted collections must be created
   explicitly: `(new mdb($collection))->createEncryptedCollection($collection)`; rotate with `->rotateKeys()`.
@@ -321,12 +323,18 @@ returning group keys, and tag constraints with `groups: [...]`.
 
 ## 8. Config
 
-`\gcgov\framework\config` is a static accessor. Paths are derived by reflecting `\app\app`'s file location, so
-`config::getAppDir()`, `getRootDir()`, `getConfigDir()`, `getModelsDir()`, `getSrvDir()`, `getTempDir()` all
-work without setup. Config DTOs are `jsonDeserialize`-hydrated from the two JSON files.
+`\gcgov\framework\config` is the single static configuration API. Paths are derived by reflecting
+`\app\app`'s file location, so `config::getAppDir()`, `getRootDir()`, `getModelsDir()`, `getSrvDir()`,
+`getTempDir()`, `getConfigFilePath()` all work without setup. Configuration values come from the
+**unified `{root}/config.json`** (hydrated once into `\gcgov\framework\models\unifiedConfig`) and are
+exposed **directly on `config`** — there are no separate appConfig/environmentConfig objects (v7):
+`config::getApp()` (title/guid), `getEmail()`, `getSettings()`, `getType()`, `isLocal()`,
+`getServerName()`, `getRootUrl()`, `getBaseUrl()`, `getBasePath()`, `getCookieUrl()`, `getPhpPath()`,
+`getLogging()`, `getMongoDatabases()`, `getSqlDatabases()`, `getDefaultSqlDatabase()`,
+`getSqlDatabaseByName($name)`, `getMicrosoft()`, `getJwtAuth()`, `getPayjunction()`, `getAppDictionary()`.
 
 ### Environment variables in config — `%env(...)%`
-Both JSON files support **Symfony-style `%env(...)%` references**, resolved at load time by
+config.json supports **Symfony-style `%env(...)%` references**, resolved at load time by
 `\gcgov\framework\services\environment\envVarResolver` (see `readme/environment-variables.md`).
 This keeps secrets out of the committed config and lets them come from the process
 environment, Docker/K8s secrets, or a `.env` file — the basis of Docker hosting.
@@ -340,25 +348,19 @@ environment, Docker/K8s secrets, or a `.env` file — the basis of Docker hostin
   `.env.local`; **real environment always wins** over both. No `APP_ENV` cascade — an
   environment IS the variable set the process is given; nothing is activated or copied (v7).
 - gf variant reads (`db:restore --from=prod`, `db:run --env=prod`, `gf env prod`) resolve the
-  same committed `environment.json` with a gitignored `app/config/{variant}.env` **overlay**
+  same committed `config.json` with a gitignored `{root}/{variant}.env` **overlay**
   (parsed via `dotEnvLoader::parseFile()`, precedence: overlay > real env > `.env.local` >
   `.env` > `default:`). Overlays must define every environment-specific variable — missing ones
   silently fall back to local values; validate with `gf env <name>`.
 - Missing required var → `configException` (runtime) / `cliException` (gf), naming the variable.
 
-**`app.json`** → `\gcgov\framework\models\appConfig`:
+**`{root}/config.json`** → `\gcgov\framework\models\unifiedConfig` (one file, all sections):
 ```jsonc
 {
   "app":      { "title": "...", "guid": "..." },
   "email":    { "fromAddress": "", "fromName": "", "useSMTP": false, "SMTPHost": "", "SMTPPort": 587, "...": "" },
-  "settings": { "useSession": false, "forceMfaForPasswordUsers": false }
-}
-```
-**`environment.json`** → `\gcgov\framework\models\environmentConfig` (accessor helpers: `getRootUrl()`,
-`getBaseUrl()`, `getBasePath()`, `isLocal()`, `getDefaultSqlDatabase()`, `getSqlDatabaseByName()`):
-```jsonc
-{
-  "type": "local|prod", "serverName": "", "rootUrl": "", "basePath": "", "baseUrl": "", "cookieUrl": "",
+  "settings": { "useSession": false, "forceMfaForPasswordUsers": false },
+  "type": "local|prod", "serverName": "", "rootUrl": "", "basePath": "", "cookieUrl": "",
   "logging": { "lifecycle": false, "renderer": false },   // lifecycle=true logs the whole request pipeline
   "mongoDatabases": [ { "default": true, "database": "", "uri": "mongodb+srv://...", "logging": true,
                         "audit": false, "include_meta": true, "encryption": { /* optional */ } } ],
@@ -431,7 +433,7 @@ List routes with `gf cli:list`; debug with `gf cli /path --debug`.
   `#[excludeFromTypemapWhenThisClassNotRoot]`.
 - There's no auth without an auth plugin; and auth plugins register a **global guard** over every
   `authentication:true` route in the app.
-- Set `logging.lifecycle=true` in `environment.json` to trace the entire pipeline when debugging routing/auth.
+- Set `logging.lifecycle=true` in `config.json` to trace the entire pipeline when debugging routing/auth.
 
 ---
 
@@ -457,10 +459,10 @@ at a time (oauth-server OR auth-ms-front).
 - `composer.json`: `"type": "framework-service"`, PSR-4 `gcgov\framework\services\<name>\ → src/`.
 - Provide `src/router.php` = `\gcgov\framework\services\<name>\router implements \gcgov\framework\interfaces\router`
   with `getRoutes()`, `authentication()`, static `_before()/_after()`. Prefix routes with
-  `config::getEnvironmentConfig()->getBasePath()`.
+  `config::getBasePath()`.
 - Controllers live under `\gcgov\framework\services\<name>\controllers\…` and implement `controller`.
 - Config via a singleton (`getInstance()`) the app tweaks in `app::_before()` (see oauth-server's `oauthConfig`),
-  and/or `environment.json.appDictionary`.
+  and/or `config.json` `appDictionary` (via `config::getAppDictionary()`).
 - Return `false` from a plugin `authentication()` only to deny; return `true` to allow.
 - Optional: contribute gf commands with `src/cli/commandProvider.php` =
   `\gcgov\framework\services\<name>\cli\commandProvider implements \gcgov\framework\cli\commandProvider`
@@ -503,8 +505,8 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
   `src/cli/chromeInstaller.php` (injectable Guzzle client — tests are network-free).
 - **Architecture** (`src/cli/`): `application` (command registration + provider discovery),
   `appContext` (app-root locator: composer autoload path first, then cwd walk-up; lazy config
-  access via `loadEnvironmentConfig($variant)` — resolves `environment.json`, applying the
-  `app/config/{variant}.env` overlay when a variant is named; never boots the request lifecycle),
+  access via `loadConfig($variant)` — resolves the root `config.json`, applying the
+  `{root}/{variant}.env` overlay when a variant is named; never boots the request lifecycle),
   `routeCatalog` (CLI-route enumeration via `router::getMergedRoutes()`), `phpProcess`,
   `tokenReplacer`, `mongoTools`, `cliException` (user-facing errors),
   `internal/run-route.php` (child-process route runner; maps response status ≥400 → exit 1).
@@ -514,7 +516,7 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
   root-only (env, db:*, cert:*, deploy, setup — config JSON only, no `\app` boot);
   app-boot (cli, cli:list — `assertAppLoadable()`; `\app\app::_before()` is deliberately NOT called).
 - **`gf cli <route>`** always spawns a fresh PHP child process (Xdebug flags need fresh INI;
-  isolates `exit()`; interpreter picked via `--php` > `GF_PHP` > environment.json `phpPath` > current).
+  isolates `exit()`; interpreter picked via `--php` > `GF_PHP` > config.json `phpPath` > current).
   The interpreter must be the CLI binary — `php-cgi`/`php-fpm`/`php-win` are swapped for the
   `php`/`php.exe` beside them, else rejected; the child always gets `-dregister_argc_argv=1`, and
   `internal/run-route.php` assumes neither `$argv` nor `STDERR` exists until it has checked.

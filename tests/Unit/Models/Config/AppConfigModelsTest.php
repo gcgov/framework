@@ -6,20 +6,20 @@ namespace gcgov\framework\tests\Unit\Models\Config;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use gcgov\framework\models\appConfig;
+use gcgov\framework\models\unifiedConfig;
 use gcgov\framework\models\config\app\app;
 use gcgov\framework\models\config\app\email;
 use gcgov\framework\models\config\app\settings;
 
-#[CoversClass(appConfig::class)]
+#[CoversClass(unifiedConfig::class)]
 #[CoversClass(app::class)]
 #[CoversClass(email::class)]
 #[CoversClass(settings::class)]
 final class AppConfigModelsTest extends TestCase {
 
-	public function testAppConfigInstantiates(): void {
-		$config = new appConfig();
-		$this->assertInstanceOf( appConfig::class, $config );
+	public function testUnifiedConfigInstantiates(): void {
+		$config = new unifiedConfig();
+		$this->assertInstanceOf( unifiedConfig::class, $config );
 	}
 
 	public function testAppHasTitleAndGuid(): void {
@@ -53,7 +53,7 @@ final class AppConfigModelsTest extends TestCase {
 	}
 
 	public function testAllConfigsExtendJsonDeserialize(): void {
-		foreach ( [ appConfig::class, app::class, email::class, settings::class ] as $class ) {
+		foreach ( [ unifiedConfig::class, app::class, email::class, settings::class ] as $class ) {
 			$this->assertTrue( is_subclass_of( $class, \andrewsauder\jsonDeserialize\jsonDeserialize::class ) );
 		}
 	}

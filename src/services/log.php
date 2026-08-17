@@ -65,7 +65,7 @@ final class log {
 
 		if( empty( $channel ) ) {
 			try {
-				$channel = \gcgov\framework\config::getAppConfig()->app->title;
+				$channel = \gcgov\framework\config::getApp()->title;
 				if( $channel === '' ) {
 					$channel = 'app';
 				}

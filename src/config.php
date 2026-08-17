@@ -3,17 +3,31 @@
 namespace gcgov\framework;
 
 
-use gcgov\framework\models\appConfig;
-use gcgov\framework\models\environmentConfig;
+use gcgov\framework\models\config\app\app;
+use gcgov\framework\models\config\app\email;
+use gcgov\framework\models\config\app\settings;
+use gcgov\framework\models\config\environment\jwtAuth;
+use gcgov\framework\models\config\environment\logging;
+use gcgov\framework\models\config\environment\microsoft;
+use gcgov\framework\models\config\environment\payjunction;
+use gcgov\framework\models\config\environment\sqlDatabase;
+use gcgov\framework\models\unifiedConfig;
 
 
+/**
+ * Static configuration access for the application.
+ *
+ * Paths are derived by reflecting \app\app's file location. Configuration values come
+ * from the single {root}/config.json (the v7 merge of the former app/config/app.json
+ * and app/config/environment.json), resolved with %env(...) environment-variable
+ * references, and are exposed directly on this class — e.g. config::getBasePath(),
+ * config::getMongoDatabases(), config::getEmail().
+ */
 final class config {
 
 	private static string $rootDir = '';
 
 	private static string $appDir = '';
-
-	private static string $configDir = '';
 
 	private static string $modelsDir = '';
 
@@ -21,9 +35,7 @@ final class config {
 
 	private static string $srvDir = '';
 
-	private static appConfig $appConfig;
-
-	private static environmentConfig $environmentConfig;
+	private static unifiedConfig $unifiedConfig;
 
 
 	public static function getTempDir(): string {
@@ -81,21 +93,6 @@ final class config {
 	}
 
 
-
-	public static function getConfigDir(): string {
-		if( self::$configDir==='' ) {
-			self::setConfigDir();
-		}
-
-		return self::$configDir;
-	}
-
-
-	private static function setConfigDir(): void {
-		self::$configDir = self::getAppDir() . '/config/';
-	}
-
-
 	public static function getServicesDir(): string {
 		if( self::$servicesDir==='' ) {
 			self::setServicesDir();
@@ -125,72 +122,173 @@ final class config {
 
 
 	/**
-	 * @return \gcgov\framework\models\appConfig
-	 * @throws \gcgov\framework\exceptions\configException
+	 * The absolute path of the unified config file.
 	 */
-	public static function getAppConfig(): appConfig {
-		if( !isset( self::$appConfig ) ) {
-			self::setAppConfig();
-		}
-
-		return self::$appConfig;
+	public static function getConfigFilePath(): string {
+		return self::getRootDir() . '/config.json';
 	}
 
 
 	/**
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
-	private static function setAppConfig(): void {
-		$appDir        = self::getAppDir();
-		$appConfigFile = $appDir . '/config/app.json';
-		if( !file_exists( $appConfigFile ) ) {
-			throw new \gcgov\framework\exceptions\configException( 'Missing app config file at ' . $appConfigFile );
+	private static function unifiedConfig(): unifiedConfig {
+		if( !isset( self::$unifiedConfig ) ) {
+			self::setUnifiedConfig();
+		}
+
+		return self::$unifiedConfig;
+	}
+
+
+	/**
+	 * @throws \gcgov\framework\exceptions\configException
+	 */
+	private static function setUnifiedConfig(): void {
+		$configFile = self::getConfigFilePath();
+		if( !file_exists( $configFile ) ) {
+			throw new \gcgov\framework\exceptions\configException( 'Missing config file at ' . $configFile );
 		}
 
 		\gcgov\framework\services\environment\dotEnvLoader::loadOnce( self::getRootDir() );
 		try {
-			$json = \gcgov\framework\services\environment\envVarResolver::resolveJson( (string)file_get_contents( $appConfigFile ), $appConfigFile );
+			$json = \gcgov\framework\services\environment\envVarResolver::resolveJson( (string)file_get_contents( $configFile ), $configFile );
 		}
 		catch( \gcgov\framework\services\environment\environmentException $e ) {
 			throw new \gcgov\framework\exceptions\configException( $e->getMessage(), 500, $e );
 		}
 
-		self::$appConfig = appConfig::jsonDeserialize( $json );
+		self::$unifiedConfig = unifiedConfig::jsonDeserialize( $json );
+	}
+
+
+	// --- application identity (formerly app.json) ---
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getApp(): app {
+		return self::unifiedConfig()->app;
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getEmail(): email {
+		return self::unifiedConfig()->email;
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getSettings(): settings {
+		return self::unifiedConfig()->settings;
+	}
+
+
+	// --- environment (formerly environment.json) ---
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getType(): string {
+		return self::unifiedConfig()->type;
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function isLocal(): bool {
+		return self::unifiedConfig()->isLocal();
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getServerName(): string {
+		return self::unifiedConfig()->serverName;
+	}
+
+
+	/** Normalized (no trailing slash). @throws \gcgov\framework\exceptions\configException */
+	public static function getRootUrl(): string {
+		return self::unifiedConfig()->getRootUrl();
+	}
+
+
+	/** {rootUrl}/{basePath}. @throws \gcgov\framework\exceptions\configException */
+	public static function getBaseUrl(): string {
+		return self::unifiedConfig()->getBaseUrl();
+	}
+
+
+	/** Normalized '/api' style ('/' at domain root). @throws \gcgov\framework\exceptions\configException */
+	public static function getBasePath(): string {
+		return self::unifiedConfig()->getBasePath();
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getCookieUrl(): string {
+		return self::unifiedConfig()->cookieUrl;
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getPhpPath(): string {
+		return self::unifiedConfig()->phpPath;
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getLogging(): logging {
+		return self::unifiedConfig()->logging;
 	}
 
 
 	/**
-	 * @return \gcgov\framework\models\environmentConfig
+	 * @return \gcgov\framework\models\config\environment\mongoDatabase[]
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
-	public static function getEnvironmentConfig(): environmentConfig {
-		if( !isset( self::$environmentConfig ) ) {
-			self::setEnvironmentConfig();
-		}
-
-		return self::$environmentConfig;
+	public static function getMongoDatabases(): array {
+		return self::unifiedConfig()->mongoDatabases;
 	}
 
 
 	/**
+	 * @return \gcgov\framework\models\config\environment\sqlDatabase[]
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
-	private static function setEnvironmentConfig(): void {
-		$appDir                = self::getAppDir();
-		$environmentConfigFile = $appDir . '/config/environment.json';
-		if( !file_exists( $environmentConfigFile ) ) {
-			throw new \gcgov\framework\exceptions\configException( 'Missing environment config file at ' . $environmentConfigFile );
-		}
+	public static function getSqlDatabases(): array {
+		return self::unifiedConfig()->sqlDatabases;
+	}
 
-		\gcgov\framework\services\environment\dotEnvLoader::loadOnce( self::getRootDir() );
-		try {
-			$json = \gcgov\framework\services\environment\envVarResolver::resolveJson( (string)file_get_contents( $environmentConfigFile ), $environmentConfigFile );
-		}
-		catch( \gcgov\framework\services\environment\environmentException $e ) {
-			throw new \gcgov\framework\exceptions\configException( $e->getMessage(), 500, $e );
-		}
 
-		self::$environmentConfig = environmentConfig::jsonDeserialize( $json );
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getDefaultSqlDatabase(): ?sqlDatabase {
+		return self::unifiedConfig()->getDefaultSqlDatabase();
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getSqlDatabaseByName( string $name ): ?sqlDatabase {
+		return self::unifiedConfig()->getSqlDatabaseByName( $name );
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getMicrosoft(): microsoft {
+		return self::unifiedConfig()->microsoft;
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getJwtAuth(): jwtAuth {
+		return self::unifiedConfig()->jwtAuth;
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getPayjunction(): payjunction {
+		return self::unifiedConfig()->payjunction;
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getAppDictionary(): array {
+		return self::unifiedConfig()->appDictionary;
 	}
 
 }

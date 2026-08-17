@@ -95,38 +95,38 @@ final class AppContextTest extends TestCase {
 		$this->assertSame( $root . '/vendor/autoload.php', $context->getVendorAutoloadPath() );
 	}
 
-	public function testLoadEnvironmentConfigParsesActiveFile(): void {
-		file_put_contents( $this->tempRootDir . '/app/config/environment.json', json_encode( [
+	public function testLoadConfigParsesActiveFile(): void {
+		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
 			'type'           => 'prod',
 			'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => 'mongodb://u:p@h:27017/widgets' ] ],
 		] ) );
 		$context = appContext::locate( $this->tempRootDir );
 		$this->assertNotNull( $context );
-		$environmentConfig = $context->loadEnvironmentConfig();
+		$environmentConfig = $context->loadConfig();
 		$this->assertSame( 'prod', $environmentConfig->type );
 		$this->assertCount( 1, $environmentConfig->mongoDatabases );
 		$this->assertSame( 'widgets', $environmentConfig->mongoDatabases[0]->database );
 	}
 
-	public function testLoadEnvironmentConfigThrowsWhenMissing(): void {
+	public function testLoadConfigThrowsWhenMissing(): void {
 		$context = appContext::locate( $this->tempRootDir );
 		$this->assertNotNull( $context );
 		$this->expectException( cliException::class );
-		$context->loadEnvironmentConfig();
+		$context->loadConfig();
 	}
 
 
-	public function testLoadEnvironmentConfigResolvesEnvVars(): void {
+	public function testLoadConfigResolvesEnvVars(): void {
 		$_ENV[ 'TEST_MONGO_URI' ] = 'mongodb://resolved:27017/widgets';
 		putenv( 'TEST_MONGO_URI=mongodb://resolved:27017/widgets' );
 		try {
-			file_put_contents( $this->tempRootDir . '/app/config/environment.json', json_encode( [
+			file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
 				'type'           => 'prod',
 				'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => '%env(TEST_MONGO_URI)%' ] ],
 			] ) );
 			$context = appContext::locate( $this->tempRootDir );
 			$this->assertNotNull( $context );
-			$environmentConfig = $context->loadEnvironmentConfig();
+			$environmentConfig = $context->loadConfig();
 			$this->assertSame( 'mongodb://resolved:27017/widgets', $environmentConfig->mongoDatabases[ 0 ]->uri );
 		}
 		finally {
@@ -136,38 +136,38 @@ final class AppContextTest extends TestCase {
 	}
 
 
-	public function testLoadEnvironmentConfigThrowsCliExceptionWhenEnvVarMissing(): void {
+	public function testLoadConfigThrowsCliExceptionWhenEnvVarMissing(): void {
 		unset( $_ENV[ 'TEST_MISSING_URI' ] );
 		putenv( 'TEST_MISSING_URI' );
-		file_put_contents( $this->tempRootDir . '/app/config/environment.json', json_encode( [
+		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
 			'type'           => 'prod',
 			'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => '%env(TEST_MISSING_URI)%' ] ],
 		] ) );
 		$context = appContext::locate( $this->tempRootDir );
 		$this->assertNotNull( $context );
 		$this->expectException( cliException::class );
-		$context->loadEnvironmentConfig();
+		$context->loadConfig();
 	}
 
 
-	public function testLoadEnvironmentConfigVariantAppliesOverlay(): void {
+	public function testLoadConfigVariantAppliesOverlay(): void {
 		// Ambient value must LOSE to the overlay for an explicit variant read.
 		$_ENV[ 'TEST_MONGO_URI' ] = 'mongodb://local:27017';
 		putenv( 'TEST_MONGO_URI=mongodb://local:27017' );
 		try {
-			file_put_contents( $this->tempRootDir . '/app/config/environment.json', json_encode( [
+			file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
 				'type'           => '%env(default:local:TEST_APP_TYPE)%',
 				'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => '%env(TEST_MONGO_URI)%' ] ],
 			] ) );
-			file_put_contents( $this->tempRootDir . '/app/config/prod.env', "TEST_APP_TYPE=prod\nTEST_MONGO_URI=mongodb://prod:27017\n" );
+			file_put_contents( $this->tempRootDir . '/prod.env', "TEST_APP_TYPE=prod\nTEST_MONGO_URI=mongodb://prod:27017\n" );
 			$context = appContext::locate( $this->tempRootDir );
 			$this->assertNotNull( $context );
 
-			$prodConfig = $context->loadEnvironmentConfig( 'prod' );
+			$prodConfig = $context->loadConfig( 'prod' );
 			$this->assertSame( 'prod', $prodConfig->type );
 			$this->assertSame( 'mongodb://prod:27017', $prodConfig->mongoDatabases[ 0 ]->uri );
 
-			$activeConfig = $context->loadEnvironmentConfig();
+			$activeConfig = $context->loadConfig();
 			$this->assertSame( 'local', $activeConfig->type );
 			$this->assertSame( 'mongodb://local:27017', $activeConfig->mongoDatabases[ 0 ]->uri );
 		}
@@ -178,19 +178,19 @@ final class AppContextTest extends TestCase {
 	}
 
 
-	public function testLoadEnvironmentConfigVariantAmbientFillsOverlayGaps(): void {
+	public function testLoadConfigVariantAmbientFillsOverlayGaps(): void {
 		$_ENV[ 'TEST_MONGO_DB' ] = 'localDb';
 		putenv( 'TEST_MONGO_DB=localDb' );
 		try {
-			file_put_contents( $this->tempRootDir . '/app/config/environment.json', json_encode( [
+			file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
 				'type'           => 'local',
 				'mongoDatabases' => [ [ 'default' => true, 'database' => '%env(TEST_MONGO_DB)%', 'uri' => '%env(TEST_MONGO_URI)%' ] ],
 			] ) );
-			file_put_contents( $this->tempRootDir . '/app/config/prod.env', "TEST_MONGO_URI=mongodb://prod:27017\n" );
+			file_put_contents( $this->tempRootDir . '/prod.env', "TEST_MONGO_URI=mongodb://prod:27017\n" );
 			$context = appContext::locate( $this->tempRootDir );
 			$this->assertNotNull( $context );
 
-			$prodConfig = $context->loadEnvironmentConfig( 'prod' );
+			$prodConfig = $context->loadConfig( 'prod' );
 			$this->assertSame( 'mongodb://prod:27017', $prodConfig->mongoDatabases[ 0 ]->uri );
 			// TEST_MONGO_DB not in the overlay -> ambient value fills the gap
 			$this->assertSame( 'localDb', $prodConfig->mongoDatabases[ 0 ]->database );
@@ -202,12 +202,12 @@ final class AppContextTest extends TestCase {
 	}
 
 
-	public function testLoadEnvironmentConfigVariantThrowsWhenOverlayMissing(): void {
-		file_put_contents( $this->tempRootDir . '/app/config/environment.json', '{"type":"local"}' );
+	public function testLoadConfigVariantThrowsWhenOverlayMissing(): void {
+		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local"}' );
 		$context = appContext::locate( $this->tempRootDir );
 		$this->assertNotNull( $context );
 		try {
-			$context->loadEnvironmentConfig( 'prod' );
+			$context->loadConfig( 'prod' );
 			$this->fail( 'Expected cliException' );
 		}
 		catch( cliException $e ) {
@@ -216,13 +216,13 @@ final class AppContextTest extends TestCase {
 	}
 
 
-	public function testLoadEnvironmentConfigVariantMentionsMigrationWhenLegacyFileExists(): void {
-		file_put_contents( $this->tempRootDir . '/app/config/environment.json', '{"type":"local"}' );
+	public function testLoadConfigVariantMentionsMigrationWhenLegacyFileExists(): void {
+		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local"}' );
 		file_put_contents( $this->tempRootDir . '/app/config/environment-prod.json', '{"type":"prod"}' );
 		$context = appContext::locate( $this->tempRootDir );
 		$this->assertNotNull( $context );
 		try {
-			$context->loadEnvironmentConfig( 'prod' );
+			$context->loadConfig( 'prod' );
 			$this->fail( 'Expected cliException' );
 		}
 		catch( cliException $e ) {
@@ -232,20 +232,24 @@ final class AppContextTest extends TestCase {
 	}
 
 
-	public function testDescribeEnvironmentConfigSource(): void {
+	public function testDescribeConfigSource(): void {
 		$context = appContext::locate( $this->tempRootDir );
 		$this->assertNotNull( $context );
 		$root = str_replace( '\\', '/', $this->tempRootDir );
-		$this->assertSame( $root . '/app/config/environment.json', $context->describeEnvironmentConfigSource() );
-		$this->assertSame( $root . '/app/config/environment.json (overlay: ' . $root . '/app/config/prod.env)', $context->describeEnvironmentConfigSource( 'prod' ) );
+		$this->assertSame( $root . '/config.json', $context->describeConfigSource() );
+		$this->assertSame( $root . '/config.json (overlay: ' . $root . '/prod.env)', $context->describeConfigSource( 'prod' ) );
 	}
 
 
 	public function testGetEnvironmentVariantsListsOverlayFiles(): void {
-		touch( $this->tempRootDir . '/app/config/prod.env' );
-		touch( $this->tempRootDir . '/app/config/staging.env' );
-		touch( $this->tempRootDir . '/app/config/prod.env.example' );
-		touch( $this->tempRootDir . '/app/config/environment.json' );
+		touch( $this->tempRootDir . '/prod.env' );
+		touch( $this->tempRootDir . '/staging.env' );
+		// none of these may appear as variants: the example file, dotfiles, the
+		// config itself, or a legacy app/config file
+		touch( $this->tempRootDir . '/prod.env.example' );
+		touch( $this->tempRootDir . '/.env' );
+		touch( $this->tempRootDir . '/.env.local' );
+		touch( $this->tempRootDir . '/config.json' );
 		touch( $this->tempRootDir . '/app/config/environment-local.json' );
 		$context = appContext::locate( $this->tempRootDir );
 		$this->assertNotNull( $context );

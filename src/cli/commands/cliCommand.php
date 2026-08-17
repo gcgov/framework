@@ -45,15 +45,15 @@ final class cliCommand extends Command {
 		$context = appContext::require();
 		$context->assertAppLoadable();
 
-		$environmentConfig = null;
+		$unifiedConfig = null;
 		try {
-			$environmentConfig = $context->loadEnvironmentConfig();
+			$unifiedConfig = $context->loadConfig();
 		}
 		catch( cliException ) {
 			// environment.json missing — the child process will report it through the framework lifecycle
 		}
 
-		$commandLine = array_merge( phpProcess::findPhpBinary( $input->getOption( 'php' ), $environmentConfig ), phpProcess::requiredIniFlags() );
+		$commandLine = array_merge( phpProcess::findPhpBinary( $input->getOption( 'php' ), $unifiedConfig ), phpProcess::requiredIniFlags() );
 
 		if( $input->getOption( 'debug' ) ) {
 			$commandLine = array_merge( $commandLine, phpProcess::xdebugFlags( (string)$input->getOption( 'debug-host' ), (int)$input->getOption( 'debug-port' ) ) );

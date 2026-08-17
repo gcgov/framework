@@ -19,14 +19,14 @@ final class router {
 	 * @throws \gcgov\framework\exceptions\routeException
 	 */
 	public function __construct( array $serviceNamespaces ) {
-		if(config::getEnvironmentConfig()->logging->lifecycle) {
+		if(config::getLogging()->lifecycle) {
 			log::debug( 'Framework Lifecycle', '-Router- constructing framework\router' );
 			log::debug( 'Framework Lifecycle', '-Router- check for routers in services' );
 		}
 		foreach($serviceNamespaces as $serviceNamespace) {
 			try {
 				$reflectionClassOfServiceRouter = new ReflectionClass( $serviceNamespace . '\router' );
-				if(config::getEnvironmentConfig()->logging->lifecycle) {
+				if(config::getLogging()->lifecycle) {
 					log::debug( 'Framework Lifecycle', '-Router- instantiate ' . $serviceNamespace . '\router' );
 				}
 				$serviceRouter = $reflectionClassOfServiceRouter->newInstance();
@@ -41,7 +41,7 @@ final class router {
 			}
 		}
 
-		if(config::getEnvironmentConfig()->logging->lifecycle) {
+		if(config::getLogging()->lifecycle) {
 			log::debug( 'Framework Lifecycle', '-Router- create \app\router' );
 		}
 		$this->appRouter = new \app\router();
@@ -53,7 +53,7 @@ final class router {
 	 * @throws \gcgov\framework\exceptions\routeException
 	 */
 	public function route(): \gcgov\framework\models\routeHandler {
-		if(config::getEnvironmentConfig()->logging->lifecycle) {
+		if(config::getLogging()->lifecycle) {
 			log::debug( 'Framework Lifecycle', '-Router- running framework\router route()' );
 		}
 
@@ -67,7 +67,7 @@ final class router {
 			}
 		} );
 
-		if(config::getEnvironmentConfig()->logging->lifecycle) {
+		if(config::getLogging()->lifecycle) {
 			log::debug( 'Framework Lifecycle', '-Router- determine route' );
 		}
 		$routeInfo = $routeDispatcher->dispatch( $this->getHttpMethod(), $this->getUri() );
@@ -79,7 +79,7 @@ final class router {
 				// ... 405 Method Not Allowed
 				throw new \gcgov\framework\exceptions\routeException ( 'Method Not Allowed', 405 );
 			case \FastRoute\Dispatcher::FOUND:
-				if(config::getEnvironmentConfig()->logging->lifecycle) {
+				if(config::getLogging()->lifecycle) {
 					log::debug( 'Framework Lifecycle', '-Router- found matching route' );
 				}
 				//build route handler to return to the framework renderer
@@ -87,22 +87,22 @@ final class router {
 				$routeHandler            = $routeInfo[ 1 ];
 				$routeHandler->arguments = $routeInfo[ 2 ];
 
-				if(config::getEnvironmentConfig()->logging->lifecycle) {
+				if(config::getLogging()->lifecycle) {
 					log::debug( 'Framework Lifecycle', '-Router- running framework authentication' );
 				}
 				if( !$routeHandler->authentication ) {
-					if(config::getEnvironmentConfig()->logging->lifecycle) {
+					if(config::getLogging()->lifecycle) {
 						log::debug( 'Framework Lifecycle', '-Router- no authentication required for route' );
 					}
 					return $routeHandler;
 				}
 
-				if(config::getEnvironmentConfig()->logging->lifecycle) {
+				if(config::getLogging()->lifecycle) {
 					log::debug( 'Framework Lifecycle', '-Router- run app\router authentication()' );
 				}
 				$appAllowRoute = $this->appRouter->authentication( $routeHandler );
 				if( !$appAllowRoute ) {
-					if(config::getEnvironmentConfig()->logging->lifecycle) {
+					if(config::getLogging()->lifecycle) {
 						log::debug( 'Framework Lifecycle', '-Router- app\router authentication() returned false; raising route exception' );
 					}
 					throw new \gcgov\framework\exceptions\routeException ( 'Authentication failed', 401 );
@@ -113,16 +113,16 @@ final class router {
 					$runServiceRouting = $this->appRouter->getRunFrameworkServiceRouteAuthentication( $routeHandler );
 				}
 				if($runServiceRouting) {
-					if(config::getEnvironmentConfig()->logging->lifecycle) {
+					if(config::getLogging()->lifecycle) {
 						log::debug( 'Framework Lifecycle', '-Router- run service routers authentication()' );
 					}
 					foreach($this->serviceRouters as $serviceRouter) {
-						if(config::getEnvironmentConfig()->logging->lifecycle) {
+						if(config::getLogging()->lifecycle) {
 							log::debug( 'Framework Lifecycle', '-Router- run framework\services\\' . get_class( $serviceRouter ) . '\router authentication()' );
 						}
 						$serviceAllowRoute = $serviceRouter->authentication( $routeHandler );
 						if(!$serviceAllowRoute) {
-							if(config::getEnvironmentConfig()->logging->lifecycle) {
+							if(config::getLogging()->lifecycle) {
 								log::debug( 'Framework Lifecycle', '-Router- framework\services\\' . get_class( $serviceRouter ) . '\router authentication() returned false; raising route exception' );
 							}
 							throw new \gcgov\framework\exceptions\routeException ( 'Authentication failed', 401 );
@@ -130,7 +130,7 @@ final class router {
 					}
 				}
 
-				if(config::getEnvironmentConfig()->logging->lifecycle) {
+				if(config::getLogging()->lifecycle) {
 					log::debug( 'Framework Lifecycle', '-Router- return route handler to framework\framework' );
 				}
 				//return rendered
@@ -165,14 +165,14 @@ final class router {
 		$routes = [];
 
 		foreach($this->serviceRouters as $serviceRouter) {
-			if(config::getEnvironmentConfig()->logging->lifecycle) {
+			if(config::getLogging()->lifecycle) {
 				log::debug( 'Framework Lifecycle', '-Router- get service routes' );
 			}
 			$serviceRoutes = $serviceRouter->getRoutes();
 			$routes = array_merge( $routes, $serviceRoutes );
 		}
 
-		if(config::getEnvironmentConfig()->logging->lifecycle) {
+		if(config::getLogging()->lifecycle) {
 			log::debug( 'Framework Lifecycle', '-Router- get app routes' );
 		}
 		$appRoutes = $this->appRouter->getRoutes();

@@ -6,14 +6,14 @@ namespace gcgov\framework\tests\Unit\Models;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use gcgov\framework\models\environmentConfig;
+use gcgov\framework\models\unifiedConfig;
 use gcgov\framework\models\config\environment\sqlDatabase;
 
-#[CoversClass(environmentConfig::class)]
-final class EnvironmentConfigTest extends TestCase {
+#[CoversClass(unifiedConfig::class)]
+final class UnifiedConfigTest extends TestCase {
 
 	public function testConstructorInitializesNestedConfigs(): void {
-		$config = new environmentConfig();
+		$config = new unifiedConfig();
 		$this->assertInstanceOf(
 			\gcgov\framework\models\config\environment\microsoft::class,
 			$config->microsoft
@@ -33,38 +33,38 @@ final class EnvironmentConfigTest extends TestCase {
 	}
 
 	public function testGetRootUrlTrimsTrailingSlashesAndSpaces(): void {
-		$config = new environmentConfig();
+		$config = new unifiedConfig();
 		$config->rootUrl = 'https://example.com/ ';
 		$this->assertSame( 'https://example.com', $config->getRootUrl() );
 	}
 
 	public function testGetBaseUrlCombinesRootAndBasePath(): void {
-		$config = new environmentConfig();
+		$config = new unifiedConfig();
 		$config->rootUrl = 'https://example.com/';
 		$config->basePath = '/api/v1/';
 		$this->assertSame( 'https://example.com/api/v1', $config->getBaseUrl() );
 	}
 
 	public function testGetBasePathReturnsLeadingSlashTrimmedValue(): void {
-		$config = new environmentConfig();
+		$config = new unifiedConfig();
 		$config->basePath = 'api/v1 ';
 		$this->assertSame( '/api/v1', $config->getBasePath() );
 	}
 
 	public function testIsLocalReturnsTrueWhenTypeIsLocal(): void {
-		$config = new environmentConfig();
+		$config = new unifiedConfig();
 		$config->type = 'local';
 		$this->assertTrue( $config->isLocal() );
 	}
 
 	public function testIsLocalReturnsFalseForOtherEnvironments(): void {
-		$config = new environmentConfig();
+		$config = new unifiedConfig();
 		$config->type = 'production';
 		$this->assertFalse( $config->isLocal() );
 	}
 
 	public function testGetDefaultSqlDatabaseReturnsTheOneMarkedDefault(): void {
-		$config = new environmentConfig();
+		$config = new unifiedConfig();
 		$db1 = new sqlDatabase();
 		$db1->name = 'db1';
 		$db1->default = false;
@@ -77,7 +77,7 @@ final class EnvironmentConfigTest extends TestCase {
 	}
 
 	public function testGetDefaultSqlDatabaseReturnsNullWhenNoneDefault(): void {
-		$config = new environmentConfig();
+		$config = new unifiedConfig();
 		$db = new sqlDatabase();
 		$db->default = false;
 		$config->sqlDatabases = [ $db ];
@@ -85,7 +85,7 @@ final class EnvironmentConfigTest extends TestCase {
 	}
 
 	public function testGetSqlDatabaseByNameMatches(): void {
-		$config = new environmentConfig();
+		$config = new unifiedConfig();
 		$db = new sqlDatabase();
 		$db->name = 'primary';
 		$config->sqlDatabases = [ $db ];
@@ -95,7 +95,7 @@ final class EnvironmentConfigTest extends TestCase {
 	}
 
 	public function testAppDictionaryIsArrayByDefault(): void {
-		$config = new environmentConfig();
+		$config = new unifiedConfig();
 		$this->assertSame( [], $config->appDictionary );
 	}
 

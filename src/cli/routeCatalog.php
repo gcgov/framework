@@ -40,7 +40,7 @@ final class routeCatalog {
 			return \gcgov\framework\router::getMergedRoutes( $context->getServiceNamespaces() );
 		}
 		catch( \gcgov\framework\exceptions\configException $e ) {
-			throw new cliException( 'Could not load routes: ' . $e->getMessage() . ' Ensure app/config/environment.json exists and every %env(...) it references has a value (validate with `gf env`).', 0, $e );
+			throw new cliException( 'Could not load routes: ' . $e->getMessage() . ' Ensure {root}/config.json exists and every %env(...) it references has a value (validate with `gf env`).', 0, $e );
 		}
 		catch( \gcgov\framework\exceptions\routeException $e ) {
 			throw new cliException( 'Could not load routes: ' . $e->getMessage(), 0, $e );

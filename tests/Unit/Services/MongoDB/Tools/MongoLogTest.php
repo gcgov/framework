@@ -7,7 +7,7 @@ namespace gcgov\framework\tests\Unit\Services\MongoDB\Tools;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use gcgov\framework\services\mongodb\tools\log;
-use gcgov\framework\models\environmentConfig;
+use gcgov\framework\models\unifiedConfig;
 use gcgov\framework\models\config\environment\mongoDatabase;
 
 #[CoversClass(log::class)]
@@ -61,9 +61,9 @@ final class MongoLogTest extends TestCase {
 		// than trying to access the first entry. This used to raise a PHP
 		// warning under PHP 8.4; the guard added during the level-5 cleanup
 		// preserves silent no-op semantics.
-		$env = new environmentConfig();
+		$env = new unifiedConfig();
 		$env->mongoDatabases = [];
-		$prop = new \ReflectionProperty( \gcgov\framework\config::class, 'environmentConfig' );
+		$prop = new \ReflectionProperty( \gcgov\framework\config::class, 'unifiedConfig' );
 		$prop->setValue( null, $env );
 
 		log::debug( 'empty-mongo', 'msg' );
@@ -71,11 +71,11 @@ final class MongoLogTest extends TestCase {
 	}
 
 	private function primeEnvWithMongoLogging( bool $enabled ): void {
-		$env = new environmentConfig();
+		$env = new unifiedConfig();
 		$db = new mongoDatabase();
 		$db->logging = $enabled;
 		$env->mongoDatabases = [ $db ];
-		$prop = new \ReflectionProperty( \gcgov\framework\config::class, 'environmentConfig' );
+		$prop = new \ReflectionProperty( \gcgov\framework\config::class, 'unifiedConfig' );
 		$prop->setValue( null, $env );
 	}
 

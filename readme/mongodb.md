@@ -8,7 +8,7 @@ You will primarily interact with this service through extended classes that mode
 will extend `\gcgov\framework\services\mongodb\model` or `\gcgov\framework\services\mongodb\embedded`.
 
 ## Config
-`environment.json`
+`{root}/config.json` (`mongoDatabases` section)
 ```json
 {
 	"...": "...",

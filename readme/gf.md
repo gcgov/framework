@@ -52,7 +52,7 @@ gf cli /cli/generate-shifts --debug     # run with Xdebug (replaces local-debug.
 - **Exit codes**: `0` on success, `1` when the response status is 400+ — so Task Scheduler /
   cron can detect failures. (The legacy `.bat` entry always exited 0.)
 - **Interpreter selection** (first match wins): `--php=<binary or directory>`, the `GF_PHP`
-  environment variable, `phpPath` in `environment.json`, the PHP running gf. Any of these may
+  environment variable, `phpPath` in `config.json`, the PHP running gf. Any of these may
   include trailing arguments after the binary, e.g. `C:\path\php.exe -c C:\path\php.ini`
   (quote a binary or argument that contains spaces).
 - **It must be the CLI binary.** `php-cgi.exe` (what an IIS FastCGI handler mapping points at),
@@ -147,14 +147,14 @@ installation exists. The `chrome-php/chrome` library is a framework dependency, 
 
 ## Databases: `gf db:restore` and `gf db:run`
 
-Connection strings come from `app/config/environment.json` (`mongoDatabases[]`) — never
+Connection strings come from the unified `{root}/config.json` (`mongoDatabases[]`) — never
 hardcode credentials in scripts again. A variant name (`--from=prod`, `--env=prod`) resolves
-that same `environment.json` with the variables from the gitignored overlay file
-`app/config/{name}.env` applied on top of your local environment (see
+that same `config.json` with the variables from the gitignored overlay file
+`{root}/{name}.env` applied on top of your local environment (see
 [Environments](#environments-gf-env) below):
 
 ```ini
-# app/config/prod.env (gitignored; start from prod.env.example)
+# {root}/prod.env (gitignored; start from prod.env.example)
 APP_TYPE=prod
 MONGO_URI=mongodb+srv://user:pass@prod-cluster/
 MONGO_DATABASE=app
@@ -179,7 +179,7 @@ gf db:restore --keep-dump --dump-dir=db/backup
 - The plan (with passwords redacted) is shown and confirmed before anything runs; `--yes` skips.
 
 ```
-gf db:run db/create-admin.js                 # against the active environment.json default db
+gf db:run db/create-admin.js                 # against the active config.json default db
 gf db:run db/migrate.js --env=prod --db=AppsSchedule
 gf db:run db/seed.js -- --quiet              # everything after -- goes to mongosh
 ```
@@ -191,15 +191,15 @@ Requires [mongosh](https://www.mongodb.com/try/download/shell) on PATH.
 ## Environments: `gf env`
 
 Environment selection is **environment-variable driven**: the committed
-`app/config/environment.json` references variables with `%env(...)%`, and whichever values the
+the root `config.json` references variables with `%env(...)%`, and whichever values the
 process environment (container env, Docker secrets, or `{root}/.env`) supplies *are* the
 environment. There is nothing to activate or copy.
 
 `gf env` is the validator for that model:
 
 ```
-gf env              # list app/config/*.env variants + validate the ACTIVE environment
-gf env prod         # resolve environment.json with the app/config/prod.env overlay and validate it
+gf env              # list {root}/*.env variants + validate the ACTIVE environment
+gf env prod         # resolve config.json with the prod.env overlay and validate it
 ```
 
 `gf env <name>` prints the resolved summary (type, serverName, urls, databases with redacted
@@ -209,18 +209,23 @@ your local value, so **an overlay file must define every environment-specific va
 
 ### Migrating a v6 app to v7
 
-v6's committed `environment-{env}.json` variants and the `gf env` copy step are gone. To move
-an app onto v7:
+v6's split `app/config/app.json` + `environment-{env}.json` files and the `gf env` copy step
+are gone. To move an app onto v7:
 
-1. Commit a single `app/config/environment.json` (remove it from `.gitignore`) with every
-   secret and every per-environment value referenced via `%env(...)%` — see
-   [environment-variables.md](environment-variables.md) and the app template's copy.
-2. For each old variant, create a gitignored `app/config/{env}.env` holding that environment's
-   variable values (start from the template's `prod.env.example`); gitignore
-   `app/config/*.env`. Local values go in `{root}/.env` (from `.env.example`).
+1. Commit a single **`config.json` at the application root**: merge the contents of the old
+   `app/config/app.json` (`app`, `email`, `settings` sections) and `app/config/environment.json`
+   (everything else) into one JSON object, with every secret and every per-environment value
+   referenced via `%env(...)%` — see [environment-variables.md](environment-variables.md) and
+   the app template's copy. Then delete the `app/config/` directory.
+2. For each old variant, create a gitignored **`{env}.env` at the application root** holding
+   that environment's variable values (start from the template's `prod.env.example`); gitignore
+   `/*.env`. Local values go in `{root}/.env` (from `.env.example`).
 3. Delete `environment-{env}.json`, `composer-{env}.json`, and `www/web-{env}.config`; commit
    `composer.json` (and a static `www/web.config`, if the app still runs on IIS).
-4. Bump `gcgov/framework` to `^v7.0`; verify with `gf env` and `gf env prod`.
+4. Replace `config::getAppConfig()` / `config::getEnvironmentConfig()` calls in app code with
+   the flattened accessors (`config::getBasePath()`, `config::getSettings()`,
+   `config::getMongoDatabases()`, …).
+5. Bump `gcgov/framework` to `^v7.0`; verify with `gf env` and `gf env prod`.
 
 ---
 
@@ -253,7 +258,7 @@ Steps: `git fetch/pull` → pick a tag (newest first, `--tags=N` to widen) → c
 `git checkout tags/<tag>` → `git submodule sync/update` → write
 `version.json` (`{"version": "<tag>", "inherit": true}`) → `composer update`.
 Any failing step aborts the deploy with that step's exit code. Configuration is committed
-(`environment.json` + `%env()` values from the server's environment), so there is no
+(`config.json` + `%env()` values from the server's environment), so there is no
 config-activation step.
 
 ---
@@ -269,7 +274,7 @@ config-activation step.
 
 Completion is dynamic: `gf cli <TAB>` suggests the application's actual CLI routes (with
 descriptions), `gf env <TAB>` (and `db:restore --from=<TAB>` etc.) suggests the variant overlay
-files (`app/config/*.env`) present in the app.
+files (`{root}/*.env`) present in the app.
 
 ---
 
@@ -305,7 +310,7 @@ down gf itself (run with `-v` to see discovery errors).
 Useful helpers for custom commands (all in `\gcgov\framework\cli`):
 
 - `appContext::require()` / `appContext::locate()` — application root + config access
-- `appContext->loadEnvironmentConfig($variant)` — resolve `environment.json` (with the `{variant}.env` overlay when a variant is named)
+- `appContext->loadConfig($variant)` — resolve the root `config.json` (with the `{variant}.env` overlay when a variant is named)
 - `dotEnvLoader::parseFile($path)` — parse a dotenv file to an array without touching the process env
 - `mongoTools::findBinary()/redactUri()/uriWithDatabase()`
 - `phpProcess::findPhpBinary()/requiredIniFlags()/xdebugFlags()`
@@ -333,10 +338,10 @@ Files an app can delete once migrated: `app/cli/local.bat`, `app/cli/local-debug
 scheduler entry references it (gf ships its own route runner).
 
 Reference any secrets that were hardcoded in those scripts via `%env(...)%` in the committed
-`app/config/environment.json` — the `db:*` commands and the request lifecycle both resolve
+the root `config.json` — the `db:*` commands and the request lifecycle both resolve
 them. Keep the actual values in the process environment, Docker/Kubernetes secrets, or a
 gitignored `.env` file (per-variant values for the `db:*` commands go in gitignored
-`app/config/{env}.env` overlays). See **[Environment variables in config](environment-variables.md)**
+`{root}/{env}.env` overlays). See **[Environment variables in config](environment-variables.md)**
 and **[Migrating a v6 app to v7](#migrating-a-v6-app-to-v7)** above.
 
 For example, instead of a plaintext URI:

@@ -38,12 +38,12 @@ if ( !class_exists( '\app\router' ) ) {
 	}' );
 }
 
-// Seed environmentConfig so config::getEnvironmentConfig() doesn't try to
+// Seed unifiedConfig so config accessors don't try to
 // load a JSON file from disk.
-$envConfig = new \gcgov\framework\models\environmentConfig();
+$envConfig = new \gcgov\framework\models\unifiedConfig();
 $envConfig->basePath = 'api';
 $envConfig->serverName = 'test.local';
 $envConfig->rootUrl = 'http://test.local';
 $envConfig->type = 'local';
-$prop = new \ReflectionProperty( \gcgov\framework\config::class, 'environmentConfig' );
+$prop = new \ReflectionProperty( \gcgov\framework\config::class, 'unifiedConfig' );
 $prop->setValue( null, $envConfig );

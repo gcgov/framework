@@ -1,7 +1,7 @@
 # Environment variables in config (`%env(...)%`)
 
 `gcgov/framework` can resolve **environment variables** inside your JSON config files
-(`app/config/app.json` and `app/config/environment.json`) at load time. This lets you keep
+(the unified `{root}/config.json`) at load time. This lets you keep
 secrets — Mongo URIs, Microsoft client secrets, SMTP/PayJunction credentials — **out of the
 config files entirely** and inject them from the process environment, Docker/Kubernetes
 secrets, or a local `.env` file. This is what makes the framework hostable in Docker (see the
@@ -28,13 +28,12 @@ malformed-JSON error behavior). You only opt in by writing `%env(...)%` somewher
 
 ## Where it applies
 
-Resolution runs at the three points where the framework reads config JSON:
+Resolution runs at the two points where the framework reads the unified config JSON:
 
 | Source | Loader |
 |--------|--------|
-| `app/config/app.json` | `\gcgov\framework\config::getAppConfig()` |
-| `app/config/environment.json` | `\gcgov\framework\config::getEnvironmentConfig()` |
-| `environment.json` + `app/config/{variant}.env` overlay | the `gf` CLI (`appContext::loadEnvironmentConfig($variant)`) — see "Per-variant overlay files" below |
+| `{root}/config.json` | `\gcgov\framework\config` static accessors (`config::getBasePath()`, `getMongoDatabases()`, `getEmail()`, …) |
+| `config.json` + `{root}/{variant}.env` overlay | the `gf` CLI (`appContext::loadConfig($variant)`) — see "Per-variant overlay files" below |
 
 Untyped config regions (`appDictionary`, plugin `clientParams`, etc.) are resolved too — the
 resolver walks the whole decoded tree.
@@ -160,13 +159,13 @@ Unlike Symfony — where `default:` names a fallback **parameter** — here `def
 "SMTPPort": "%env(int:default:587:SMTP_PORT)%"    // → int 587 when SMTP_PORT is unset
 ```
 
-With a single committed `environment.json`, the split is per **value**, not per file: give
+With the single committed `config.json`, the split is per **value**, not per file: give
 `default:` fallbacks only to non-secret dev conveniences (identity URLs, a local `type`), and
 leave secrets and database coordinates as **hard references** so a misconfigured prod container
 fails loudly, naming exactly what to set — dev covers them via `.env` (`cp .env.example .env`):
 
 ```jsonc
-// app/config/environment.json — one file for every environment:
+// config.json — one file for every environment:
 "type":         "%env(default:local:APP_TYPE)%",          // dev-safe default; prod sets APP_TYPE=prod
 "uri":          "%env(MONGO_URI)%",                        // hard: fail fast when unset
 "clientSecret": "%env(MICROSOFT_CLIENT_SECRET)%"
@@ -182,9 +181,9 @@ fails loudly, naming exactly what to set — dev covers them via `.env` (`cp .en
 The gf CLI sometimes needs a **foreign** environment's values without activating anything —
 `gf db:restore --from=prod` must resolve prod's Mongo URI while your shell holds local values.
 That is what per-variant overlay files are for: a gitignored dotenv file
-`app/config/{variant}.env` (e.g. `app/config/prod.env`; start from the app template's
-`prod.env.example`). `appContext::loadEnvironmentConfig('prod')` resolves the committed
-`environment.json` with that file's variables applied on top. Precedence for such a read:
+`{root}/{variant}.env` (e.g. `prod.env`; start from the app template’s
+`prod.env.example`). `appContext::loadConfig('prod')` resolves the committed
+`config.json` with that file’s variables applied on top. Precedence for such a read:
 
 ```
 {variant}.env overlay  >  real environment  >  .env.local  >  .env  >  default: fallback
@@ -194,7 +193,7 @@ Two things to know:
 
 - **An overlay must define every environment-specific variable.** A variable missing from the
   overlay falls back to your *local* value silently. `gf env <name>` validates that an overlay
-  fully resolves `environment.json`, and `db:restore` refuses a pair whose source and target
+  fully resolves `config.json`, and `db:restore` refuses a pair whose source and target
   resolve to the same database — but neither catches everything.
 - Overlay files are parsed with `dotEnvLoader::parseFile()` — they are **never loaded into the
   process environment** and never affect the running app; only the one gf resolution sees them.
