@@ -97,6 +97,23 @@ _Avoid_: credential, sensitive value, private setting
 The file a Secret is delivered as at runtime, named by a Config Reference rather than carrying the
 Secret's value in the environment itself.
 
+**Zone**:
+A network isolation boundary, defined by what it can reach and what can reach it. Three exist:
+internal-only, public with internal access, and public without. An Application in production runs in
+exactly one Zone; a Zone is not an Environment, and the two vary independently.
+_Avoid_: server, host, network, tier, segment
+
+**Ops Repo**:
+The single private repository describing what runs on every host — encrypted Secrets, production
+compose definitions, and the shared proxy stack — organized by Zone. An Application repository never
+holds production topology or Secrets.
+_Avoid_: infra repo, config repo
+
+**Provisioning**:
+Writing decrypted Secrets onto a host. Performed by an operator as a step deliberately separate from
+deploying, so that no host holds a decryption key and no deploy needs one.
+_Avoid_: secret sync, secret deploy, key distribution
+
 **Release**:
 A tagged, immutable build of an Application, identified in production by content digest rather than
 by tag or branch. Deploying and rolling back are both the act of pointing a host at a different
