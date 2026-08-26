@@ -16,7 +16,7 @@ corresponding front end application.
 
 Framework package requirements from `composer.json`:
 
-* PHP `>=8.3`
+* PHP `>=8.4`
 * PHP extensions: `ext-mongodb`, `ext-fileinfo`, `ext-pdo`
 
 Install dependencies with Composer:

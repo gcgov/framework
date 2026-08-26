@@ -8,7 +8,7 @@ This file is the fast path to a correct mental model. For exhaustive reference, 
 
 ## 1. What this is
 
-`gcgov/framework` is a small, opinionated PHP 8.3+ framework for building **REST APIs** (and optionally
+`gcgov/framework` is a small, opinionated PHP 8.4+ framework for building **REST APIs** (and optionally
 SSR apps) for Garrett County Government. Composer package name: `gcgov/framework`, PSR-4 root
 `gcgov\framework\` → `src/`.
 
@@ -480,11 +480,11 @@ at a time (oauth-server OR auth-ms-front).
 ---
 
 ## 14. Build / test / CI
-- Install: `composer install`. PHP `>=8.3`; ext `mongodb`, `sodium`, `fileinfo`, `pdo`.
+- Install: `composer install`. PHP `>=8.4`; ext `mongodb`, `sodium`, `fileinfo`, `pdo`.
 - Static analysis: `composer phpstan` (PHPStan; `phpstan-stubs/` provides stubs for optional deps).
 - Tests: `composer test` (PHPUnit; `tests/` mirrors `src/`, uses `tests/Shims/MongoDBShims.php` so unit tests
   run without a live Mongo). `composer ci` = phpstan + test.
-- GitHub Actions (`.github/workflows/ci.yml`) runs both on PHP 8.3 and 8.4. **Run `composer ci` before pushing.**
+- GitHub Actions (`.github/workflows/ci.yml`) runs on PHP 8.4. **Run `composer ci` before pushing.**
 - When you change `src/`, add/adjust the mirrored test under `tests/Unit/…`.
 
 ---
