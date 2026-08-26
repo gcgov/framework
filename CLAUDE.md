@@ -538,3 +538,19 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
   add a mirrored test in `tests/Unit/Cli/` (external binaries are exercised via pure
   arg-builder methods, e.g. `dbRestoreCommand::buildDumpCommand()`).
 - The legacy `scripts/*.ps1` are deprecated wrappers kept for backward compatibility.
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `gcgov/framework`, driven by the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, each label string equal to its role name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.md`.
