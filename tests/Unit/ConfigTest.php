@@ -84,17 +84,31 @@ final class ConfigTest extends TestCase {
 		$prop = new \ReflectionProperty( config::class, 'unifiedConfig' );
 		$prop->setValue( null, $unified );
 
-		// v6 environmentConfig call patterns
+		// v6 environmentConfig call patterns — the shim returns the unified object
 		$this->assertSame( $unified, config::getEnvironmentConfig() );
 		$this->assertSame( '/api', config::getEnvironmentConfig()->getBasePath() );
 		$this->assertFalse( config::getEnvironmentConfig()->isLocal() );
 		$this->assertSame( [], config::getEnvironmentConfig()->mongoDatabases );
 
-		// v6 appConfig call patterns
-		$this->assertSame( $unified, config::getAppConfig() );
-		$this->assertTrue( config::getAppConfig()->settings->forceMfaForPasswordUsers );
-		$this->assertSame( 'Widget API', config::getAppConfig()->app->title );
-		$this->assertSame( '', config::getAppConfig()->email->SMTPUsername );
+		// v6 appConfig call patterns — the shim returns a v6-shaped VIEW (app/email/settings)
+		$appConfig = config::getAppConfig();
+		$this->assertInstanceOf( \gcgov\framework\models\appConfig::class, $appConfig );
+		$this->assertTrue( $appConfig->settings->forceMfaForPasswordUsers );
+		$this->assertSame( 'Widget API', $appConfig->app->title );
+		$this->assertSame( '', $appConfig->email->SMTPUsername );
+		$this->assertSame( $unified->settings, $appConfig->settings, 'view shares the live section objects' );
+
+		// The view must NOT expose environment-side secrets (mongo/microsoft/payjunction/jwtAuth)
+		$viewProperties = array_keys( get_object_vars( $appConfig ) );
+		$this->assertSame( [ 'app', 'email', 'settings' ], $viewProperties );
+	}
+
+
+	public function testEnvironmentConfigClassAliasResolvesToUnifiedConfig(): void {
+		// v6 type references (\gcgov\framework\models\environmentConfig) must still autoload.
+		$this->assertTrue( class_exists( \gcgov\framework\models\environmentConfig::class ) );
+		$this->assertSame( unifiedConfig::class, ( new \ReflectionClass( \gcgov\framework\models\environmentConfig::class ) )->getName() );
+		$this->assertInstanceOf( \gcgov\framework\models\environmentConfig::class, new unifiedConfig() );
 	}
 
 	public function testIsFinalClass(): void {

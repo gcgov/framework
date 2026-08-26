@@ -18,8 +18,10 @@ use JetBrains\PhpStorm\Deprecated;
  * (the v7 merge of the former app/config/app.json and app/config/environment.json).
  *
  * Application code normally reads configuration through the static accessors on
- * \gcgov\framework\config; this model is the hydration target and what the gf CLI
- * returns for per-variant overlay reads (appContext::loadConfig('prod')).
+ * \gcgov\framework\config; this model is the hydration target (via
+ * services\environment\configLoader) and what appContext::loadConfig() returns
+ * in the gf CLI. The CLI-only `environments` section of config.json is stripped
+ * before hydration — see \gcgov\framework\models\config\variantEnvironment.
  */
 class unifiedConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 

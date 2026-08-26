@@ -2,6 +2,7 @@
 
 namespace gcgov\framework\cli;
 
+use gcgov\framework\models\config\variantEnvironment;
 use gcgov\framework\models\unifiedConfig;
 
 /**
@@ -159,77 +160,67 @@ final class appContext {
 
 
 	/**
-	 * Parse the unified {root}/config.json directly — no \app boot, no ext-mongodb.
-	 *
-	 * $variant ''     → resolve against the ambient environment ({root}/.env is loaded
-	 *                   first; the real process environment wins).
-	 * $variant 'name' → resolve the SAME config.json with the variables from
-	 *                   {root}/{name}.env applied as an overlay that takes precedence
-	 *                   over the ambient environment — a foreign-environment read (used by
-	 *                   db:restore/db:run/env) without activating anything. Variables
-	 *                   missing from the overlay fall back to ambient values, so overlay
-	 *                   files should define every environment-specific variable.
+	 * Load and resolve the ACTIVE configuration from the unified {root}/config.json —
+	 * no \app boot, no ext-mongodb. {root}/.env is loaded first; the real process
+	 * environment wins. The CLI-only `environments` section is stripped before
+	 * resolution (see loadVariantEnvironment()).
 	 *
 	 * @throws \gcgov\framework\cli\cliException
 	 */
-	public function loadConfig( string $variant = '' ): unifiedConfig {
-		$file       = $this->getConfigPath();
-		$legacyHint = $this->legacyConfigHint( $variant );
-
-		if( !file_exists( $file ) ) {
-			throw new cliException( 'Missing config file: ' . $file . '. Commit a config.json at the application root that references environment variables with %env(...) and supply values via the process environment or a .env file.' . $legacyHint );
+	public function loadConfig(): unifiedConfig {
+		if( !file_exists( $this->getConfigPath() ) ) {
+			throw new cliException( 'Missing config file: ' . $this->getConfigPath() . '. Commit a config.json at the application root that references environment variables with %env(...) and supply values via the process environment or a .env file.' . $this->legacyConfigHint() );
 		}
-
-		$overlayVars = [];
-		$source      = $file;
-		if( $variant!=='' ) {
-			$overlayPath = $this->getVariantOverlayPath( $variant );
-			if( !file_exists( $overlayPath ) ) {
-				throw new cliException( 'Missing environment overlay file: ' . $overlayPath . '. Create it with the "' . $variant . '" environment\'s variable values (see prod.env.example in the app template).' . $legacyHint );
-			}
-			try {
-				$overlayVars = \gcgov\framework\services\environment\dotEnvLoader::parseFile( $overlayPath );
-			}
-			catch( \gcgov\framework\services\environment\environmentException $e ) {
-				throw new cliException( $e->getMessage(), 0, $e );
-			}
-			$source = $this->describeConfigSource( $variant );
-		}
-
-		\gcgov\framework\services\environment\dotEnvLoader::loadOnce( $this->rootDir );
 
 		try {
-			$json = \gcgov\framework\services\environment\envVarResolver::resolveJson( (string)file_get_contents( $file ), $source, $overlayVars );
+			return \gcgov\framework\services\environment\configLoader::load( $this->rootDir );
 		}
 		catch( \gcgov\framework\services\environment\environmentException $e ) {
-			throw new cliException( 'Failed to resolve environment variables in ' . $source . ': ' . $e->getMessage(), 0, $e );
-		}
-
-		try {
-			return unifiedConfig::jsonDeserialize( $json );
-		}
-		catch( \andrewsauder\jsonDeserialize\exceptions\jsonDeserializeException $e ) {
-			throw new cliException( 'Failed to parse ' . $file . ': ' . $e->getMessage(), 0, $e );
+			throw new cliException( $e->getMessage(), 0, $e );
 		}
 	}
 
 
 	/**
-	 * Migration hint when pre-v7 config files are present (split app/config/app.json +
-	 * environment{-variant}.json instead of the unified root config.json).
+	 * Load and resolve ONE entry of config.json's `environments` section — a
+	 * foreign-environment read (db:restore --from, db:run --env, gf env <name>).
+	 * The entry's %env() references should use environment-prefixed variable names
+	 * (e.g. PROD_MONGO_URI, defined in {root}/.env), so a missing value fails
+	 * loudly instead of resolving to a local value.
+	 *
+	 * @throws \gcgov\framework\cli\cliException
 	 */
-	private function legacyConfigHint( string $variant ): string {
+	public function loadVariantEnvironment( string $name ): variantEnvironment {
+		if( !file_exists( $this->getConfigPath() ) ) {
+			throw new cliException( 'Missing config file: ' . $this->getConfigPath() . '.' . $this->legacyConfigHint( $name ) );
+		}
+
+		try {
+			return \gcgov\framework\services\environment\configLoader::loadVariantEnvironment( $this->rootDir, $name );
+		}
+		catch( \gcgov\framework\services\environment\environmentException $e ) {
+			throw new cliException( $e->getMessage() . $this->legacyConfigHint( $name ), 0, $e );
+		}
+	}
+
+
+	/**
+	 * Migration hint when pre-v7 config layouts are present: the v6 split
+	 * app/config/app.json + environment{-variant}.json files, or a pre-release
+	 * {root}/{variant}.env overlay file.
+	 */
+	private function legacyConfigHint( string $variant = '' ): string {
 		$legacyFiles = [
-			$this->getConfigDir() . '/environment.json',
-			$this->getConfigDir() . '/app.json',
+			$this->getConfigDir() . '/environment.json'  => 'app/config/environment.json',
+			$this->getConfigDir() . '/app.json'          => 'app/config/app.json',
 		];
 		if( $variant!=='' ) {
-			$legacyFiles[] = $this->getConfigDir() . '/environment-' . $variant . '.json';
-			$legacyFiles[] = $this->getConfigDir() . '/' . $variant . '.env';
+			$legacyFiles[ $this->getConfigDir() . '/environment-' . $variant . '.json' ] = 'app/config/environment-' . $variant . '.json';
+			$legacyFiles[ $this->rootDir . '/' . $variant . '.env' ]                     = $variant . '.env';
 		}
-		foreach( $legacyFiles as $legacyFile ) {
+		foreach( $legacyFiles as $legacyFile => $label ) {
 			if( file_exists( $legacyFile ) ) {
-				return ' A legacy app/config/' . basename( $legacyFile ) . ' exists — this framework version reads a single {root}/config.json (with {root}/{name}.env overlay files for variants); see readme/gf.md "Migrating a v6 app to v7".';
+				return ' A legacy ' . $label . ' exists — this framework version reads a single {root}/config.json whose `environments` section (with environment-prefixed variables like PROD_MONGO_URI in .env) replaces per-environment files; see readme/gf.md "Migrating a v6 app to v7".';
 			}
 		}
 
@@ -237,37 +228,25 @@ final class appContext {
 	}
 
 
-	/** The per-variant overlay env file read by loadConfig($variant). */
-	public function getVariantOverlayPath( string $variant ): string {
-		return $this->rootDir . '/' . $variant . '.env';
-	}
-
-
-	/** Human-readable description of where a variant's config comes from, for error/guard messages. */
+	/** Human-readable description of where an environment's config comes from, for error/guard messages. */
 	public function describeConfigSource( string $variant = '' ): string {
 		if( $variant==='' ) {
 			return $this->getConfigPath();
 		}
 
-		return $this->getConfigPath() . ' (overlay: ' . $this->getVariantOverlayPath( $variant ) . ')';
+		return $this->getConfigPath() . ' (environments.' . $variant . ')';
 	}
 
 
 	/**
-	 * Environment variant names available at the application root ({name}.env overlay files).
-	 * glob's `*` does not match a leading dot, and `*.env` does not match `*.env.example`,
-	 * so `.env`, `.env.local`, and the committed example file never appear as variants.
+	 * Environment names declared in config.json's `environments` section — committed
+	 * literals, so discovery and tab completion work on a fresh clone without any
+	 * resolution or .env loading.
 	 *
 	 * @return string[]
 	 */
 	public function getEnvironmentVariants(): array {
-		$variants = [];
-		foreach( glob( $this->rootDir . '/*.env' ) ?: [] as $file ) {
-			$variants[] = basename( $file, '.env' );
-		}
-		sort( $variants );
-
-		return $variants;
+		return \gcgov\framework\services\environment\configLoader::variantNames( $this->rootDir );
 	}
 
 }

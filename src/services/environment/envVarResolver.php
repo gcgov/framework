@@ -5,17 +5,19 @@ declare(strict_types=1);
 namespace gcgov\framework\services\environment;
 
 /**
- * Resolves Symfony-style `%env(...)%` references inside a config JSON document.
+ * Resolves Symfony-style `%env(...)%` references inside the unified {root}/config.json.
  *
  * This is a small, standalone, directly-testable resolver — it is intentionally
  * NOT coupled to Symfony's dependency-injection container (where Symfony's own
- * env processors live). It is applied to the raw JSON string of app.json /
- * environment.json before that string is handed to `jsonDeserialize()`.
+ * env processors live). The framework applies it to config.json before the JSON
+ * is handed to `jsonDeserialize()` (see configLoader); the gf CLI applies it to
+ * the `environments.{name}` subtree for foreign-environment reads.
  *
  * ## Backwards compatibility
- * A config file that contains no `%env(` substring is returned byte-for-byte
- * unchanged (including its existing malformed-JSON error behavior). Only files
- * that opt in by using `%env(...)%` are decoded and re-serialized.
+ * A config string that contains no `%env(` substring is returned byte-for-byte
+ * unchanged. Only values that opt in by using `%env(...)%` are touched. A value
+ * that still contains the literal text `%env(` AFTER resolution throws — there is
+ * no escape syntax, so a config value cannot contain that literal text.
  *
  * ## Syntax
  * `%env(PROCESSOR:...:VAR_NAME)%`
@@ -35,33 +37,43 @@ namespace gcgov\framework\services\environment;
  * Unlike Symfony — where `default:` names a fallback *parameter* — here `default`
  * takes a **literal** fallback value. It must be innermost (closest to the var),
  * and its argument is greedy: everything between `default:` and the final `:VAR`,
- * so colons are legal in the fallback:
+ * so colons are legal in the fallback (a `)` is not — the reference syntax ends
+ * at the first `)`):
  *   `%env(default:mongodb://mongodb:27017:MONGO_URI)%`
  * The fallback applies only when the variable is unset:
  *   `%env(default::VAR)%`            → '' when VAR is unset
  *   `%env(int:default:587:SMTP_PORT)%` → int 587 when SMTP_PORT is unset
+ *
+ * ## Reserved (blocked) variable names — request-data injection guard
+ * In web SAPIs, request data leaks into the ambient lookup sources: CGI/FastCGI
+ * turns request headers into `HTTP_*` variables that reach the real process
+ * environment (getenv) and, depending on `variables_order`, `$_ENV`; `$_SERVER`
+ * additionally carries request-derived CGI meta-variables (SERVER_NAME,
+ * PHP_AUTH_PW, QUERY_STRING, …). To guarantee a `%env(...)%` reference can never
+ * be satisfied by request data, names matching the CGI meta-variable set are
+ * treated as UNSET in every ambient source — `default:` applies, otherwise the
+ * reference fails loudly. Do not name real configuration variables after CGI
+ * meta-variables.
  */
 final class envVarResolver {
+
+	/** Name prefixes never resolved from the ambient environment (request-derived under web SAPIs). */
+	private const array BLOCKED_NAME_PREFIXES = [ 'HTTP_', 'SERVER_', 'REQUEST_', 'REMOTE_', 'PHP_AUTH_', 'SCRIPT_', 'DOCUMENT_' ];
+
+	/** Exact names never resolved from the ambient environment (request-derived under web SAPIs). */
+	private const array BLOCKED_NAMES = [ 'HTTPS', 'QUERY_STRING', 'CONTENT_TYPE', 'CONTENT_LENGTH', 'AUTH_TYPE', 'GATEWAY_INTERFACE', 'PHP_SELF', 'PATH_INFO', 'PATH_TRANSLATED' ];
+
 
 	/**
 	 * Resolve every `%env(...)%` reference in $json.
 	 *
-	 * @param  string                 $json               Raw config JSON.
-	 * @param  string                 $sourceDescription  Human-readable source (e.g. the file path) for error messages.
-	 * @param  array<string, string>  $overlayVars        Variables that take precedence over the ambient
-	 *                                                    environment during this resolution. Used by the gf CLI
-	 *                                                    to resolve a *foreign* environment's config (e.g.
-	 *                                                    `app/config/prod.env` for `db:restore --from=prod`) —
-	 *                                                    an explicit variant request must beat the local
-	 *                                                    environment. A variable missing from the overlay falls
-	 *                                                    back to the ambient lookup, so an incomplete overlay
-	 *                                                    silently picks up local values — overlay files should
-	 *                                                    define every environment-specific variable.
+	 * @param  string  $json               Raw config JSON.
+	 * @param  string  $sourceDescription  Human-readable source (e.g. the file path) for error messages.
 	 *
 	 * @return string|\stdClass  The original string (fast path / undecodable), or the resolved object tree.
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
-	public static function resolveJson( string $json, string $sourceDescription, array $overlayVars = [] ): string|\stdClass {
+	public static function resolveJson( string $json, string $sourceDescription ): string|\stdClass {
 		// Fast path: configs that do not opt in take a byte-identical route, preserving
 		// full backwards compatibility (including today's malformed-JSON error behavior).
 		if( !str_contains( $json, '%env(' ) ) {
@@ -75,37 +87,48 @@ final class envVarResolver {
 			return $json;
 		}
 
-		$resolved = self::resolveNode( $decoded, $sourceDescription, $overlayVars );
+		return self::resolveDecoded( $decoded, $sourceDescription );
+	}
 
-		return $resolved instanceof \stdClass ? $resolved : $json;
+
+	/**
+	 * Resolve every `%env(...)%` reference in an already-decoded config tree, in place.
+	 * Used by configLoader so the `environments` subtree can be stripped/extracted
+	 * before resolution without a re-encode round trip.
+	 *
+	 * @throws \gcgov\framework\services\environment\environmentException
+	 */
+	public static function resolveDecoded( \stdClass $decoded, string $sourceDescription ): \stdClass {
+		self::resolveNode( $decoded, $sourceDescription );
+
+		return $decoded;
 	}
 
 
 	/**
 	 * Recursively resolve string leaves within the decoded tree.
 	 *
-	 * @param  mixed                  $node
-	 * @param  string                 $sourceDescription
-	 * @param  array<string, string>  $overlayVars
+	 * @param  mixed   $node
+	 * @param  string  $sourceDescription
 	 *
 	 * @return mixed
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
-	private static function resolveNode( mixed $node, string $sourceDescription, array $overlayVars ): mixed {
+	private static function resolveNode( mixed $node, string $sourceDescription ): mixed {
 		if( $node instanceof \stdClass ) {
 			foreach( get_object_vars( $node ) as $key => $value ) {
-				$node->$key = self::resolveNode( $value, $sourceDescription, $overlayVars );
+				$node->$key = self::resolveNode( $value, $sourceDescription );
 			}
 
 			return $node;
 		}
 
 		if( is_array( $node ) ) {
-			return array_map( static fn( $value ) => self::resolveNode( $value, $sourceDescription, $overlayVars ), $node );
+			return array_map( static fn( $value ) => self::resolveNode( $value, $sourceDescription ), $node );
 		}
 
 		if( is_string( $node ) ) {
-			return self::resolveString( $node, $sourceDescription, $overlayVars );
+			return self::resolveString( $node, $sourceDescription );
 		}
 
 		return $node;
@@ -115,24 +138,22 @@ final class envVarResolver {
 	/**
 	 * Resolve `%env(...)%` occurrences in a single string leaf.
 	 *
-	 * @param  array<string, string>  $overlayVars
-	 *
 	 * @return mixed  Typed value when the whole string is one reference; a string otherwise.
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
-	private static function resolveString( string $value, string $sourceDescription, array $overlayVars ): mixed {
+	private static function resolveString( string $value, string $sourceDescription ): mixed {
 		if( !str_contains( $value, '%env(' ) ) {
 			return $value;
 		}
 
 		// Whole-string reference → typed result.
 		if( preg_match( '/^%env\(([^)]+)\)%$/', $value, $matches )===1 ) {
-			return self::resolveExpression( $matches[ 1 ], $sourceDescription, $overlayVars );
+			return self::resolveExpression( $matches[ 1 ], $sourceDescription );
 		}
 
 		// Embedded reference(s) → string substitution.
-		$result = preg_replace_callback( '/%env\(([^)]+)\)%/', static function( array $matches ) use ( $sourceDescription, $overlayVars ): string {
-			$resolved = self::resolveExpression( $matches[ 1 ], $sourceDescription, $overlayVars );
+		$result = preg_replace_callback( '/%env\(([^)]+)\)%/', static function( array $matches ) use ( $sourceDescription ): string {
+			$resolved = self::resolveExpression( $matches[ 1 ], $sourceDescription );
 			if( is_bool( $resolved ) ) {
 				return $resolved ? 'true' : 'false';
 			}
@@ -143,21 +164,26 @@ final class envVarResolver {
 				return (string)$resolved;
 			}
 			throw new environmentException( 'Cannot embed non-scalar environment value for %env(' . $matches[ 1 ] . ')% inside a larger string in ' . $sourceDescription . '. Reference it as the whole value ("%env(...)%") instead.' );
-		}, $value );
+		}, $value ) ?? $value;
 
-		return $result ?? $value;
+		// Fail loud instead of silently shipping an unresolved reference: a leftover
+		// '%env(' means malformed syntax (e.g. a ')' inside a default: literal) or a
+		// literal '%env(' in a config value — neither is supported.
+		if( str_contains( $result, '%env(' ) ) {
+			throw new environmentException( 'Unresolvable %env(...) reference in ' . $sourceDescription . ': "' . $value . '". The reference syntax ends at the first ")" — a ")" inside a default: literal is not supported, and a config value cannot contain the literal text "%env(".' );
+		}
+
+		return $result;
 	}
 
 
 	/**
 	 * Resolve one `%env(...)%` expression (the text between the parentheses).
 	 *
-	 * @param  array<string, string>  $overlayVars
-	 *
 	 * @return mixed
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
-	private static function resolveExpression( string $expression, string $sourceDescription, array $overlayVars = [] ): mixed {
+	private static function resolveExpression( string $expression, string $sourceDescription ): mixed {
 		$lastColon = strrpos( $expression, ':' );
 		if( $lastColon===false ) {
 			$varName       = $expression;
@@ -193,9 +219,12 @@ final class envVarResolver {
 		}
 
 		// Environment lookup (with optional literal default fallback).
-		$raw = self::lookupEnv( $varName, $overlayVars );
+		$raw = self::lookupEnv( $varName );
 		if( $raw===null ) {
 			if( $default===null ) {
+				if( self::isBlockedName( $varName ) ) {
+					throw new environmentException( '"' . $varName . '" is a reserved CGI meta-variable name and is never resolved from the environment (referenced as "%env(' . $expression . ')%" in ' . $sourceDescription . '). Rename the configuration variable.' );
+				}
 				throw new environmentException( 'Required environment variable "' . $varName . '" is not set (referenced as "%env(' . $expression . ')%" in ' . $sourceDescription . '). Set it in the process environment, a Docker secret, or a .env file.' );
 			}
 			$value = $default;
@@ -300,24 +329,40 @@ final class envVarResolver {
 	}
 
 
+	/** Request-derived under web SAPIs — never satisfiable from the ambient environment. */
+	private static function isBlockedName( string $name ): bool {
+		if( in_array( $name, self::BLOCKED_NAMES, true ) ) {
+			return true;
+		}
+		foreach( self::BLOCKED_NAME_PREFIXES as $prefix ) {
+			if( str_starts_with( $name, $prefix ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+
 	/**
 	 * Look up an environment variable value.
-	 * Precedence: overlay → $_ENV → $_SERVER (excluding HTTP_* request headers) → getenv().
+	 * Precedence: $_ENV → $_SERVER → getenv(). The blocked-name guard applies to ALL
+	 * three sources by name (not per source): under CGI/FastCGI SAPIs request headers
+	 * reach the real process environment (getenv) and — with `variables_order=E` —
+	 * $_ENV, so filtering only $_SERVER would be bypassable.
 	 * Returns null only when the variable is genuinely unset (a set-but-empty
-	 * variable — overlay included — resolves to '', which also suppresses `default:`).
-	 *
-	 * @param  array<string, string>  $overlayVars
+	 * variable resolves to '', which also suppresses `default:`).
 	 */
-	private static function lookupEnv( string $name, array $overlayVars = [] ): ?string {
-		if( array_key_exists( $name, $overlayVars ) ) {
-			return (string)$overlayVars[ $name ];
+	private static function lookupEnv( string $name ): ?string {
+		if( self::isBlockedName( $name ) ) {
+			return null;
 		}
 
 		if( array_key_exists( $name, $_ENV ) ) {
 			return (string)$_ENV[ $name ];
 		}
 
-		if( !str_starts_with( $name, 'HTTP_' ) && array_key_exists( $name, $_SERVER ) ) {
+		if( array_key_exists( $name, $_SERVER ) && is_scalar( $_SERVER[ $name ] ) ) {
 			return (string)$_SERVER[ $name ];
 		}
 

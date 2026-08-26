@@ -125,7 +125,18 @@ final class config {
 	 * The absolute path of the unified config file.
 	 */
 	public static function getConfigFilePath(): string {
-		return self::getRootDir() . '/config.json';
+		return \gcgov\framework\services\environment\configLoader::configFilePath( self::getRootDir() );
+	}
+
+
+	/**
+	 * @deprecated v7 — the app/config directory no longer exists (configuration is the
+	 *             single {root}/config.json; see getConfigFilePath()). Kept so v6 code
+	 *             that located files under app/config keeps resolving the same path.
+	 */
+	#[\JetBrains\PhpStorm\Deprecated( reason: 'v7: configuration is the single {root}/config.json', replacement: '\gcgov\framework\config::getConfigFilePath()' )]
+	public static function getConfigDir(): string {
+		return self::getAppDir() . '/config/';
 	}
 
 
@@ -145,20 +156,12 @@ final class config {
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	private static function setUnifiedConfig(): void {
-		$configFile = self::getConfigFilePath();
-		if( !file_exists( $configFile ) ) {
-			throw new \gcgov\framework\exceptions\configException( 'Missing config file at ' . $configFile );
-		}
-
-		\gcgov\framework\services\environment\dotEnvLoader::loadOnce( self::getRootDir() );
 		try {
-			$json = \gcgov\framework\services\environment\envVarResolver::resolveJson( (string)file_get_contents( $configFile ), $configFile );
+			self::$unifiedConfig = \gcgov\framework\services\environment\configLoader::load( self::getRootDir() );
 		}
 		catch( \gcgov\framework\services\environment\environmentException $e ) {
 			throw new \gcgov\framework\exceptions\configException( $e->getMessage(), 500, $e );
 		}
-
-		self::$unifiedConfig = unifiedConfig::jsonDeserialize( $json );
 	}
 
 
@@ -180,13 +183,13 @@ final class config {
 	/**
 	 * @deprecated v7 — use the flattened static accessors instead: `config::getAppConfig()->settings` becomes
 	 *             `config::getSettings()`, `->app` becomes `config::getApp()`, `->email` becomes `config::getEmail()`.
-	 *             Returns the unified config object, which carries the app/email/settings sections,
-	 *             so existing call sites keep working until they migrate.
+	 *             Returns a v6-shaped VIEW (app/email/settings only) over the unified config, so existing
+	 *             call sites — including ones that serialize the object — keep their exact v6 behavior.
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	#[\JetBrains\PhpStorm\Deprecated( reason: 'v7: config values are exposed directly on config', replacement: '\gcgov\framework\config' )]
-	public static function getAppConfig(): unifiedConfig {
-		return self::unifiedConfig();
+	public static function getAppConfig(): \gcgov\framework\models\appConfig {
+		return new \gcgov\framework\models\appConfig( self::unifiedConfig() );
 	}
 
 

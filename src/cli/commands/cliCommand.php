@@ -25,7 +25,7 @@ final class cliCommand extends Command {
 		$this->addOption( 'debug', null, InputOption::VALUE_NONE, 'Run the route with Xdebug step debugging enabled (replaces local-debug.bat)' );
 		$this->addOption( 'debug-host', null, InputOption::VALUE_REQUIRED, 'Xdebug client host', '127.0.0.1' );
 		$this->addOption( 'debug-port', null, InputOption::VALUE_REQUIRED, 'Xdebug client port', '9003' );
-		$this->addOption( 'php', null, InputOption::VALUE_REQUIRED, 'PHP binary (or its directory) to run the route with. Defaults to GF_PHP, then environment.json phpPath, then the PHP running gf.' );
+		$this->addOption( 'php', null, InputOption::VALUE_REQUIRED, 'PHP binary (or its directory) to run the route with. Defaults to GF_PHP, then config.json phpPath, then the PHP running gf.' );
 		$this->setHelp( 'Executes the route through the full framework lifecycle in a fresh PHP process, exactly like the legacy app/cli/index.php entry. Exit code is 0 on success and 1 when the response status is 400 or higher.' );
 	}
 
@@ -45,12 +45,13 @@ final class cliCommand extends Command {
 		$context = appContext::require();
 		$context->assertAppLoadable();
 
+		// A missing config.json is tolerated (the child process reports it through the
+		// framework lifecycle), but a PRESENT config that fails to resolve must surface
+		// loudly here — swallowing it would silently discard the configured phpPath and
+		// run the route under the wrong interpreter.
 		$unifiedConfig = null;
-		try {
+		if( file_exists( $context->getConfigPath() ) ) {
 			$unifiedConfig = $context->loadConfig();
-		}
-		catch( cliException ) {
-			// environment.json missing — the child process will report it through the framework lifecycle
 		}
 
 		$commandLine = array_merge( phpProcess::findPhpBinary( $input->getOption( 'php' ), $unifiedConfig ), phpProcess::requiredIniFlags() );

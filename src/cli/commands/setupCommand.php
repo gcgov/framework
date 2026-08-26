@@ -74,14 +74,19 @@ final class setupCommand extends Command {
 		$io->text( [ 'Application root: ' . $context->rootDir, 'To skip replacing a value, press enter.', '' ] );
 
 		// Only prompt for values whose {token} actually appears in the project tree, so
-		// templates that no longer carry a token (e.g. the prod_* config set) stop asking for it.
-		$prompts = self::filterPromptsToPresentTokens( self::PROMPTS, $context->rootDir );
-		$microsoftPrompts = self::filterPromptsToPresentTokens( self::MICROSOFT_PROMPTS, $context->rootDir );
+		// templates that no longer carry a token (e.g. the prod_* config set) stop asking
+		// for it. The haystack (one full tree read) is built once and shared.
+		$haystack         = self::buildTokenHaystack( $context->rootDir );
+		$prompts          = self::filterPromptsToPresentTokens( self::PROMPTS, $context->rootDir, $haystack );
+		$microsoftPrompts = self::filterPromptsToPresentTokens( self::MICROSOFT_PROMPTS, $context->rootDir, $haystack );
+		if( count( $prompts )===0 && count( $microsoftPrompts )===0 ) {
+			$io->text( 'No {placeholder} tokens found in the project — it appears to be already set up.' );
+		}
 		if( count( $microsoftPrompts )>0 && $io->confirm( 'Do you want to define Microsoft Azure App ids during set up?', false ) ) {
 			$prompts = array_merge( $prompts, $microsoftPrompts );
 		}
-		if( count( $prompts )===0 ) {
-			$io->text( 'No {placeholder} tokens found in the project — it appears to be already set up.' );
+		elseif( count( $microsoftPrompts )>0 && count( $prompts )===0 ) {
+			$io->text( 'Skipping the Microsoft Azure prompts — their {tokens} remain in place for a later re-run. No other tokens to replace.' );
 		}
 
 		$inputs = [];
@@ -158,14 +163,11 @@ final class setupCommand extends Command {
 
 
 	/**
-	 * Keep only the prompts whose token(s) actually appear somewhere in the project's
-	 * token-eligible files, so setup never asks for values it cannot place.
-	 *
-	 * @param array<string, string> $prompts prompt key => label
-	 *
-	 * @return array<string, string>
+	 * Concatenated contents of every token-eligible file — the haystack prompt
+	 * filtering searches. Build it once per run and pass it to each
+	 * filterPromptsToPresentTokens() call (the tree walk + reads are not cheap).
 	 */
-	public static function filterPromptsToPresentTokens( array $prompts, string $rootDir ): array {
+	public static function buildTokenHaystack( string $rootDir ): string {
 		$haystack = '';
 		foreach( tokenReplacer::findEligibleFiles( $rootDir ) as $filePath ) {
 			$contents = file_get_contents( $filePath );
@@ -173,6 +175,22 @@ final class setupCommand extends Command {
 				$haystack .= $contents;
 			}
 		}
+
+		return $haystack;
+	}
+
+
+	/**
+	 * Keep only the prompts whose token(s) actually appear somewhere in the project's
+	 * token-eligible files, so setup never asks for values it cannot place.
+	 *
+	 * @param array<string, string> $prompts  prompt key => label
+	 * @param ?string               $haystack pass buildTokenHaystack() when filtering multiple sets
+	 *
+	 * @return array<string, string>
+	 */
+	public static function filterPromptsToPresentTokens( array $prompts, string $rootDir, ?string $haystack = null ): array {
+		$haystack ??= self::buildTokenHaystack( $rootDir );
 
 		return array_filter( $prompts, function( string $key ) use ( $haystack ): bool {
 			foreach( self::tokensForPromptKey( $key ) as $token ) {

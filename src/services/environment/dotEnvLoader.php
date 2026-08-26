@@ -8,19 +8,21 @@ use Symfony\Component\Dotenv\Dotenv;
 
 /**
  * Idempotent wrapper over symfony/dotenv that loads a project's `.env` file(s)
- * once per process, before config JSON is resolved by {@see envVarResolver}.
+ * once per process, before {root}/config.json is resolved by {@see envVarResolver}.
  *
  * Precedence (highest wins): real process environment > .env.local > .env.
  * The real container/process environment always wins — Symfony's Dotenv never
  * overrides variables that are already present in the environment. `usePutenv()`
  * is enabled so that call sites reading through `getenv()` (e.g. `GF_PHP` in the
- * gf CLI) also observe values loaded from .env files.
+ * gf CLI) also observe values loaded from .env files. Either file may exist on
+ * its own — a project keeping only machine-local values in `.env.local` loads
+ * exactly like one with only `.env`.
  *
  * There is deliberately no APP_ENV cascade: environment selection is simply
  * which variables the process environment (or .env) supplies. The gf CLI reads
- * a *foreign* environment's values via per-variant overlay files
- * (app/config/{name}.env, parsed with parseFile() — never loaded into the
- * process environment).
+ * a *foreign* environment's values via the `environments.{name}` section of
+ * config.json, referencing distinctly-named variables (e.g. PROD_MONGO_URI)
+ * that live in the same `.env`.
  */
 final class dotEnvLoader {
 
@@ -29,8 +31,10 @@ final class dotEnvLoader {
 
 
 	/**
-	 * Load {root}/.env then {root}/.env.local when present. No-op when neither
+	 * Load {root}/.env and/or {root}/.env.local when present. No-op when neither
 	 * exists or when this root has already been loaded in the current process.
+	 *
+	 * @throws \gcgov\framework\services\environment\environmentException When a present file has invalid syntax
 	 */
 	public static function loadOnce( string $rootDir ): void {
 		$rootDir = rtrim( str_replace( '\\', '/', $rootDir ), '/' );
@@ -40,50 +44,22 @@ final class dotEnvLoader {
 		}
 		self::$loadedRoots[ $rootDir ] = true;
 
-		$envFile = $rootDir . '/.env';
-		if( !file_exists( $envFile ) ) {
-			// Nothing to load; still mark as processed so we don't re-stat every call.
+		// load() applies files left to right with later files overriding earlier ones,
+		// never overriding real environment variables that are already set.
+		$files = array_values( array_filter( [ $rootDir . '/.env', $rootDir . '/.env.local' ], 'file_exists' ) );
+		if( count( $files )===0 ) {
+			// Nothing to load; still marked as processed so we don't re-stat every call.
 			return;
 		}
 
 		$dotenv = new Dotenv();
 		$dotenv->usePutenv();
 
-		// load() reads .env and, when present, .env.local — never overriding real
-		// environment variables that are already set.
-		$files = [ $envFile ];
-		$localFile = $rootDir . '/.env.local';
-		if( file_exists( $localFile ) ) {
-			$files[] = $localFile;
-		}
-
-		$dotenv->load( ...$files );
-	}
-
-
-	/**
-	 * Parse a dotenv-format file into an array WITHOUT mutating the process
-	 * environment. Used by the gf CLI to build the overlay for foreign-environment
-	 * reads (e.g. app/config/prod.env for `db:restore --from=prod`).
-	 *
-	 * @return array<string, string>
-	 * @throws \gcgov\framework\services\environment\environmentException
-	 */
-	public static function parseFile( string $path ): array {
-		if( !is_file( $path ) || !is_readable( $path ) ) {
-			throw new environmentException( 'Environment file "' . $path . '" does not exist or is not readable.' );
-		}
-
-		$contents = file_get_contents( $path );
-		if( $contents===false ) {
-			throw new environmentException( 'Failed reading environment file "' . $path . '".' );
-		}
-
 		try {
-			return ( new Dotenv() )->parse( $contents, $path );
+			$dotenv->load( ...$files );
 		}
 		catch( \Symfony\Component\Dotenv\Exception\FormatException $e ) {
-			throw new environmentException( 'Invalid syntax in environment file "' . $path . '": ' . $e->getMessage(), 0, $e );
+			throw new environmentException( 'Invalid syntax in environment file (' . implode( ', ', $files ) . '): ' . $e->getMessage(), 0, $e );
 		}
 	}
 

@@ -71,9 +71,8 @@ Required config file (missing it throws `configException` at request time):
 Typical app tree (scaffolding template adds more — `srv/`, `db/`, `docker/`, `Dockerfile`, etc.):
 ```
 /api
-├── config.json                  # unified config (committed; %env(...) refs)
-├── {env}.env                    # gitignored per-variant overlays for gf db:*/env (e.g. prod.env)
-├── .env                         # gitignored local values (from .env.example)
+├── config.json                  # unified config (committed; %env(...) refs; CLI-only `environments` section)
+├── .env                         # gitignored local values incl. gf db:*/env PREFIXED vars (from .env.example)
 ├── app/{app,router,renderer,constants}.php
 │   ├── cli/index.php            # CLI entry
 │   ├── controllers/{name}.php
@@ -345,15 +344,24 @@ environment, Docker/K8s secrets, or a `.env` file — the basis of Docker hostin
 - `file` reads the file at the variable's value (Docker secrets: `%env(trim:file:MONGO_URI_FILE)%`).
 - `default:` is a **literal** fallback (deviation from Symfony), must be innermost, greedy
   argument so colons are legal: `%env(default:mongodb://mongodb:27017:MONGO_URI)%`.
-- `.env` loading (via `symfony/dotenv`, `dotEnvLoader::loadOnce()`): `{root}/.env` then
-  `.env.local`; **real environment always wins** over both. No `APP_ENV` cascade — an
-  environment IS the variable set the process is given; nothing is activated or copied (v7).
-- gf variant reads (`db:restore --from=prod`, `db:run --env=prod`, `gf env prod`) resolve the
-  same committed `config.json` with a gitignored `{root}/{variant}.env` **overlay**
-  (parsed via `dotEnvLoader::parseFile()`, precedence: overlay > real env > `.env.local` >
-  `.env` > `default:`). Overlays must define every environment-specific variable — missing ones
-  silently fall back to local values; validate with `gf env <name>`.
-- Missing required var → `configException` (runtime) / `cliException` (gf), naming the variable.
+- `.env` loading (via `symfony/dotenv`, `dotEnvLoader::loadOnce()`): `{root}/.env` and/or
+  `.env.local` (either may exist alone); **real environment always wins**; precedence
+  `real env > .env.local > .env > default:`. No `APP_ENV` cascade — an environment IS the
+  variable set the process is given; nothing is activated or copied (v7).
+- **Foreign-environment reads** (`db:restore --from=prod`, `db:run --env=prod`, `gf env prod`) come
+  from the CLI-only `environments` section of `config.json` (stripped before the active config is
+  resolved). Each `environments.{name}` entry has a literal `type` (the db:restore prod guard needs
+  it) and `mongoDatabases` referencing **environment-prefixed** variables (e.g. `PROD_MONGO_URI` in
+  `.env`) so a missing value fails loudly instead of resolving to the local value.
+  `appContext::loadVariantEnvironment($name)` reads one entry; `configLoader` is the shared load
+  pipeline for both runtime and CLI.
+- **Reserved names**: CGI meta-variable names (`HTTP_*`, `SERVER_*`, `REQUEST_*`, `REMOTE_*`,
+  `PHP_AUTH_*`, `SCRIPT_*`, `DOCUMENT_*`, `HTTPS`, `QUERY_STRING`, `CONTENT_*`, `AUTH_TYPE`,
+  `GATEWAY_INTERFACE`, `PHP_SELF`, `PATH_INFO`, `PATH_TRANSLATED`) are never resolved from the
+  ambient environment (request data can reach it under CGI/FastCGI) — they act as unset.
+- Missing/unresolvable var → `configException` (runtime) / `cliException` (gf), naming the variable.
+  A leftover `%env(` after resolution (e.g. a `)` inside a `default:` literal) is an error, not
+  silently shipped.
 
 **`{root}/config.json`** → `\gcgov\framework\models\unifiedConfig` (one file, all sections):
 ```jsonc
@@ -505,9 +513,10 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
   logic lives in `services/chrome/chromeInstallation.php`, download orchestration in
   `src/cli/chromeInstaller.php` (injectable Guzzle client — tests are network-free).
 - **Architecture** (`src/cli/`): `application` (command registration + provider discovery),
-  `appContext` (app-root locator: composer autoload path first, then cwd walk-up; lazy config
-  access via `loadConfig($variant)` — resolves the root `config.json`, applying the
-  `{root}/{variant}.env` overlay when a variant is named; never boots the request lifecycle),
+  `appContext` (app-root locator: composer autoload path first, then cwd walk-up; config access
+  via `loadConfig()` for the active config and `loadVariantEnvironment($name)` for one
+  `environments.{name}` entry — both delegate to `services\environment\configLoader`; never boots
+  the request lifecycle),
   `routeCatalog` (CLI-route enumeration via `router::getMergedRoutes()`), `phpProcess`,
   `tokenReplacer`, `mongoTools`, `cliException` (user-facing errors),
   `internal/run-route.php` (child-process route runner; maps response status ≥400 → exit 1).

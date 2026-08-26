@@ -13,12 +13,12 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand( name: 'env', description: 'List environment variants and validate that a variant\'s app/config/{name}.env overlay fully resolves app/config/environment.json' )]
+#[AsCommand( name: 'env', description: 'List config.json environments and validate that %env(...) references resolve (active config, or an environments.{name} entry)' )]
 final class envCommand extends Command {
 
 	protected function configure(): void {
-		$this->addArgument( 'environment', InputArgument::OPTIONAL, 'Variant to validate ({root}/{name}.env). Omit to list variants and check the active environment.', null, self::suggestEnvironments( ... ) );
-		$this->setHelp( 'Environment selection is environment-variable driven: the root config.json references variables with %env(...), and the process environment / {root}/.env supplies the values. This command validates that resolution. `gf env <name>` resolves config.json with the {root}/{name}.env overlay applied — use it to prove an overlay (e.g. prod.env, used by db:restore/db:run) defines every variable it needs before relying on it.' );
+		$this->addArgument( 'environment', InputArgument::OPTIONAL, 'environments.{name} entry of config.json to validate. Omit to list environments and check the active configuration.', null, self::suggestEnvironments( ... ) );
+		$this->setHelp( 'Environment selection is environment-variable driven: the root config.json references variables with %env(...), and the process environment / {root}/.env supplies the values. This command validates that resolution. `gf env <name>` resolves the environments.{name} entry of config.json — the per-environment connection info used by db:restore/db:run, referencing environment-prefixed variables (e.g. PROD_MONGO_URI in .env) — and fails naming the first unresolvable variable.' );
 	}
 
 
@@ -31,23 +31,23 @@ final class envCommand extends Command {
 		if( $environment==='' ) {
 			$variants = $context->getEnvironmentVariants();
 			$io->text( count( $variants )===0
-				? 'No variant overlay files found at the application root (create {name}.env — see prod.env.example in the app template).'
-				: 'Variant overlay files: ' . implode( ', ', array_map( fn( string $v ) => $v . '.env', $variants ) ) );
+				? 'No environments section in config.json (define environments.{name} with type + mongoDatabases to enable gf db:restore/db:run against other environments).'
+				: 'Environments defined in config.json: ' . implode( ', ', $variants ) );
 
-			$io->section( 'Active environment (config.json + ambient environment)' );
+			$io->section( 'Active configuration (config.json + ambient environment)' );
 
-			return $this->validate( $context, '', $io );
+			return $this->validateActive( $context, $io );
 		}
 
-		$io->section( 'Variant "' . $environment . '" (' . $context->describeConfigSource( $environment ) . ')' );
+		$io->section( 'Environment "' . $environment . '" (' . $context->describeConfigSource( $environment ) . ')' );
 
-		return $this->validate( $context, $environment, $io );
+		return $this->validateVariant( $context, $environment, $io );
 	}
 
 
-	private function validate( appContext $context, string $variant, SymfonyStyle $io ): int {
+	private function validateActive( appContext $context, SymfonyStyle $io ): int {
 		try {
-			$environmentConfig = $context->loadConfig( $variant );
+			$unifiedConfig = $context->loadConfig();
 		}
 		catch( cliException $e ) {
 			$io->error( $e->getMessage() );
@@ -55,15 +55,39 @@ final class envCommand extends Command {
 			return Command::FAILURE;
 		}
 
-		$io->text( 'type: ' . $environmentConfig->type );
-		if( $environmentConfig->serverName!=='' ) {
-			$io->text( 'serverName: ' . $environmentConfig->serverName );
+		$io->text( 'type: ' . $unifiedConfig->type );
+		if( $unifiedConfig->serverName!=='' ) {
+			$io->text( 'serverName: ' . $unifiedConfig->serverName );
 		}
-		if( $environmentConfig->rootUrl!=='' ) {
-			$io->text( 'rootUrl: ' . $environmentConfig->rootUrl . '  basePath: ' . $environmentConfig->getBasePath() );
+		if( $unifiedConfig->rootUrl!=='' ) {
+			$io->text( 'rootUrl: ' . $unifiedConfig->rootUrl . '  basePath: ' . $unifiedConfig->getBasePath() );
 		}
-		foreach( $environmentConfig->mongoDatabases as $mongoDatabase ) {
+		foreach( $unifiedConfig->mongoDatabases as $mongoDatabase ) {
 			$io->text( 'mongo: ' . $mongoDatabase->database . ' @ ' . mongoTools::redactUri( $mongoDatabase->uri ) . ( $mongoDatabase->default ? ' (default)' : '' ) );
+		}
+
+		$io->success( 'Resolved successfully — every %env(...) reference has a value.' );
+
+		return Command::SUCCESS;
+	}
+
+
+	private function validateVariant( appContext $context, string $environment, SymfonyStyle $io ): int {
+		try {
+			$variantEnvironment = $context->loadVariantEnvironment( $environment );
+		}
+		catch( cliException $e ) {
+			$io->error( $e->getMessage() );
+
+			return Command::FAILURE;
+		}
+
+		$io->text( 'type: ' . $variantEnvironment->type );
+		foreach( $variantEnvironment->mongoDatabases as $mongoDatabase ) {
+			$io->text( 'mongo: ' . $mongoDatabase->database . ' @ ' . mongoTools::redactUri( $mongoDatabase->uri ) . ( $mongoDatabase->default ? ' (default)' : '' ) );
+		}
+		if( $variantEnvironment->type==='' ) {
+			$io->warning( 'environments.' . $environment . ' has no "type" — set it to a committed literal (e.g. "prod"); the db:restore prod guard relies on it.' );
 		}
 
 		$io->success( 'Resolved successfully — every %env(...) reference has a value.' );

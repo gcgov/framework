@@ -32,8 +32,8 @@ Resolution runs at the two points where the framework reads the unified config J
 
 | Source | Loader |
 |--------|--------|
-| `{root}/config.json` | `\gcgov\framework\config` static accessors (`config::getBasePath()`, `getMongoDatabases()`, `getEmail()`, …) |
-| `config.json` + `{root}/{variant}.env` overlay | the `gf` CLI (`appContext::loadConfig($variant)`) — see "Per-variant overlay files" below |
+| `{root}/config.json` (active — the `environments` section is stripped) | `\gcgov\framework\config` static accessors (`config::getBasePath()`, `getMongoDatabases()`, `getEmail()`, …) |
+| `config.json`'s `environments.{name}` entry | the `gf` CLI (`appContext::loadVariantEnvironment($name)`) — see "Foreign environments" below |
 
 Untyped config regions (`appDictionary`, plugin `clientParams`, etc.) are resolved too — the
 resolver walks the whole decoded tree.
@@ -176,27 +176,53 @@ fails loudly, naming exactly what to set — dev covers them via `.env` (`cp .en
 
 ---
 
-## Per-variant overlay files (gf CLI)
+## Foreign environments (gf CLI: `environments` section)
 
-The gf CLI sometimes needs a **foreign** environment's values without activating anything —
-`gf db:restore --from=prod` must resolve prod's Mongo URI while your shell holds local values.
-That is what per-variant overlay files are for: a gitignored dotenv file
-`{root}/{variant}.env` (e.g. `prod.env`; start from the app template’s
-`prod.env.example`). `appContext::loadConfig('prod')` resolves the committed
-`config.json` with that file’s variables applied on top. Precedence for such a read:
+The gf CLI sometimes needs a **foreign** environment's connection info without activating
+anything — `gf db:restore --from=prod` must resolve prod's Mongo URI while your shell holds
+local values. This lives in an `environments` section of `config.json`, keyed by environment
+name. The runtime **strips this section** before resolving the active configuration, so its
+references never have to be set for the app to run:
 
+```jsonc
+{
+  "type": "%env(default:local:APP_TYPE)%",
+  "mongoDatabases": [ { "default": true, "database": "%env(MONGO_DATABASE)%", "uri": "%env(MONGO_URI)%" } ],
+
+  // gf-only. type is a committed LITERAL (the db:restore prod guard relies on it); the %env()
+  // references use ENVIRONMENT-PREFIXED names so a missing value fails loudly instead of
+  // silently resolving to your local value.
+  "environments": {
+    "prod": {
+      "type": "prod",
+      "mongoDatabases": [ { "default": true, "database": "%env(PROD_MONGO_DATABASE)%", "uri": "%env(PROD_MONGO_URI)%" } ]
+    }
+  }
+}
 ```
-{variant}.env overlay  >  real environment  >  .env.local  >  .env  >  default: fallback
-```
 
-Two things to know:
+Put the `PROD_*` values in the **same gitignored `.env`** you already use for local development.
+`appContext::loadVariantEnvironment('prod')` resolves only the `environments.prod` subtree.
 
-- **An overlay must define every environment-specific variable.** A variable missing from the
-  overlay falls back to your *local* value silently. `gf env <name>` validates that an overlay
-  fully resolves `config.json`, and `db:restore` refuses a pair whose source and target
-  resolve to the same database — but neither catches everything.
-- Overlay files are parsed with `dotEnvLoader::parseFile()` — they are **never loaded into the
-  process environment** and never affect the running app; only the one gf resolution sees them.
+Why prefixed names? Because the source and target of `db:restore` resolve against the same
+process environment, a *shared* name (`MONGO_URI`) would silently fall back to your local value
+when the prod value is missing. A distinct name (`PROD_MONGO_URI`) fails loudly instead. Validate
+an environment before relying on it with `gf env prod` (it reports the resolved databases with
+redacted URIs, or names the first unresolvable variable); `db:restore` additionally refuses a
+pair whose source and target resolve to the same database.
+
+---
+
+## Reserved variable names (request-data guard)
+
+In web SAPIs, request data leaks into the ambient lookup: CGI/FastCGI turns request headers into
+`HTTP_*` variables that reach `getenv()` (and, with `variables_order=E`, `$_ENV`), and `$_SERVER`
+carries request-derived CGI meta-variables. To guarantee a `%env(...)%` reference can never be
+satisfied by request data, names matching the CGI meta-variable set — `HTTP_*`, `SERVER_*`,
+`REQUEST_*`, `REMOTE_*`, `PHP_AUTH_*`, `SCRIPT_*`, `DOCUMENT_*`, and `HTTPS`, `QUERY_STRING`,
+`CONTENT_TYPE`, `CONTENT_LENGTH`, `AUTH_TYPE`, `GATEWAY_INTERFACE`, `PHP_SELF`, `PATH_INFO`,
+`PATH_TRANSLATED` — are treated as **unset** in every ambient source (`default:` still applies,
+otherwise the reference fails loudly). Do not name configuration variables after these.
 
 ---
 

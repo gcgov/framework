@@ -58,24 +58,32 @@ final class CommandsTest extends TestCase {
 		$this->assertStringNotContainsString( '/widget', $display );
 	}
 
-	public function testEnvCommandValidatesVariantOverlay(): void {
-		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"%env(default:local:TEST_ENVCMD_TYPE)%","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_URI)%"}]}' );
-		file_put_contents( $this->tempRootDir . '/prod.env', "TEST_ENVCMD_TYPE=prod\nTEST_ENVCMD_URI=mongodb://user:secret@prod:27017\n" );
+	public function testEnvCommandValidatesEnvironmentEntry(): void {
+		putenv( 'TEST_ENVCMD_URI=mongodb://user:secret@prod:27017' );
+		$_ENV[ 'TEST_ENVCMD_URI' ] = 'mongodb://user:secret@prod:27017';
+		try {
+			file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local","environments":{"prod":{"type":"prod","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_URI)%"}]}}}' );
 
-		$commandTester = new CommandTester( new envCommand() );
-		$exitCode      = $commandTester->execute( [ 'environment' => 'prod' ] );
+			$commandTester = new CommandTester( new envCommand() );
+			$exitCode      = $commandTester->execute( [ 'environment' => 'prod' ] );
 
-		$this->assertSame( 0, $exitCode );
-		$display = $commandTester->getDisplay();
-		$this->assertStringContainsString( 'type: prod', $display );
-		$this->assertStringContainsString( 'widgets', $display );
-		$this->assertStringNotContainsString( 'secret', $display, 'mongo uri credentials must be redacted' );
-		$this->assertStringContainsString( 'Resolved successfully', $display );
+			$this->assertSame( 0, $exitCode );
+			$display = $commandTester->getDisplay();
+			$this->assertStringContainsString( 'type: prod', $display );
+			$this->assertStringContainsString( 'widgets', $display );
+			$this->assertStringNotContainsString( 'secret', $display, 'mongo uri credentials must be redacted' );
+			$this->assertStringContainsString( 'Resolved successfully', $display );
+		}
+		finally {
+			unset( $_ENV[ 'TEST_ENVCMD_URI' ] );
+			putenv( 'TEST_ENVCMD_URI' );
+		}
 	}
 
 	public function testEnvCommandFailsNamingTheMissingVariable(): void {
-		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"prod","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_MISSING_URI)%"}]}' );
-		file_put_contents( $this->tempRootDir . '/prod.env', "IRRELEVANT=1\n" );
+		unset( $_ENV[ 'TEST_ENVCMD_MISSING_URI' ] );
+		putenv( 'TEST_ENVCMD_MISSING_URI' );
+		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local","environments":{"prod":{"type":"prod","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_MISSING_URI)%"}]}}}' );
 
 		$commandTester = new CommandTester( new envCommand() );
 		$exitCode      = $commandTester->execute( [ 'environment' => 'prod' ] );
@@ -84,18 +92,16 @@ final class CommandsTest extends TestCase {
 		$this->assertStringContainsString( 'TEST_ENVCMD_MISSING_URI', $commandTester->getDisplay() );
 	}
 
-	public function testEnvCommandBareListsVariantsAndChecksActiveEnvironment(): void {
-		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local"}' );
-		touch( $this->tempRootDir . '/prod.env' );
-		touch( $this->tempRootDir . '/staging.env' );
+	public function testEnvCommandBareListsEnvironmentsAndChecksActive(): void {
+		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local","environments":{"prod":{"type":"prod"},"staging":{"type":"staging"}}}' );
 
 		$commandTester = new CommandTester( new envCommand() );
 		$exitCode      = $commandTester->execute( [] );
 
 		$this->assertSame( 0, $exitCode );
 		$display = $commandTester->getDisplay();
-		$this->assertStringContainsString( 'prod.env', $display );
-		$this->assertStringContainsString( 'staging.env', $display );
+		$this->assertStringContainsString( 'prod', $display );
+		$this->assertStringContainsString( 'staging', $display );
 		$this->assertStringContainsString( 'Resolved successfully', $display );
 	}
 

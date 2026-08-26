@@ -91,27 +91,20 @@ final class DotEnvLoaderTest extends TestCase {
 	}
 
 
-	public function testParseFileReturnsMapWithoutMutatingEnvironment(): void {
-		file_put_contents( $this->tempDir . '/prod.env', "DOTENV_TEST_A=prod_value\nDOTENV_TEST_B=other\n" );
-
-		$parsed = dotEnvLoader::parseFile( $this->tempDir . '/prod.env' );
-
-		$this->assertSame( [ 'DOTENV_TEST_A' => 'prod_value', 'DOTENV_TEST_B' => 'other' ], $parsed );
-		$this->assertArrayNotHasKey( 'DOTENV_TEST_A', $_ENV );
-		$this->assertFalse( getenv( 'DOTENV_TEST_A' ) );
+	public function testLoadsEnvLocalWhenEnvAbsent(): void {
+		// A project keeping only machine-local values in .env.local (no committed .env)
+		// must still load — the documented precedence lists both files.
+		file_put_contents( $this->tempDir . '/.env.local', "DOTENV_TEST_A=only_local\n" );
+		dotEnvLoader::loadOnce( $this->tempDir );
+		$this->assertSame( 'only_local', $_ENV[ 'DOTENV_TEST_A' ] ?? null );
+		$this->assertSame( 'only_local', getenv( 'DOTENV_TEST_A' ) );
 	}
 
 
-	public function testParseFileThrowsWhenMissing(): void {
+	public function testMalformedEnvFileThrowsEnvironmentException(): void {
+		file_put_contents( $this->tempDir . '/.env', "NOT A VALID LINE ===\n" );
 		$this->expectException( \gcgov\framework\services\environment\environmentException::class );
-		dotEnvLoader::parseFile( $this->tempDir . '/does-not-exist.env' );
-	}
-
-
-	public function testParseFileThrowsOnMalformedContent(): void {
-		file_put_contents( $this->tempDir . '/bad.env', "NOT A VALID LINE ===\n" );
-		$this->expectException( \gcgov\framework\services\environment\environmentException::class );
-		dotEnvLoader::parseFile( $this->tempDir . '/bad.env' );
+		dotEnvLoader::loadOnce( $this->tempDir );
 	}
 
 

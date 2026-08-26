@@ -79,7 +79,7 @@ automatically start with some extra folders and tools.
 /api
 │...
 ├── config.json                       # committed unified config; secrets/per-env values via %env(...)
-├── prod.env.example                  # copy to prod.env (gitignored) for gf db:*/env variant reads
+├── .env.example                      # copy to .env (gitignored); holds gf db:*/env PROD_* vars too
 ├── www
 │   │...
 ├── app
@@ -98,7 +98,6 @@ automatically start with some extra folders and tools.
 ├── db
 │   └── local-createuser.js
 ├── logs
-├── .env.example                      # copy to .env (gitignored) for local development
 ├── Dockerfile
 └── docker-compose.yml
 ```
@@ -216,7 +215,7 @@ gf cli:list                      # list the app's CLI routes
 gf cert:generate-auth            # JWT signing keys (replaces create-jwt-keys.ps1)
 gf db:restore --from=prod        # pull a source env's mongo dbs into the local env
 gf db:run db/script.js           # run a mongosh script with config-managed credentials
-gf env prod                      # validate that the prod.env overlay fully resolves config.json
+gf env prod                      # validate the config.json environments.prod entry resolves
 gf setup                         # bootstrap a scaffolded app (replaces setup.ps1)
 gf deploy                        # tag-based deployment (replaces update-production.ps1)
 ```

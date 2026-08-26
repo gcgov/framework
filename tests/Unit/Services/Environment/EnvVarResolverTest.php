@@ -203,49 +203,19 @@ final class EnvVarResolverTest extends TestCase {
 	}
 
 
-	public function testOverlayBeatsAmbientEnvironment(): void {
-		$this->setEnv( 'MONGO_URI', 'mongodb://local:27017' );
-		$result = envVarResolver::resolveJson( '{"uri":"%env(MONGO_URI)%"}', 'test', [ 'MONGO_URI' => 'mongodb://prod:27017' ] );
-		$this->assertSame( 'mongodb://prod:27017', $result->uri );
+	public function testResolveDecodedResolvesInPlace(): void {
+		$this->setEnv( 'RD_URI', 'mongodb://rd:27017' );
+		$decoded = json_decode( '{"a":{"uri":"%env(RD_URI)%"}}', false );
+		$result  = envVarResolver::resolveDecoded( $decoded, 'test' );
+		$this->assertSame( $decoded, $result );
+		$this->assertSame( 'mongodb://rd:27017', $result->a->uri );
 	}
 
 
-	public function testOverlayMissFallsBackToAmbient(): void {
-		$this->setEnv( 'MONGO_URI', 'mongodb://local:27017' );
-		$result = envVarResolver::resolveJson( '{"uri":"%env(MONGO_URI)%","db":"%env(MONGO_DATABASE)%"}', 'test', [ 'MONGO_DATABASE' => 'prodDb' ] );
-		$this->assertSame( 'mongodb://local:27017', $result->uri );
-		$this->assertSame( 'prodDb', $result->db );
-	}
+	// --- request-data injection guard (see BLOCKED_NAME_PREFIXES/BLOCKED_NAMES) ---
 
-
-	public function testOverlayValueSuppressesDefault(): void {
-		$result = envVarResolver::resolveJson( '{"uri":"%env(default:mongodb://fallback:27017:MONGO_URI)%"}', 'test', [ 'MONGO_URI' => 'mongodb://overlay:27017' ] );
-		$this->assertSame( 'mongodb://overlay:27017', $result->uri );
-	}
-
-
-	public function testEmptyOverlayValueResolvesToEmptyStringAndSuppressesDefault(): void {
-		$result = envVarResolver::resolveJson( '{"secret":"%env(default:fallback:CLIENT_SECRET)%"}', 'test', [ 'CLIENT_SECRET' => '' ] );
-		$this->assertSame( '', $result->secret );
-	}
-
-
-	public function testEmptyOverlayArrayIsIdenticalToTwoArgCall(): void {
-		$this->setEnv( 'MONGO_URI', 'mongodb://ambient:27017' );
-		$json = '{"uri":"%env(MONGO_URI)%","port":"%env(int:default:587:SMTP_PORT)%"}';
-		$this->assertEquals( envVarResolver::resolveJson( $json, 'test' ), envVarResolver::resolveJson( $json, 'test', [] ) );
-	}
-
-
-	public function testOverlayWorksWithProcessorsAndEmbeddedRefs(): void {
-		$result = envVarResolver::resolveJson( '{"port":"%env(int:SMTP_PORT)%","url":"https://%env(HOSTNAME_X)%/api"}', 'test', [ 'SMTP_PORT' => '2525', 'HOSTNAME_X' => 'prod.example.com' ] );
-		$this->assertSame( 2525, $result->port );
-		$this->assertSame( 'https://prod.example.com/api', $result->url );
-	}
-
-
-	public function testServerHttpKeysAreNotUsedForLookup(): void {
-		// A malicious request header must not satisfy an env reference.
+	public function testHttpPrefixedNameIsNeverResolvedFromServer(): void {
+		// A malicious request header exposed via $_SERVER must not satisfy an env reference.
 		$_SERVER[ 'HTTP_MONGO_URI' ] = 'mongodb://attacker';
 		$this->expectException( environmentException::class );
 		try {
@@ -254,6 +224,67 @@ final class EnvVarResolverTest extends TestCase {
 		finally {
 			unset( $_SERVER[ 'HTTP_MONGO_URI' ] );
 		}
+	}
+
+
+	public function testHttpPrefixedNameIsNeverResolvedFromGetenv(): void {
+		// Under CGI/FastCGI the header reaches the real process env; the guard must
+		// still hold at the getenv() fallback, not just $_SERVER.
+		putenv( 'HTTP_EVIL_VAR=attacker' );
+		try {
+			envVarResolver::resolveJson( '{"v":"%env(HTTP_EVIL_VAR)%"}', 'test' );
+			$this->fail( 'Expected environmentException' );
+		}
+		catch( environmentException ) {
+			$this->addToAssertionCount( 1 );
+		}
+		finally {
+			putenv( 'HTTP_EVIL_VAR' );
+		}
+	}
+
+
+	public function testServerMetaVariableNameIsNeverResolved(): void {
+		// $_SERVER['SERVER_NAME'] is request-derived (Host header); a %env(SERVER_NAME)
+		// reference must fail loud, not silently bind to the request value.
+		$_SERVER[ 'SERVER_NAME' ] = 'evil.host';
+		try {
+			envVarResolver::resolveJson( '{"v":"%env(SERVER_NAME)%"}', 'test' );
+			$this->fail( 'Expected environmentException' );
+		}
+		catch( environmentException $e ) {
+			$this->assertStringContainsString( 'reserved', $e->getMessage() );
+		}
+		// (leave $_SERVER['SERVER_NAME'] — it is part of the real server env; restored in tearDown)
+	}
+
+
+	public function testBlockedNameStillAllowsDefaultFallback(): void {
+		// A blocked name is treated as unset, so an explicit default: still applies.
+		$_SERVER[ 'HTTP_X' ] = 'attacker';
+		try {
+			$result = envVarResolver::resolveJson( '{"v":"%env(default:safe:HTTP_X)%"}', 'test' );
+			$this->assertSame( 'safe', $result->v );
+		}
+		finally {
+			unset( $_SERVER[ 'HTTP_X' ] );
+		}
+	}
+
+
+	// --- fail-loud on unresolvable references ---
+
+	public function testParenInsideDefaultLiteralThrowsInsteadOfSilentPassthrough(): void {
+		$this->expectException( environmentException::class );
+		envVarResolver::resolveJson( '{"v":"%env(default:pa)ss:SOME_UNSET_VAR_X)%"}', 'test' );
+	}
+
+
+	public function testLiteralEnvPrefixInValueThrows(): void {
+		// A value containing the literal '%env(' that isn't a valid reference must not
+		// ship unresolved.
+		$this->expectException( environmentException::class );
+		envVarResolver::resolveJson( '{"v":"prefix %env( not a ref"}', 'test' );
 	}
 
 
