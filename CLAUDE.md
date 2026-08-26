@@ -327,7 +327,8 @@ returning group keys, and tag constraints with `groups: [...]`.
 `\app\app`'s file location, so `config::getAppDir()`, `getRootDir()`, `getModelsDir()`, `getSrvDir()`,
 `getTempDir()`, `getConfigFilePath()` all work without setup. Configuration values come from the
 **unified `{root}/config.json`** (hydrated once into `\gcgov\framework\models\unifiedConfig`) and are
-exposed **directly on `config`** — there are no separate appConfig/environmentConfig objects (v7):
+exposed **directly on `config`** — there are no separate appConfig/environmentConfig objects (v7;
+`getAppConfig()`/`getEnvironmentConfig()` remain as deprecated pass-throughs returning the unified object):
 `config::getApp()` (title/guid), `getEmail()`, `getSettings()`, `getType()`, `isLocal()`,
 `getServerName()`, `getRootUrl()`, `getBaseUrl()`, `getBasePath()`, `getCookieUrl()`, `getPhpPath()`,
 `getLogging()`, `getMongoDatabases()`, `getSqlDatabases()`, `getDefaultSqlDatabase()`,

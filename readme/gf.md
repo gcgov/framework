@@ -222,9 +222,11 @@ are gone. To move an app onto v7:
    `/*.env`. Local values go in `{root}/.env` (from `.env.example`).
 3. Delete `environment-{env}.json`, `composer-{env}.json`, and `www/web-{env}.config`; commit
    `composer.json` (and a static `www/web.config`, if the app still runs on IIS).
-4. Replace `config::getAppConfig()` / `config::getEnvironmentConfig()` calls in app code with
+4. Migrate `config::getAppConfig()` / `config::getEnvironmentConfig()` calls in app code to
    the flattened accessors (`config::getBasePath()`, `config::getSettings()`,
-   `config::getMongoDatabases()`, …).
+   `config::getMongoDatabases()`, …). The old methods still work — they are **deprecated
+   pass-throughs** returning the unified config object, which carries every former field and
+   helper — so this step can happen gradually after the upgrade.
 5. Bump `gcgov/framework` to `^v7.0`; verify with `gf env` and `gf env prod`.
 
 ---

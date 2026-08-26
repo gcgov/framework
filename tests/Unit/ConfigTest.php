@@ -74,6 +74,29 @@ final class ConfigTest extends TestCase {
 		$this->assertSame( $unified->settings, config::getSettings() );
 	}
 
+	public function testDeprecatedPassThroughsPreserveV6CallPatterns(): void {
+		$unified                                    = new unifiedConfig();
+		$unified->type                              = 'prod';
+		$unified->basePath                          = '/api/';
+		$unified->settings->forceMfaForPasswordUsers = true;
+		$unified->app->title                        = 'Widget API';
+
+		$prop = new \ReflectionProperty( config::class, 'unifiedConfig' );
+		$prop->setValue( null, $unified );
+
+		// v6 environmentConfig call patterns
+		$this->assertSame( $unified, config::getEnvironmentConfig() );
+		$this->assertSame( '/api', config::getEnvironmentConfig()->getBasePath() );
+		$this->assertFalse( config::getEnvironmentConfig()->isLocal() );
+		$this->assertSame( [], config::getEnvironmentConfig()->mongoDatabases );
+
+		// v6 appConfig call patterns
+		$this->assertSame( $unified, config::getAppConfig() );
+		$this->assertTrue( config::getAppConfig()->settings->forceMfaForPasswordUsers );
+		$this->assertSame( 'Widget API', config::getAppConfig()->app->title );
+		$this->assertSame( '', config::getAppConfig()->email->SMTPUsername );
+	}
+
 	public function testIsFinalClass(): void {
 		$this->assertTrue( ( new \ReflectionClass( config::class ) )->isFinal() );
 	}

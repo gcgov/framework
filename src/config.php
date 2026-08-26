@@ -162,6 +162,34 @@ final class config {
 	}
 
 
+	// --- deprecated v6 pass-throughs (migration aids) ---
+
+	/**
+	 * @deprecated v7 — use the flattened static accessors instead: `config::getEnvironmentConfig()->getBasePath()`
+	 *             becomes `config::getBasePath()`, `->mongoDatabases` becomes `config::getMongoDatabases()`, etc.
+	 *             Returns the unified config object, which carries every former environmentConfig field and helper,
+	 *             so existing call sites keep working until they migrate.
+	 * @throws \gcgov\framework\exceptions\configException
+	 */
+	#[\JetBrains\PhpStorm\Deprecated( reason: 'v7: config values are exposed directly on config', replacement: '\gcgov\framework\config' )]
+	public static function getEnvironmentConfig(): unifiedConfig {
+		return self::unifiedConfig();
+	}
+
+
+	/**
+	 * @deprecated v7 — use the flattened static accessors instead: `config::getAppConfig()->settings` becomes
+	 *             `config::getSettings()`, `->app` becomes `config::getApp()`, `->email` becomes `config::getEmail()`.
+	 *             Returns the unified config object, which carries the app/email/settings sections,
+	 *             so existing call sites keep working until they migrate.
+	 * @throws \gcgov\framework\exceptions\configException
+	 */
+	#[\JetBrains\PhpStorm\Deprecated( reason: 'v7: config values are exposed directly on config', replacement: '\gcgov\framework\config' )]
+	public static function getAppConfig(): unifiedConfig {
+		return self::unifiedConfig();
+	}
+
+
 	// --- application identity (formerly app.json) ---
 
 	/** @throws \gcgov\framework\exceptions\configException */
