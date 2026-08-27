@@ -34,9 +34,31 @@ final class RouteCatalogTest extends TestCase {
 		rmdir( $this->tempRootDir );
 	}
 
-	public function testGetMergedRoutesReturnsAppRoutes(): void {
+	public function testGetMergedRoutesReturnsFrameworkAndAppRoutes(): void {
 		$routes = router::getMergedRoutes( [] );
-		$this->assertCount( 3, $routes );
+
+		// 3 stub app routes + the framework's own two health routes, which every
+		// application gets whether it asked for them or not.
+		$this->assertCount( 5, $routes );
+	}
+
+
+	public function testHealthRoutesAreContributedFirstAndUnauthenticated(): void {
+		$routes = router::getMergedRoutes( [] );
+
+		$healthRoutes = array_values( array_filter( $routes, fn( $route ) => str_contains( $route->route, '/health' ) ) );
+		$this->assertCount( 2, $healthRoutes );
+
+		$paths = array_map( fn( $route ) => $route->route, $healthRoutes );
+		$this->assertSame( [ '/api/health', '/api/health/ready' ], $paths );
+
+		foreach( $healthRoutes as $healthRoute ) {
+			$this->assertFalse( $healthRoute->authentication, 'a prober holds no token' );
+		}
+
+		// Contributed before anything else, so an application defining its own /health
+		// collides at boot rather than shadowing the deploy gate.
+		$this->assertSame( '/api/health', $routes[ 0 ]->route );
 	}
 
 	public function testGetCliRoutesFiltersToCliMethodOnly(): void {

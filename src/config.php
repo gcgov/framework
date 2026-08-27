@@ -227,12 +227,6 @@ final class config {
 	}
 
 
-	/** @throws \gcgov\framework\exceptions\configException */
-	public static function getServerName(): string {
-		return self::unifiedConfig()->serverName;
-	}
-
-
 	/** Normalized (no trailing slash). @throws \gcgov\framework\exceptions\configException */
 	public static function getRootUrl(): string {
 		return self::unifiedConfig()->getRootUrl();
@@ -248,18 +242,6 @@ final class config {
 	/** Normalized '/api' style ('/' at domain root). @throws \gcgov\framework\exceptions\configException */
 	public static function getBasePath(): string {
 		return self::unifiedConfig()->getBasePath();
-	}
-
-
-	/** @throws \gcgov\framework\exceptions\configException */
-	public static function getCookieUrl(): string {
-		return self::unifiedConfig()->cookieUrl;
-	}
-
-
-	/** @throws \gcgov\framework\exceptions\configException */
-	public static function getPhpPath(): string {
-		return self::unifiedConfig()->phpPath;
 	}
 
 
@@ -308,6 +290,31 @@ final class config {
 	/** @throws \gcgov\framework\exceptions\configException */
 	public static function getJwtAuth(): jwtAuth {
 		return self::unifiedConfig()->jwtAuth;
+	}
+
+
+	/** Token issuer, defaulting to the application's root url. @throws \gcgov\framework\exceptions\configException */
+	public static function getTokenIssuedBy(): string {
+		return self::unifiedConfig()->getTokenIssuedBy();
+	}
+
+
+	/** Token audience, defaulting to the application's base path. @throws \gcgov\framework\exceptions\configException */
+	public static function getTokenPermittedFor(): string {
+		return self::unifiedConfig()->getTokenPermittedFor();
+	}
+
+
+	/**
+	 * Directory holding the JWT signing keypairs — the configured jwtAuth.keyPath, or
+	 * the default {root}/srv/jwtCertificates. Always returned with a trailing slash.
+	 *
+	 * @throws \gcgov\framework\exceptions\configException
+	 */
+	public static function getJwtKeyPath(): string {
+		$configured = trim( self::unifiedConfig()->jwtAuth->keyPath );
+
+		return rtrim( $configured!=='' ? str_replace( '\\', '/', $configured ) : self::getSrvDir() . 'jwtCertificates', '/' ) . '/';
 	}
 
 

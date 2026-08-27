@@ -19,9 +19,8 @@ final class dbRunCommand extends Command {
 	protected function configure(): void {
 		$this->addArgument( 'script', InputArgument::REQUIRED, 'Path to the .js script to execute with mongosh' );
 		$this->addArgument( 'mongoshArgs', InputArgument::IS_ARRAY | InputArgument::OPTIONAL, 'Extra arguments passed through to mongosh (prefix with --)' );
-		$this->addOption( 'env', null, InputOption::VALUE_REQUIRED, 'Environment to read the connection from (resolves the environments.{env} entry of config.json). Omit to use the active configuration.', '', envCommand::suggestEnvironments( ... ) );
 		$this->addOption( 'db', null, InputOption::VALUE_REQUIRED, 'Database name from the mongoDatabases config to run against. Default: the entry marked default (or the only entry).' );
-		$this->setHelp( 'Replaces per-script mongosh invocations with hardcoded connection strings, e.g.: gf db:run db/create-admin.js --env=local. Everything after -- is forwarded to mongosh.' );
+		$this->setHelp( 'Replaces per-script mongosh invocations with hardcoded connection strings, e.g.: gf db:run db/create-admin.js. Everything after -- is forwarded to mongosh.' );
 	}
 
 
@@ -33,8 +32,7 @@ final class dbRunCommand extends Command {
 			throw new cliException( 'Script not found: ' . $scriptPath );
 		}
 
-		$environment    = (string)$input->getOption( 'env' );
-		$mongoDatabases = $environment==='' ? $context->loadConfig()->mongoDatabases : $context->loadVariantEnvironment( $environment )->mongoDatabases;
+		$mongoDatabases = $context->loadConfig()->mongoDatabases;
 
 		$databaseName = (string)( $input->getOption( 'db' ) ?? '' );
 		$mongoDatabase = null;

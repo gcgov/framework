@@ -71,8 +71,8 @@ Required config file (missing it throws `configException` at request time):
 Typical app tree (scaffolding template adds more — `srv/`, `db/`, `docker/`, `Dockerfile`, etc.):
 ```
 /api
-├── config.json                  # unified config (committed; %env(...) refs; CLI-only `environments` section)
-├── .env                         # gitignored local values incl. gf db:*/env PREFIXED vars (from .env.example)
+├── config.json                  # unified config (committed; every %env(...) ref is REQUIRED)
+├── .env                         # gitignored local values (generate with `gf env --init`)
 ├── app/{app,router,renderer,constants}.php
 │   ├── cli/index.php            # CLI entry
 │   ├── controllers/{name}.php
@@ -329,9 +329,12 @@ returning group keys, and tag constraints with `groups: [...]`.
 exposed **directly on `config`** — there are no separate appConfig/environmentConfig objects (v7;
 `getAppConfig()`/`getEnvironmentConfig()` remain as deprecated pass-throughs returning the unified object):
 `config::getApp()` (title/guid), `getEmail()`, `getSettings()`, `getType()`, `isLocal()`,
-`getServerName()`, `getRootUrl()`, `getBaseUrl()`, `getBasePath()`, `getCookieUrl()`, `getPhpPath()`,
-`getLogging()`, `getMongoDatabases()`, `getSqlDatabases()`, `getDefaultSqlDatabase()`,
-`getSqlDatabaseByName($name)`, `getMicrosoft()`, `getJwtAuth()`, `getPayjunction()`, `getAppDictionary()`.
+`getRootUrl()`, `getBaseUrl()`, `getBasePath()`, `getLogging()`, `getMongoDatabases()`,
+`getSqlDatabases()`, `getDefaultSqlDatabase()`, `getSqlDatabaseByName($name)`, `getMicrosoft()`,
+`getJwtAuth()`, `getTokenIssuedBy()`, `getTokenPermittedFor()`, `getJwtKeyPath()`,
+`getPayjunction()`, `getAppDictionary()`.
+`serverName`, `cookieUrl` and `phpPath` were **removed in v7** — nothing read them (confirmed across
+the framework and all five framework services). The PHP interpreter is `GF_PHP` / `gf cli --php`.
 
 ### Environment variables in config — `%env(...)%`
 config.json supports **Symfony-style `%env(...)%` references**, resolved at load time by
@@ -339,29 +342,28 @@ config.json supports **Symfony-style `%env(...)%` references**, resolved at load
 This keeps secrets out of the committed config and lets them come from the process
 environment, Docker/K8s secrets, or a `.env` file — the basis of Docker hosting.
 - A file with no `%env(` substring is loaded byte-for-byte as before. You opt in by writing `%env(...)%`.
+- **Every reference is REQUIRED.** There is no `default:` processor (removed in v7), and a variable
+  set to the empty string counts as unset. A missing value is a startup failure naming the variable.
+  A value that does not vary between environments is written as a literal, not referenced.
 - Whole-value ref → typed result (`"%env(int:SMTP_PORT)%"` → `587`); embedded ref → string
-  substitution. Processors (right-to-left): `string,bool,not,int,float,trim,file,base64,json,default`.
-- `file` reads the file at the variable's value (Docker secrets: `%env(trim:file:MONGO_URI_FILE)%`).
-- `default:` is a **literal** fallback (deviation from Symfony), must be innermost, greedy
-  argument so colons are legal: `%env(default:mongodb://mongodb:27017:MONGO_URI)%`.
+  substitution. Processors, applied right-to-left: `secret, file, trim, int, bool, json`.
+- **`secret`** implements the conventional `_FILE` indirection: `%env(secret:MONGO_URI)%` reads the
+  file named by `MONGO_URI_FILE` if that is set, else `MONGO_URI`. A `_FILE` pointing at a missing
+  file is a hard error and **never** falls back — that fallback would silently substitute a stale
+  environment value for a secret that failed to mount. This is what lets one committed config.json
+  serve both a developer machine (plain vars in `.env`) and production (files at `/run/secrets`).
+  `secret` must be the innermost processor.
 - `.env` loading (via `symfony/dotenv`, `dotEnvLoader::loadOnce()`): `{root}/.env` and/or
   `.env.local` (either may exist alone); **real environment always wins**; precedence
-  `real env > .env.local > .env > default:`. No `APP_ENV` cascade — an environment IS the
-  variable set the process is given; nothing is activated or copied (v7).
-- **Foreign-environment reads** (`db:restore --from=prod`, `db:run --env=prod`, `gf env prod`) come
-  from the CLI-only `environments` section of `config.json` (stripped before the active config is
-  resolved). Each `environments.{name}` entry has a literal `type` (the db:restore prod guard needs
-  it) and `mongoDatabases` referencing **environment-prefixed** variables (e.g. `PROD_MONGO_URI` in
-  `.env`) so a missing value fails loudly instead of resolving to the local value.
-  `appContext::loadVariantEnvironment($name)` reads one entry; `configLoader` is the shared load
-  pipeline for both runtime and CLI.
+  `real env > .env.local > .env`. No `APP_ENV` cascade — an environment IS the variable set the
+  process is given; nothing is activated or copied.
 - **Reserved names**: CGI meta-variable names (`HTTP_*`, `SERVER_*`, `REQUEST_*`, `REMOTE_*`,
   `PHP_AUTH_*`, `SCRIPT_*`, `DOCUMENT_*`, `HTTPS`, `QUERY_STRING`, `CONTENT_*`, `AUTH_TYPE`,
   `GATEWAY_INTERFACE`, `PHP_SELF`, `PATH_INFO`, `PATH_TRANSLATED`) are never resolved from the
   ambient environment (request data can reach it under CGI/FastCGI) — they act as unset.
 - Missing/unresolvable var → `configException` (runtime) / `cliException` (gf), naming the variable.
-  A leftover `%env(` after resolution (e.g. a `)` inside a `default:` literal) is an error, not
-  silently shipped.
+- `gf env --list` prints every referenced variable; `gf env --init` writes the `.env` skeleton from
+  config.json itself, so the manifest cannot drift.
 
 **`{root}/config.json`** → `\gcgov\framework\models\unifiedConfig` (one file, all sections):
 ```jsonc
@@ -369,13 +371,16 @@ environment, Docker/K8s secrets, or a `.env` file — the basis of Docker hostin
   "app":      { "title": "...", "guid": "..." },
   "email":    { "fromAddress": "", "fromName": "", "useSMTP": false, "SMTPHost": "", "SMTPPort": 587, "...": "" },
   "settings": { "useSession": false, "forceMfaForPasswordUsers": false },
-  "type": "local|prod", "serverName": "", "rootUrl": "", "basePath": "", "cookieUrl": "",
-  "logging": { "lifecycle": false, "renderer": false },   // lifecycle=true logs the whole request pipeline
+  "type": "local|prod", "rootUrl": "", "basePath": "",
+  "logging": { "lifecycle": false, "renderer": false,
+               "destination": "stderr|file|both" },       // stderr (default) emits JSON lines
   "mongoDatabases": [ { "default": true, "database": "", "uri": "mongodb+srv://...", "logging": true,
                         "audit": false, "include_meta": true, "encryption": { /* optional */ } } ],
   "sqlDatabases":  [ { "default": true, "name": "", "dsn": "", "readAccount": {}, "writeAccount": {} } ],
   "microsoft":     { "clientId": "", "clientSecret": "", "tenant": "", "driveId": "", "fromAddress": "" },
-  "jwtAuth":       { "tokenIssuedBy": "", "tokenPermittedFor": "", "redirectAfterLoginUrl": "", "redirectAfterLogoutUrl": "" },
+  "jwtAuth":       { "tokenIssuedBy": "", "tokenPermittedFor": "",   // empty → derived from rootUrl / basePath
+                     "redirectAfterLoginUrl": "", "redirectAfterLogoutUrl": "",
+                     "keyPath": "" },                     // empty → {root}/srv/jwtCertificates
   "appDictionary": { }   // free-form key/values plugins read (e.g. cronMonitorUrl)
 }
 ```
@@ -386,7 +391,7 @@ environment, Docker/K8s secrets, or a `.env` file — the basis of Docker hostin
 
 | Call | Purpose |
 |------|---------|
-| `services\log::{debug,info,notice,warning,error,critical,alert,emergency}($channel,$msg,$context=[])` | Monolog-backed; writes `/logs/{channel}.log`. |
+| `services\log::{debug,info,notice,warning,error,critical,alert,emergency}($channel,$msg,$context=[])` | Monolog-backed. Destination is `logging.destination`: `stderr` (default, JSON lines) / `file` (`/logs/{channel}.log`) / `both`. |
 | `services\request::getAuthUser(): authUser` | Request-scoped authenticated user (roles, id, email…). Populated by the auth plugin's guard. |
 | `services\request::getUserClassFqdn(): string` | Resolves the app's user model FQDN: `\app\models\user`, else the Mongo `…\models\auth\user`. |
 | `services\request::getPostData(): array` | Parsed request body. |
@@ -443,6 +448,11 @@ List routes with `gf cli:list`; debug with `gf cli /path --debug`.
 - There's no auth without an auth plugin; and auth plugins register a **global guard** over every
   `authentication:true` route in the app.
 - Set `logging.lifecycle=true` in `config.json` to trace the entire pipeline when debugging routing/auth.
+- Every `%env()` reference is required — there is no default and `FOO=` counts as unset. `gf env` says
+  which one is missing.
+- Logs go to **stderr** by default, not `logs/*.log`. An app on IIS sets `logging.destination: "file"`.
+- JWT signing keys are gitignored, so they are never in a built image: a container must point
+  `jwtAuth.keyPath` at a provisioned directory or authentication cannot work.
 
 ---
 
@@ -485,6 +495,9 @@ at a time (oauth-server OR auth-ms-front).
 - Tests: `composer test` (PHPUnit; `tests/` mirrors `src/`, uses `tests/Shims/MongoDBShims.php` so unit tests
   run without a live Mongo). `composer ci` = phpstan + test.
 - GitHub Actions (`.github/workflows/ci.yml`) runs on PHP 8.4. **Run `composer ci` before pushing.**
+- Every application gets `GET {basePath}/health` (liveness, no I/O) and `/health/ready` (readiness,
+  pings Mongo, 503 when a dependency is down) from `services/health/` — contributed by the framework
+  router itself, not opt-in, because a deploy pipeline cannot gate on an endpoint an app might omit.
 - When you change `src/`, add/adjust the mirrored test under `tests/Unit/…`.
 
 ---
@@ -503,9 +516,17 @@ at a time (oauth-server OR auth-ms-front).
 The framework ships a symfony/console-based command line tool exposed as a composer bin: every
 consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `readme/gf.md`.
 
-- **Commands** (canonical names; `gf db restore` auto-resolves to `db:restore`): `cli`, `cli:list`,
-  `cert:generate-auth`, `chrome:install`, `chrome:update`, `chrome:status`, `db:restore`, `db:run`,
-  `env`, `setup`, `deploy`, `completion`, `completion:powershell`. Bare `gf` lists everything.
+- **Commands** (canonical names; `gf db run` auto-resolves to `db:run`): `cli`, `cli:list`,
+  `cert:generate-auth`, `chrome:install`, `chrome:update`, `chrome:status`, `db:run`, `env`, `init`,
+  `migrate`, `completion`, `completion:powershell`. Bare `gf` lists everything.
+  **Removed in v7**: `deploy` (a Release is an immutable image pinned by digest — see ADR 0002),
+  `db:restore` (it required production credentials on every workstation), and `setup` (replaced by
+  the non-interactive `init`, since bootstrap belongs in a scaffolding script or a devcontainer).
+- **`gf env`** validates that config.json resolves; `--list` prints every referenced variable and
+  whether it is currently set; `--init` writes the `.env` skeleton (refuses to overwrite without
+  `--force`). **`gf init --title="…"`** bootstraps a scaffolded app: title, guid, `.env`, JWT keys,
+  chrome. **`gf migrate`** converts a v6 app — its `plan()` is a pure function of `app.json` +
+  `environment.json`, so it is unit-tested rather than run hopefully.
 - **chrome-headless-shell**: `chrome:install`/`chrome:update` download the Chrome for Testing
   Stable build for the current platform into `srv/chrome/{version}/` (manifest:
   `srv/chrome/installation.json`; needs ext-zip; `gf setup` auto-installs, `--skip-chrome` opts
@@ -513,20 +534,18 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
   logic lives in `services/chrome/chromeInstallation.php`, download orchestration in
   `src/cli/chromeInstaller.php` (injectable Guzzle client — tests are network-free).
 - **Architecture** (`src/cli/`): `application` (command registration + provider discovery),
-  `appContext` (app-root locator: composer autoload path first, then cwd walk-up; config access
-  via `loadConfig()` for the active config and `loadVariantEnvironment($name)` for one
-  `environments.{name}` entry — both delegate to `services\environment\configLoader`; never boots
-  the request lifecycle),
+  `appContext` (app-root locator: composer autoload path first, then cwd walk-up; config via
+  `loadConfig()` and `configReferences()`, both delegating to `services\environment\configLoader`;
+  never boots the request lifecycle),
   `routeCatalog` (CLI-route enumeration via `router::getMergedRoutes()`), `phpProcess`,
-  `tokenReplacer`, `mongoTools`, `cliException` (user-facing errors),
+  `mongoTools`, `cliException` (user-facing errors),
   `internal/run-route.php` (child-process route runner; maps response status ≥400 → exit 1).
-  `gf env` validates config resolution (it stopped copying files in v7); `gf setup` prompts only
-  for `{token}`s present in the tree (`setupCommand::filterPromptsToPresentTokens`).
+
 - **Command tiers**: no context (list/help/completion — must work anywhere, including this repo);
-  root-only (env, db:*, cert:*, deploy, setup — config JSON only, no `\app` boot);
+  root-only (env, db:run, cert:*, init, migrate — config JSON only, no `\app` boot);
   app-boot (cli, cli:list — `assertAppLoadable()`; `\app\app::_before()` is deliberately NOT called).
 - **`gf cli <route>`** always spawns a fresh PHP child process (Xdebug flags need fresh INI;
-  isolates `exit()`; interpreter picked via `--php` > `GF_PHP` > config.json `phpPath` > current).
+  isolates `exit()`; interpreter picked via `--php` > `GF_PHP` > current).
   The interpreter must be the CLI binary — `php-cgi`/`php-fpm`/`php-win` are swapped for the
   `php`/`php.exe` beside them, else rejected; the child always gets `-dregister_argc_argv=1`, and
   `internal/run-route.php` assumes neither `$argv` nor `STDERR` exists until it has checked.
@@ -535,9 +554,9 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
   Discovery is fail-safe — errors never break gf (visible with `-v`).
 - When adding a command: lowercase lowerCamelCase class in `src/cli/commands/`, `#[AsCommand]`
   attribute, register it in `application::__construct()`, throw `cliException` for user errors,
-  add a mirrored test in `tests/Unit/Cli/` (external binaries are exercised via pure
-  arg-builder methods, e.g. `dbRestoreCommand::buildDumpCommand()`).
-- The legacy `scripts/*.ps1` are deprecated wrappers kept for backward compatibility.
+  add a mirrored test in `tests/Unit/Cli/`. Keep the logic in a pure static method the test can
+  call directly (e.g. `migrateCommand::plan()`, `envCommand::renderEnvFile()`) rather than driving
+  everything through CommandTester.
 
 ---
 
@@ -554,3 +573,10 @@ The five canonical roles, each label string equal to its role name. See `docs/ag
 ### Domain docs
 
 Single-context: one root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.md`.
+
+`CONTEXT.md` is the glossary — read it before naming anything. Note especially that **Environment**
+(a deployment target, defined by the variable set a process is given) and **Zone** (a network
+isolation boundary) are different things, and that v6's "environment variant" no longer exists.
+
+ADRs recorded so far: 0001 fail-closed configuration · 0002 immutable Release pinned by digest ·
+0003 secrets never decrypt in CI or on hosts · 0004 one self-hosted runner per Zone.

@@ -2,7 +2,6 @@
 
 namespace gcgov\framework\cli;
 
-use gcgov\framework\models\unifiedConfig;
 use Symfony\Component\Process\PhpExecutableFinder;
 
 /**
@@ -25,9 +24,10 @@ final class phpProcess {
 	 * Priority:
 	 *  1. --php option
 	 *  2. GF_PHP environment variable
-	 *  3. config.json phpPath (a directory per the setup convention — php/php.exe appended;
-	 *     a full binary path, optionally followed by CLI arguments, is also accepted)
-	 *  4. Symfony PhpExecutableFinder / PHP_BINARY (the interpreter running gf)
+	 *  3. Symfony PhpExecutableFinder / PHP_BINARY (the interpreter running gf)
+	 *
+	 * The interpreter is a property of the machine, not of the application, so it is
+	 * deliberately not configurable in the committed config.json.
 	 *
 	 * Sources 1-3 may include trailing arguments after the binary, e.g.
 	 * `C:\path\php.exe -c C:\path\php.ini` — the binary and each argument become separate
@@ -40,7 +40,7 @@ final class phpProcess {
 	 * @return string[] Command array — first element is the binary, remaining elements are arguments.
 	 * @throws \gcgov\framework\cli\cliException
 	 */
-	public static function findPhpBinary( ?string $optionValue = null, ?unifiedConfig $unifiedConfig = null ): array {
+	public static function findPhpBinary( ?string $optionValue = null ): array {
 		$candidates = [];
 
 		if( $optionValue!==null && $optionValue!=='' ) {
@@ -50,10 +50,6 @@ final class phpProcess {
 		$envValue = getenv( 'GF_PHP' );
 		if( $envValue!==false && $envValue!=='' ) {
 			$candidates[ $envValue ] = 'GF_PHP environment variable';
-		}
-
-		if( $unifiedConfig!==null && $unifiedConfig->phpPath!=='' ) {
-			$candidates[ $unifiedConfig->phpPath ] = 'config.json phpPath';
 		}
 
 		foreach( $candidates as $candidate => $sourceDescription ) {
@@ -87,7 +83,7 @@ final class phpProcess {
 
 	/**
 	 * Ensure the resolved command runs the CLI interpreter. php-cgi/php-fpm/php-win are
-	 * silently swapped for the php/php.exe beside them (a phpPath copied from an IIS FastCGI
+	 * silently swapped for the php/php.exe beside them (a path copied from an IIS FastCGI
 	 * handler mapping is the common case); when no CLI binary is there, fail with an
 	 * actionable message instead of letting the child process die on undefined $argv/STDERR.
 	 *
@@ -109,7 +105,7 @@ final class phpProcess {
 			return $command;
 		}
 
-		throw new cliException( 'PHP binary from ' . $sourceDescription . ' is not the CLI interpreter: ' . $binary . '. gf runs application code through the PHP CLI binary (php/php.exe) — php-cgi, php-fpm, and php-win cannot run CLI routes ($argv and STDERR are unavailable there). No CLI binary was found beside it, so point --php, GF_PHP, or config.json phpPath at php.exe or the directory containing it.' );
+		throw new cliException( 'PHP binary from ' . $sourceDescription . ' is not the CLI interpreter: ' . $binary . '. gf runs application code through the PHP CLI binary (php/php.exe) — php-cgi, php-fpm, and php-win cannot run CLI routes ($argv and STDERR are unavailable there). No CLI binary was found beside it, so point --php or GF_PHP at php.exe or the directory containing it.' );
 	}
 
 

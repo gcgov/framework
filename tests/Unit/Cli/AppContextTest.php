@@ -90,7 +90,6 @@ final class AppContextTest extends TestCase {
 		$this->assertNotNull( $context );
 		$root = str_replace( '\\', '/', $this->tempRootDir );
 		$this->assertSame( $root . '/app', $context->getAppDir() );
-		$this->assertSame( $root . '/app/config', $context->getConfigDir() );
 		$this->assertSame( $root . '/srv', $context->getSrvDir() );
 		$this->assertSame( $root . '/vendor/autoload.php', $context->getVendorAutoloadPath() );
 	}
@@ -150,117 +149,20 @@ final class AppContextTest extends TestCase {
 	}
 
 
-	public function testActiveConfigStripsEnvironmentsSection(): void {
-		// The CLI-only environments section must not have to resolve for the active
-		// config to load — its PROD_* variables are unset here.
-		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
-			'type'           => 'local',
-			'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => 'mongodb://local:27017' ] ],
-			'environments'   => [ 'prod' => [ 'type' => 'prod', 'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => '%env(PROD_MONGO_URI)%' ] ] ] ],
-		] ) );
-		$context = appContext::locate( $this->tempRootDir );
-		$this->assertNotNull( $context );
-		$active = $context->loadConfig();
-		$this->assertSame( 'local', $active->type );
-		$this->assertSame( 'mongodb://local:27017', $active->mongoDatabases[ 0 ]->uri );
-	}
 
 
-	public function testLoadVariantEnvironmentResolvesEntry(): void {
-		$_ENV[ 'PROD_MONGO_URI' ] = 'mongodb://prod:27017/widgets';
-		putenv( 'PROD_MONGO_URI=mongodb://prod:27017/widgets' );
-		try {
-			file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
-				'type'           => 'local',
-				'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => 'mongodb://local:27017' ] ],
-				'environments'   => [ 'prod' => [ 'type' => 'prod', 'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => '%env(PROD_MONGO_URI)%' ] ] ] ],
-			] ) );
-			$context = appContext::locate( $this->tempRootDir );
-			$this->assertNotNull( $context );
-			$prod = $context->loadVariantEnvironment( 'prod' );
-			$this->assertSame( 'prod', $prod->type );
-			$this->assertSame( 'mongodb://prod:27017/widgets', $prod->mongoDatabases[ 0 ]->uri );
-		}
-		finally {
-			unset( $_ENV[ 'PROD_MONGO_URI' ] );
-			putenv( 'PROD_MONGO_URI' );
-		}
-	}
 
 
-	public function testLoadVariantEnvironmentThrowsCliExceptionWhenPrefixedVarMissing(): void {
-		unset( $_ENV[ 'PROD_MONGO_URI' ] );
-		putenv( 'PROD_MONGO_URI' );
-		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
-			'type'         => 'local',
-			'environments' => [ 'prod' => [ 'type' => 'prod', 'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => '%env(PROD_MONGO_URI)%' ] ] ] ],
-		] ) );
-		$context = appContext::locate( $this->tempRootDir );
-		$this->assertNotNull( $context );
-		try {
-			$context->loadVariantEnvironment( 'prod' );
-			$this->fail( 'Expected cliException' );
-		}
-		catch( cliException $e ) {
-			$this->assertStringContainsString( 'PROD_MONGO_URI', $e->getMessage() );
-		}
-	}
 
 
-	public function testLoadVariantEnvironmentThrowsWhenEntryMissing(): void {
-		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local","environments":{"staging":{"type":"staging"}}}' );
-		$context = appContext::locate( $this->tempRootDir );
-		$this->assertNotNull( $context );
-		try {
-			$context->loadVariantEnvironment( 'prod' );
-			$this->fail( 'Expected cliException' );
-		}
-		catch( cliException $e ) {
-			$this->assertStringContainsString( 'No "prod" entry', $e->getMessage() );
-			$this->assertStringContainsString( 'staging', $e->getMessage() );
-		}
-	}
 
 
-	public function testLoadVariantEnvironmentMentionsMigrationWhenLegacyFileExists(): void {
-		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local"}' );
-		file_put_contents( $this->tempRootDir . '/app/config/environment-prod.json', '{"type":"prod"}' );
-		$context = appContext::locate( $this->tempRootDir );
-		$this->assertNotNull( $context );
-		try {
-			$context->loadVariantEnvironment( 'prod' );
-			$this->fail( 'Expected cliException' );
-		}
-		catch( cliException $e ) {
-			$this->assertStringContainsString( 'environment-prod.json', $e->getMessage() );
-			$this->assertStringContainsString( 'Migrating a v6 app to v7', $e->getMessage() );
-		}
-	}
 
 
-	public function testDescribeConfigSource(): void {
-		$context = appContext::locate( $this->tempRootDir );
-		$this->assertNotNull( $context );
-		$root = str_replace( '\\', '/', $this->tempRootDir );
-		$this->assertSame( $root . '/config.json', $context->describeConfigSource() );
-		$this->assertSame( $root . '/config.json (environments.prod)', $context->describeConfigSource( 'prod' ) );
-	}
 
 
-	public function testGetEnvironmentVariantsListsEnvironmentsSection(): void {
-		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local","environments":{"prod":{"type":"prod"},"staging":{"type":"staging"}}}' );
-		$context = appContext::locate( $this->tempRootDir );
-		$this->assertNotNull( $context );
-		$this->assertSame( [ 'prod', 'staging' ], $context->getEnvironmentVariants() );
-	}
 
 
-	public function testGetEnvironmentVariantsEmptyWithoutEnvironmentsSection(): void {
-		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local"}' );
-		$context = appContext::locate( $this->tempRootDir );
-		$this->assertNotNull( $context );
-		$this->assertSame( [], $context->getEnvironmentVariants() );
-	}
 
 	private function deleteDirectory( string $directory ): void {
 		if( !is_dir( $directory ) ) {

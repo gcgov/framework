@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace gcgov\framework\services\environment;
 
-use gcgov\framework\models\config\variantEnvironment;
 use gcgov\framework\models\unifiedConfig;
 
 /**
@@ -15,11 +14,6 @@ use gcgov\framework\models\unifiedConfig;
  *
  * All failures are thrown as the neutral environmentException; each caller wraps
  * it in its layer's exception type (configException / cliException).
- *
- * The `environments` section of config.json is CLI-only (foreign-environment
- * connection info) and is stripped before the active configuration is resolved,
- * so its environment-prefixed `%env()` references (e.g. PROD_MONGO_URI) never
- * have to be set for the app to run.
  */
 final class configLoader {
 
@@ -32,8 +26,7 @@ final class configLoader {
 
 
 	/**
-	 * Load and resolve the ACTIVE configuration (ambient environment; the
-	 * `environments` section is stripped).
+	 * Load and resolve the configuration.
 	 *
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
@@ -47,7 +40,6 @@ final class configLoader {
 			return self::hydrate( unifiedConfig::class, $decoded, $configFile );
 		}
 
-		unset( $decoded->environments );
 		envVarResolver::resolveDecoded( $decoded, $configFile );
 
 		return self::hydrate( unifiedConfig::class, $decoded, $configFile );
@@ -55,54 +47,25 @@ final class configLoader {
 
 
 	/**
-	 * Load and resolve ONE entry of the `environments` section — a
-	 * foreign-environment read for the gf CLI.
+	 * Every variable config.json references, WITHOUT resolving any of them — so it works
+	 * on a machine where none are set yet. Backs `gf env --list` and `gf env --init`, which
+	 * is what keeps the .env manifest from drifting away from config.json.
 	 *
+	 * @return array<string, bool>  variable name => is a secret
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
-	public static function loadVariantEnvironment( string $rootDir, string $name ): variantEnvironment {
-		$configFile = self::configFilePath( $rootDir );
-		$decoded    = self::readAndDecode( $rootDir, $configFile );
-
-		if( is_string( $decoded ) ) {
-			throw new environmentException( 'Failed to parse ' . $configFile . ': the file is not a valid JSON object.' );
-		}
-
-		$environments = $decoded->environments ?? null;
-		if( !$environments instanceof \stdClass || !isset( $environments->{$name} ) || !$environments->{$name} instanceof \stdClass ) {
-			$available = $environments instanceof \stdClass ? array_keys( get_object_vars( $environments ) ) : [];
-			throw new environmentException( 'No "' . $name . '" entry in the environments section of ' . $configFile . '. ' . ( count( $available )>0 ? 'Defined environments: ' . implode( ', ', $available ) . '.' : 'Define one, e.g. "environments": { "' . $name . '": { "type": "' . $name . '", "mongoDatabases": [ { "default": true, "database": "%env(' . strtoupper( $name ) . '_MONGO_DATABASE)%", "uri": "%env(' . strtoupper( $name ) . '_MONGO_URI)%" } ] } } with the variable values in your .env.' ) );
-		}
-
-		$source = $configFile . ' (environments.' . $name . ')';
-		envVarResolver::resolveDecoded( $environments->{$name}, $source );
-
-		return self::hydrate( variantEnvironment::class, $environments->{$name}, $source );
-	}
-
-
-	/**
-	 * Environment names declared in config.json's `environments` section.
-	 * Read WITHOUT resolution or .env loading — the keys are literals — so this
-	 * is safe for tab completion in any state.
-	 *
-	 * @return string[]
-	 */
-	public static function variantNames( string $rootDir ): array {
+	public static function references( string $rootDir ): array {
 		$configFile = self::configFilePath( $rootDir );
 		if( !file_exists( $configFile ) ) {
-			return [];
+			throw new environmentException( 'Missing config file: ' . $configFile );
 		}
 
 		$decoded = json_decode( (string)file_get_contents( $configFile ), false );
-		if( !$decoded instanceof \stdClass || !( $decoded->environments ?? null ) instanceof \stdClass ) {
-			return [];
+		if( !$decoded instanceof \stdClass ) {
+			throw new environmentException( 'Failed to parse ' . $configFile . ': the file is not a valid JSON object.' );
 		}
 
-		$names = array_keys( get_object_vars( $decoded->environments ) );
-		sort( $names );
-
-		return $names;
+		return envVarResolver::collectReferences( $decoded, $configFile );
 	}
 
 

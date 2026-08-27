@@ -2,7 +2,6 @@
 
 namespace gcgov\framework\cli;
 
-use gcgov\framework\models\config\variantEnvironment;
 use gcgov\framework\models\unifiedConfig;
 
 /**
@@ -111,11 +110,6 @@ final class appContext {
 	}
 
 
-	public function getConfigDir(): string {
-		return $this->rootDir . '/app/config';
-	}
-
-
 	/** The unified {root}/config.json read by loadConfig(). */
 	public function getConfigPath(): string {
 		return $this->rootDir . '/config.json';
@@ -160,16 +154,14 @@ final class appContext {
 
 
 	/**
-	 * Load and resolve the ACTIVE configuration from the unified {root}/config.json —
-	 * no \app boot, no ext-mongodb. {root}/.env is loaded first; the real process
-	 * environment wins. The CLI-only `environments` section is stripped before
-	 * resolution (see loadVariantEnvironment()).
+	 * Load and resolve {root}/config.json — no \app boot, no ext-mongodb.
+	 * {root}/.env is loaded first; the real process environment wins.
 	 *
 	 * @throws \gcgov\framework\cli\cliException
 	 */
 	public function loadConfig(): unifiedConfig {
 		if( !file_exists( $this->getConfigPath() ) ) {
-			throw new cliException( 'Missing config file: ' . $this->getConfigPath() . '. Commit a config.json at the application root that references environment variables with %env(...) and supply values via the process environment or a .env file.' . $this->legacyConfigHint() );
+			throw new cliException( 'Missing config file: ' . $this->getConfigPath() . '. Commit a config.json at the application root that references environment variables with %env(...) and supply values via the process environment or a .env file. Migrating a v6 application? Run `gf migrate`.' );
 		}
 
 		try {
@@ -182,71 +174,24 @@ final class appContext {
 
 
 	/**
-	 * Load and resolve ONE entry of config.json's `environments` section — a
-	 * foreign-environment read (db:restore --from, db:run --env, gf env <name>).
-	 * The entry's %env() references should use environment-prefixed variable names
-	 * (e.g. PROD_MONGO_URI, defined in {root}/.env), so a missing value fails
-	 * loudly instead of resolving to a local value.
+	 * Every variable config.json references, and whether each is a secret. Read without
+	 * resolving anything, so it works on a fresh clone with no .env.
 	 *
+	 * @return array<string, bool>
 	 * @throws \gcgov\framework\cli\cliException
 	 */
-	public function loadVariantEnvironment( string $name ): variantEnvironment {
-		if( !file_exists( $this->getConfigPath() ) ) {
-			throw new cliException( 'Missing config file: ' . $this->getConfigPath() . '.' . $this->legacyConfigHint( $name ) );
-		}
-
+	public function configReferences(): array {
 		try {
-			return \gcgov\framework\services\environment\configLoader::loadVariantEnvironment( $this->rootDir, $name );
+			return \gcgov\framework\services\environment\configLoader::references( $this->rootDir );
 		}
 		catch( \gcgov\framework\services\environment\environmentException $e ) {
-			throw new cliException( $e->getMessage() . $this->legacyConfigHint( $name ), 0, $e );
+			throw new cliException( $e->getMessage(), 0, $e );
 		}
 	}
 
 
-	/**
-	 * Migration hint when pre-v7 config layouts are present: the v6 split
-	 * app/config/app.json + environment{-variant}.json files, or a pre-release
-	 * {root}/{variant}.env overlay file.
-	 */
-	private function legacyConfigHint( string $variant = '' ): string {
-		$legacyFiles = [
-			$this->getConfigDir() . '/environment.json'  => 'app/config/environment.json',
-			$this->getConfigDir() . '/app.json'          => 'app/config/app.json',
-		];
-		if( $variant!=='' ) {
-			$legacyFiles[ $this->getConfigDir() . '/environment-' . $variant . '.json' ] = 'app/config/environment-' . $variant . '.json';
-			$legacyFiles[ $this->rootDir . '/' . $variant . '.env' ]                     = $variant . '.env';
-		}
-		foreach( $legacyFiles as $legacyFile => $label ) {
-			if( file_exists( $legacyFile ) ) {
-				return ' A legacy ' . $label . ' exists — this framework version reads a single {root}/config.json whose `environments` section (with environment-prefixed variables like PROD_MONGO_URI in .env) replaces per-environment files; see readme/gf.md "Migrating a v6 app to v7".';
-			}
-		}
-
-		return '';
-	}
-
-
-	/** Human-readable description of where an environment's config comes from, for error/guard messages. */
-	public function describeConfigSource( string $variant = '' ): string {
-		if( $variant==='' ) {
-			return $this->getConfigPath();
-		}
-
-		return $this->getConfigPath() . ' (environments.' . $variant . ')';
-	}
-
-
-	/**
-	 * Environment names declared in config.json's `environments` section — committed
-	 * literals, so discovery and tab completion work on a fresh clone without any
-	 * resolution or .env loading.
-	 *
-	 * @return string[]
-	 */
-	public function getEnvironmentVariants(): array {
-		return \gcgov\framework\services\environment\configLoader::variantNames( $this->rootDir );
+	public function getEnvFilePath(): string {
+		return $this->rootDir . '/.env';
 	}
 
 }

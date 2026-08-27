@@ -42,7 +42,6 @@ if ( !class_exists( '\app\router' ) ) {
 // load a JSON file from disk.
 $envConfig = new \gcgov\framework\models\unifiedConfig();
 $envConfig->basePath = 'api';
-$envConfig->serverName = 'test.local';
 $envConfig->rootUrl = 'http://test.local';
 $envConfig->type = 'local';
 $prop = new \ReflectionProperty( \gcgov\framework\config::class, 'unifiedConfig' );

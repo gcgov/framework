@@ -32,11 +32,10 @@ final class application extends \Symfony\Component\Console\Application {
 			                    new commands\chromeInstallCommand(),
 			                    new commands\chromeUpdateCommand(),
 			                    new commands\chromeStatusCommand(),
-			                    new commands\dbRestoreCommand(),
 			                    new commands\dbRunCommand(),
 			                    new commands\envCommand(),
-			                    new commands\setupCommand(),
-			                    new commands\deployCommand(),
+			                    new commands\initCommand(),
+			                    new commands\migrateCommand(),
 			                    new commands\completionPowershellCommand(),
 		                    ] );
 

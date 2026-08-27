@@ -10,7 +10,6 @@ use gcgov\framework\cli\commands\certGenerateAuthCommand;
 use gcgov\framework\cli\commands\cliListCommand;
 use gcgov\framework\cli\commands\completionPowershellCommand;
 use gcgov\framework\cli\commands\envCommand;
-use gcgov\framework\cli\commands\setupCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -58,72 +57,10 @@ final class CommandsTest extends TestCase {
 		$this->assertStringNotContainsString( '/widget', $display );
 	}
 
-	public function testEnvCommandValidatesEnvironmentEntry(): void {
-		putenv( 'TEST_ENVCMD_URI=mongodb://user:secret@prod:27017' );
-		$_ENV[ 'TEST_ENVCMD_URI' ] = 'mongodb://user:secret@prod:27017';
-		try {
-			file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local","environments":{"prod":{"type":"prod","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_URI)%"}]}}}' );
 
-			$commandTester = new CommandTester( new envCommand() );
-			$exitCode      = $commandTester->execute( [ 'environment' => 'prod' ] );
 
-			$this->assertSame( 0, $exitCode );
-			$display = $commandTester->getDisplay();
-			$this->assertStringContainsString( 'type: prod', $display );
-			$this->assertStringContainsString( 'widgets', $display );
-			$this->assertStringNotContainsString( 'secret', $display, 'mongo uri credentials must be redacted' );
-			$this->assertStringContainsString( 'Resolved successfully', $display );
-		}
-		finally {
-			unset( $_ENV[ 'TEST_ENVCMD_URI' ] );
-			putenv( 'TEST_ENVCMD_URI' );
-		}
-	}
 
-	public function testEnvCommandFailsNamingTheMissingVariable(): void {
-		unset( $_ENV[ 'TEST_ENVCMD_MISSING_URI' ] );
-		putenv( 'TEST_ENVCMD_MISSING_URI' );
-		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local","environments":{"prod":{"type":"prod","mongoDatabases":[{"default":true,"database":"widgets","uri":"%env(TEST_ENVCMD_MISSING_URI)%"}]}}}' );
 
-		$commandTester = new CommandTester( new envCommand() );
-		$exitCode      = $commandTester->execute( [ 'environment' => 'prod' ] );
-
-		$this->assertSame( 1, $exitCode );
-		$this->assertStringContainsString( 'TEST_ENVCMD_MISSING_URI', $commandTester->getDisplay() );
-	}
-
-	public function testEnvCommandBareListsEnvironmentsAndChecksActive(): void {
-		file_put_contents( $this->tempRootDir . '/config.json', '{"type":"local","environments":{"prod":{"type":"prod"},"staging":{"type":"staging"}}}' );
-
-		$commandTester = new CommandTester( new envCommand() );
-		$exitCode      = $commandTester->execute( [] );
-
-		$this->assertSame( 0, $exitCode );
-		$display = $commandTester->getDisplay();
-		$this->assertStringContainsString( 'prod', $display );
-		$this->assertStringContainsString( 'staging', $display );
-		$this->assertStringContainsString( 'Resolved successfully', $display );
-	}
-
-	public function testSetupPromptFilteringKeepsOnlyPresentTokens(): void {
-		file_put_contents( $this->tempRootDir . '/app/config/app.json', '{"title":"{app_title}"}' );
-		file_put_contents( $this->tempRootDir . '/app/router.php', '<?php $p = "{app_relative_url}";' );
-
-		$filtered = setupCommand::filterPromptsToPresentTokens( [
-			'app_title'          => 'Title',
-			'app_base_path'      => 'Base path',       // present via derived {app_relative_url}
-			'prod_app_root_url'  => 'PROD root url',   // absent
-			'prod_app_base_path' => 'PROD base path',  // absent
-		], $this->tempRootDir );
-
-		$this->assertSame( [ 'app_title', 'app_base_path' ], array_keys( $filtered ) );
-	}
-
-	public function testTokensForPromptKeyMapsBasePathToBothTokens(): void {
-		$this->assertSame( [ '{app_base_path}', '{app_relative_url}' ], setupCommand::tokensForPromptKey( 'app_base_path' ) );
-		$this->assertSame( [ '{prod_app_base_path}', '{prod_app_relative_url}' ], setupCommand::tokensForPromptKey( 'prod_app_base_path' ) );
-		$this->assertSame( [ '{app_title}' ], setupCommand::tokensForPromptKey( 'app_title' ) );
-	}
 
 	public function testCertGenerateAuthCreatesKeypairsAndGuidsJson(): void {
 		if( !extension_loaded( 'openssl' ) ) {
@@ -181,34 +118,7 @@ final class CommandsTest extends TestCase {
 		$this->assertStringContainsString( '-a' . \Symfony\Component\Console\Command\CompleteCommand::COMPLETION_API_VERSION, $display );
 	}
 
-	public function testSetupRefusesNonInteractiveMode(): void {
-		$commandTester = new CommandTester( new setupCommand() );
 
-		$this->expectException( \gcgov\framework\cli\cliException::class );
-		$commandTester->execute( [], [ 'interactive' => false ] );
-	}
-
-	public function testSetupBuildReplacementTableDerivesUrlTokens(): void {
-		$setupCommand = new setupCommand();
-
-		$replacements = $setupCommand->buildReplacementTable( [
-			'app_title'          => 'Widget API',
-			'app_base_path'      => 'api',
-			'prod_app_base_path' => '/api/',
-			'app_root_url'       => 'https://local.example.gov/',
-			'prod_app_absolute_path' => 'E:\Web\api\\',
-		], '/var/www/widget' );
-
-		$this->assertSame( 'Widget API', $replacements[ '{app_title}' ] );
-		$this->assertSame( '/api/', $replacements[ '{app_base_path}' ] );
-		$this->assertSame( 'api/', $replacements[ '{app_relative_url}' ] );
-		$this->assertSame( '/api/', $replacements[ '{prod_app_base_path}' ] );
-		$this->assertSame( 'api/', $replacements[ '{prod_app_relative_url}' ] );
-		$this->assertSame( 'https://local.example.gov', $replacements[ '{app_root_url}' ] );
-		$this->assertSame( 'E:\Web\api', $replacements[ '{prod_app_absolute_path}' ] );
-		$this->assertSame( '/var/www/widget', $replacements[ '{app_absolute_path}' ] );
-		$this->assertNotSame( '', $replacements[ '{app_guid}' ] );
-	}
 
 	public function testDynamicRouteCompletionSuggestsCliRoutes(): void {
 		$suggestions = \gcgov\framework\cli\commands\cliCommand::suggestCliRoutes( \Symfony\Component\Console\Completion\CompletionInput::fromTokens( [ 'gf', 'cli', '' ], 2 ) );

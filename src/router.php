@@ -23,6 +23,11 @@ final class router {
 			log::debug( 'Framework Lifecycle', '-Router- constructing framework\router' );
 			log::debug( 'Framework Lifecycle', '-Router- check for routers in services' );
 		}
+
+		// The framework's own routes (health checks) come first and are not opt-in: a
+		// deploy pipeline cannot gate on an endpoint an application chose not to have.
+		$this->serviceRouters[] = new \gcgov\framework\services\health\router();
+
 		foreach($serviceNamespaces as $serviceNamespace) {
 			try {
 				$reflectionClassOfServiceRouter = new ReflectionClass( $serviceNamespace . '\router' );

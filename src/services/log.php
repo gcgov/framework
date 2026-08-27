@@ -2,6 +2,7 @@
 namespace gcgov\framework\services;
 
 use Monolog\Logger;
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\StreamHandler;
 
 final class log {
@@ -75,13 +76,52 @@ final class log {
 			}
 		}
 
-		$handlers = [
-			new StreamHandler( \gcgov\framework\config::getRootDir() . '/logs/' . $channel . '.log' )
-		];
-
-		self::$loggers[ $channel ] = new Logger( $channel, $handlers );
+		self::$loggers[ $channel ] = new Logger( $channel, self::buildHandlers( $channel ) );
 
 		return self::$loggers[ $channel ];
+	}
+
+
+	/**
+	 * Handlers for the configured destination.
+	 *
+	 * stderr is the default and what a container needs: its filesystem does not survive
+	 * a deploy, so file logs would be per-replica and destroyed on every release. Records
+	 * go out as JSON lines so a collector can query them. Applications still hosted on
+	 * IIS set logging.destination to "file".
+	 *
+	 * Configuration may itself be unreadable when something fails early in the lifecycle,
+	 * and a logger that throws while reporting an error is worse than a misplaced log —
+	 * so an unreadable config falls back to stderr.
+	 *
+	 * @return \Monolog\Handler\HandlerInterface[]
+	 */
+	private static function buildHandlers( string $channel ): array {
+		try {
+			$logging = \gcgov\framework\config::getLogging();
+		}
+		catch( \gcgov\framework\exceptions\configException ) {
+			return [ self::stderrHandler() ];
+		}
+
+		$handlers = [];
+		if( $logging->writesToStderr() ) {
+			$handlers[] = self::stderrHandler();
+		}
+		if( $logging->writesToFile() ) {
+			$handlers[] = new StreamHandler( \gcgov\framework\config::getRootDir() . '/logs/' . $channel . '.log' );
+		}
+
+		// An unrecognised destination still has to log somewhere.
+		return count( $handlers )>0 ? $handlers : [ self::stderrHandler() ];
+	}
+
+
+	private static function stderrHandler(): StreamHandler {
+		$handler = new StreamHandler( 'php://stderr' );
+		$handler->setFormatter( new JsonFormatter() );
+
+		return $handler;
 	}
 
 }

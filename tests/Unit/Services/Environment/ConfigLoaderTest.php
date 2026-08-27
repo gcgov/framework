@@ -56,19 +56,6 @@ final class ConfigLoaderTest extends TestCase {
 	}
 
 
-	public function testLoadStripsEnvironmentsSectionBeforeResolving(): void {
-		// PROD_MONGO_URI is unset — the active load must succeed anyway because the
-		// environments section is removed before resolution.
-		$this->writeConfig( [
-			'type'           => 'local',
-			'mongoDatabases' => [ [ 'default' => true, 'database' => 'db', 'uri' => 'mongodb://local:27017' ] ],
-			'environments'   => [ 'prod' => [ 'type' => 'prod', 'mongoDatabases' => [ [ 'default' => true, 'database' => 'db', 'uri' => '%env(PROD_MONGO_URI)%' ] ] ] ],
-		] );
-
-		$config = configLoader::load( $this->tempDir );
-		$this->assertInstanceOf( unifiedConfig::class, $config );
-		$this->assertSame( 'local', $config->type );
-	}
 
 
 	public function testLoadThrowsWhenConfigMissing(): void {
@@ -77,59 +64,14 @@ final class ConfigLoaderTest extends TestCase {
 	}
 
 
-	public function testLoadVariantEnvironmentResolvesPrefixedVariables(): void {
-		putenv( 'PROD_MONGO_URI=mongodb://prod:27017/db' );
-		$_ENV[ 'PROD_MONGO_URI' ] = 'mongodb://prod:27017/db';
-		$this->writeConfig( [
-			'type'         => 'local',
-			'environments' => [ 'prod' => [ 'type' => 'prod', 'mongoDatabases' => [ [ 'default' => true, 'database' => 'db', 'uri' => '%env(PROD_MONGO_URI)%' ] ] ] ],
-		] );
-
-		$variant = configLoader::loadVariantEnvironment( $this->tempDir, 'prod' );
-		$this->assertSame( 'prod', $variant->type );
-		$this->assertSame( 'mongodb://prod:27017/db', $variant->mongoDatabases[ 0 ]->uri );
-	}
 
 
-	public function testLoadVariantEnvironmentThrowsWhenEntryMissing(): void {
-		$this->writeConfig( [ 'type' => 'local', 'environments' => [ 'staging' => [ 'type' => 'staging' ] ] ] );
-		try {
-			configLoader::loadVariantEnvironment( $this->tempDir, 'prod' );
-			$this->fail( 'Expected environmentException' );
-		}
-		catch( environmentException $e ) {
-			$this->assertStringContainsString( 'No "prod" entry', $e->getMessage() );
-			$this->assertStringContainsString( 'staging', $e->getMessage() );
-		}
-	}
 
 
-	public function testLoadVariantEnvironmentThrowsWhenNoEnvironmentsSection(): void {
-		$this->writeConfig( [ 'type' => 'local' ] );
-		$this->expectException( environmentException::class );
-		configLoader::loadVariantEnvironment( $this->tempDir, 'prod' );
-	}
 
 
-	public function testVariantNamesListsSortedKeysWithoutResolution(): void {
-		// %env references present but unset — variantNames must not resolve them.
-		$this->writeConfig( [
-			'type'         => 'local',
-			'environments' => [
-				'staging' => [ 'type' => 'staging', 'mongoDatabases' => [ [ 'uri' => '%env(STAGING_UNSET)%' ] ] ],
-				'prod'    => [ 'type' => 'prod', 'mongoDatabases' => [ [ 'uri' => '%env(PROD_UNSET)%' ] ] ],
-			],
-		] );
-
-		$this->assertSame( [ 'prod', 'staging' ], configLoader::variantNames( $this->tempDir ) );
-	}
 
 
-	public function testVariantNamesEmptyWhenNoEnvironmentsOrNoFile(): void {
-		$this->assertSame( [], configLoader::variantNames( $this->tempDir ) );
-		$this->writeConfig( [ 'type' => 'local' ] );
-		$this->assertSame( [], configLoader::variantNames( $this->tempDir ) );
-	}
 
 
 	private function deleteDirectory( string $directory ): void {

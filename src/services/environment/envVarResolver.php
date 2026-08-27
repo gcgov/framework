@@ -5,13 +5,18 @@ declare(strict_types=1);
 namespace gcgov\framework\services\environment;
 
 /**
- * Resolves Symfony-style `%env(...)%` references inside the unified {root}/config.json.
+ * Resolves `%env(...)%` references inside the unified {root}/config.json.
  *
  * This is a small, standalone, directly-testable resolver — it is intentionally
  * NOT coupled to Symfony's dependency-injection container (where Symfony's own
  * env processors live). The framework applies it to config.json before the JSON
- * is handed to `jsonDeserialize()` (see configLoader); the gf CLI applies it to
- * the `environments.{name}` subtree for foreign-environment reads.
+ * is handed to `jsonDeserialize()` (see configLoader).
+ *
+ * ## Every reference is required
+ * There is no fallback mechanism. A referenced variable that is unset — or set
+ * to the empty string, which counts as unset — is a startup failure naming the
+ * variable. A configuration value that does not vary between Environments is
+ * written as a literal in config.json rather than referenced.
  *
  * ## Backwards compatibility
  * A config string that contains no `%env(` substring is returned byte-for-byte
@@ -26,23 +31,24 @@ namespace gcgov\framework\services\environment;
  *  - Preceding segments form a processor chain, applied right-to-left (Symfony
  *    order): `%env(trim:file:DB_PASS_FILE)%` = `trim(file(env(DB_PASS_FILE)))`.
  *  - When the whole string is a single `%env(...)%`, the typed result
- *    (int/bool/float/array/stdClass/string) replaces the value. When `%env(...)%`
+ *    (int/bool/array/stdClass/string) replaces the value. When `%env(...)%`
  *    appears embedded inside a larger string, its result is substituted as a
  *    string (a non-scalar embedded result throws).
  *
  * ## Processors
- *  string, bool, not, int, float, trim, file, base64, json, default.
+ *  secret, file, trim, int, bool, json.
  *
- * ## The `default` processor (deliberate deviation from Symfony)
- * Unlike Symfony — where `default:` names a fallback *parameter* — here `default`
- * takes a **literal** fallback value. It must be innermost (closest to the var),
- * and its argument is greedy: everything between `default:` and the final `:VAR`,
- * so colons are legal in the fallback (a `)` is not — the reference syntax ends
- * at the first `)`):
- *   `%env(default:mongodb://mongodb:27017:MONGO_URI)%`
- * The fallback applies only when the variable is unset:
- *   `%env(default::VAR)%`            → '' when VAR is unset
- *   `%env(int:default:587:SMTP_PORT)%` → int 587 when SMTP_PORT is unset
+ * ## The `secret` lookup
+ * `%env(secret:MONGO_URI)%` implements the conventional `_FILE` indirection used
+ * by the official database images: if `MONGO_URI_FILE` is set, its value is a path
+ * whose (trimmed) contents are the result; otherwise `MONGO_URI` is read directly.
+ * A `_FILE` variable pointing at a missing or unreadable file is an error and never
+ * falls back to the plain variable — falling back would silently substitute a stale
+ * environment value for a secret that failed to mount.
+ *
+ * This is what lets one committed config.json serve both a developer's machine
+ * (plain variables in .env) and production (files provisioned to /run/secrets).
+ * `secret` must be the innermost element of a processor chain.
  *
  * ## Reserved (blocked) variable names — request-data injection guard
  * In web SAPIs, request data leaks into the ambient lookup sources: CGI/FastCGI
@@ -51,17 +57,22 @@ namespace gcgov\framework\services\environment;
  * additionally carries request-derived CGI meta-variables (SERVER_NAME,
  * PHP_AUTH_PW, QUERY_STRING, …). To guarantee a `%env(...)%` reference can never
  * be satisfied by request data, names matching the CGI meta-variable set are
- * treated as UNSET in every ambient source — `default:` applies, otherwise the
- * reference fails loudly. Do not name real configuration variables after CGI
- * meta-variables.
+ * treated as UNSET in every ambient source, so the reference fails loudly. Do not
+ * name real configuration variables after CGI meta-variables.
  */
 final class envVarResolver {
+
+	/** Suffix of the companion variable naming a secret's file, per the conventional `_FILE` indirection. */
+	public const string SECRET_FILE_SUFFIX = '_FILE';
 
 	/** Name prefixes never resolved from the ambient environment (request-derived under web SAPIs). */
 	private const array BLOCKED_NAME_PREFIXES = [ 'HTTP_', 'SERVER_', 'REQUEST_', 'REMOTE_', 'PHP_AUTH_', 'SCRIPT_', 'DOCUMENT_' ];
 
 	/** Exact names never resolved from the ambient environment (request-derived under web SAPIs). */
 	private const array BLOCKED_NAMES = [ 'HTTPS', 'QUERY_STRING', 'CONTENT_TYPE', 'CONTENT_LENGTH', 'AUTH_TYPE', 'GATEWAY_INTERFACE', 'PHP_SELF', 'PATH_INFO', 'PATH_TRANSLATED' ];
+
+	/** Every supported processor. `secret` changes the lookup; the rest transform the value. */
+	private const array PROCESSORS = [ 'secret', 'file', 'trim', 'int', 'bool', 'json' ];
 
 
 	/**
@@ -93,8 +104,6 @@ final class envVarResolver {
 
 	/**
 	 * Resolve every `%env(...)%` reference in an already-decoded config tree, in place.
-	 * Used by configLoader so the `environments` subtree can be stripped/extracted
-	 * before resolution without a re-encode round trip.
 	 *
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
@@ -102,6 +111,37 @@ final class envVarResolver {
 		self::resolveNode( $decoded, $sourceDescription );
 
 		return $decoded;
+	}
+
+
+	/**
+	 * Every variable referenced by a decoded config tree, WITHOUT resolving any of them —
+	 * so this works on a machine that has none of them set. Used by `gf env --list` and
+	 * `gf env --init` to generate the .env manifest from config.json itself, which is what
+	 * keeps the two from drifting.
+	 *
+	 * A `secret` reference reports the variable's own name; the companion `{NAME}_FILE`
+	 * variable is implied by the `secret` flag rather than listed separately.
+	 *
+	 * @return array<string, bool>  variable name => is a secret, ordered by first appearance
+	 * @throws \gcgov\framework\services\environment\environmentException  On a malformed reference
+	 */
+	public static function collectReferences( \stdClass $decoded, string $sourceDescription ): array {
+		$references = [];
+		self::walkStrings( $decoded, function( string $value ) use ( &$references, $sourceDescription ): void {
+			if( !str_contains( $value, '%env(' ) ) {
+				return;
+			}
+			preg_match_all( '/%env\(([^)]+)\)%/', $value, $matches );
+			foreach( $matches[ 1 ] as $expression ) {
+				[ $varName, $processors ] = self::parseExpression( $expression, $sourceDescription );
+				$isSecret = in_array( 'secret', $processors, true );
+				// A name referenced both ways is a secret: the stricter reading wins.
+				$references[ $varName ] = ( $references[ $varName ] ?? false ) || $isSecret;
+			}
+		} );
+
+		return $references;
 	}
 
 
@@ -136,6 +176,35 @@ final class envVarResolver {
 
 
 	/**
+	 * Visit every string leaf of a decoded tree without modifying it.
+	 *
+	 * @param  mixed                  $node
+	 * @param  callable(string):void  $visitor
+	 */
+	private static function walkStrings( mixed $node, callable $visitor ): void {
+		if( $node instanceof \stdClass ) {
+			foreach( get_object_vars( $node ) as $value ) {
+				self::walkStrings( $value, $visitor );
+			}
+
+			return;
+		}
+
+		if( is_array( $node ) ) {
+			foreach( $node as $value ) {
+				self::walkStrings( $value, $visitor );
+			}
+
+			return;
+		}
+
+		if( is_string( $node ) ) {
+			$visitor( $node );
+		}
+	}
+
+
+	/**
 	 * Resolve `%env(...)%` occurrences in a single string leaf.
 	 *
 	 * @return mixed  Typed value when the whole string is one reference; a string otherwise.
@@ -157,9 +226,6 @@ final class envVarResolver {
 			if( is_bool( $resolved ) ) {
 				return $resolved ? 'true' : 'false';
 			}
-			if( $resolved===null ) {
-				return '';
-			}
 			if( is_scalar( $resolved ) ) {
 				return (string)$resolved;
 			}
@@ -167,10 +233,10 @@ final class envVarResolver {
 		}, $value ) ?? $value;
 
 		// Fail loud instead of silently shipping an unresolved reference: a leftover
-		// '%env(' means malformed syntax (e.g. a ')' inside a default: literal) or a
-		// literal '%env(' in a config value — neither is supported.
+		// '%env(' means an unterminated reference or a literal '%env(' in a config
+		// value — neither is supported.
 		if( str_contains( $result, '%env(' ) ) {
-			throw new environmentException( 'Unresolvable %env(...) reference in ' . $sourceDescription . ': "' . $value . '". The reference syntax ends at the first ")" — a ")" inside a default: literal is not supported, and a config value cannot contain the literal text "%env(".' );
+			throw new environmentException( 'Unresolvable %env(...) reference in ' . $sourceDescription . ': "' . $value . '". A reference ends at the first ")", and a config value cannot contain the literal text "%env(".' );
 		}
 
 		return $result;
@@ -178,59 +244,57 @@ final class envVarResolver {
 
 
 	/**
-	 * Resolve one `%env(...)%` expression (the text between the parentheses).
+	 * Split one `%env(...)%` expression (the text between the parentheses) into its
+	 * variable name and its processor chain, outermost first.
 	 *
-	 * @return mixed
+	 * @return array{0: string, 1: string[]}
 	 * @throws \gcgov\framework\services\environment\environmentException
 	 */
-	private static function resolveExpression( string $expression, string $sourceDescription ): mixed {
-		$lastColon = strrpos( $expression, ':' );
-		if( $lastColon===false ) {
-			$varName       = $expression;
-			$processorSpec = '';
-		}
-		else {
-			$varName       = substr( $expression, $lastColon + 1 );
-			$processorSpec = substr( $expression, 0, $lastColon );
-		}
+	private static function parseExpression( string $expression, string $sourceDescription ): array {
+		$segments = explode( ':', $expression );
+		$varName  = (string)array_pop( $segments );
 
 		if( preg_match( '/^[A-Za-z_][A-Za-z0-9_]*$/', $varName )!==1 ) {
 			throw new environmentException( 'Invalid environment variable reference "%env(' . $expression . ')%" in ' . $sourceDescription . ': "' . $varName . '" is not a valid variable name.' );
 		}
 
-		// Parse the processor chain left-to-right (outer → inner). `default` is greedy:
-		// it consumes the remainder of the spec as its literal fallback and is innermost.
-		$processors    = [];
-		$default       = null;
-		$remainingSpec = $processorSpec;
-		while( $remainingSpec!=='' ) {
-			$colon = strpos( $remainingSpec, ':' );
-			$token = $colon===false ? $remainingSpec : substr( $remainingSpec, 0, $colon );
-			$rest  = $colon===false ? '' : substr( $remainingSpec, $colon + 1 );
-
-			if( $token==='default' ) {
-				$default       = $rest;
-				$remainingSpec = '';
-				break;
+		foreach( $segments as $index => $processor ) {
+			if( !in_array( $processor, self::PROCESSORS, true ) ) {
+				throw new environmentException( 'Unknown environment processor "' . $processor . '" in "%env(' . $expression . ')%" (' . $sourceDescription . '). Supported: ' . implode( ', ', self::PROCESSORS ) . '.' );
 			}
-
-			$processors[]  = $token;
-			$remainingSpec = $rest;
+			if( $processor==='secret' && $index!==count( $segments ) - 1 ) {
+				throw new environmentException( '"secret" must be the innermost processor in "%env(' . $expression . ')%" (' . $sourceDescription . '), i.e. immediately before the variable name — it selects where the value is read from, so nothing can come between it and the variable.' );
+			}
 		}
 
-		// Environment lookup (with optional literal default fallback).
-		$raw = self::lookupEnv( $varName );
-		if( $raw===null ) {
-			if( $default===null ) {
-				if( self::isBlockedName( $varName ) ) {
-					throw new environmentException( '"' . $varName . '" is a reserved CGI meta-variable name and is never resolved from the environment (referenced as "%env(' . $expression . ')%" in ' . $sourceDescription . '). Rename the configuration variable.' );
-				}
-				throw new environmentException( 'Required environment variable "' . $varName . '" is not set (referenced as "%env(' . $expression . ')%" in ' . $sourceDescription . '). Set it in the process environment, a Docker secret, or a .env file.' );
-			}
-			$value = $default;
+		return [ $varName, $segments ];
+	}
+
+
+	/**
+	 * Resolve one `%env(...)%` expression.
+	 *
+	 * @return mixed
+	 * @throws \gcgov\framework\services\environment\environmentException
+	 */
+	private static function resolveExpression( string $expression, string $sourceDescription ): mixed {
+		[ $varName, $processors ] = self::parseExpression( $expression, $sourceDescription );
+
+		$useSecretLookup = false;
+		if( count( $processors )>0 && end( $processors )==='secret' ) {
+			array_pop( $processors );
+			$useSecretLookup = true;
 		}
-		else {
-			$value = $raw;
+
+		$value = $useSecretLookup
+			? self::lookupSecret( $varName, $expression, $sourceDescription )
+			: self::lookupEnv( $varName );
+
+		if( $value===null ) {
+			if( self::isBlockedName( $varName ) ) {
+				throw new environmentException( '"' . $varName . '" is a reserved CGI meta-variable name and is never resolved from the environment (referenced as "%env(' . $expression . ')%" in ' . $sourceDescription . '). Rename the configuration variable.' );
+			}
+			throw new environmentException( 'Required environment variable "' . $varName . '" is not set' . ( $useSecretLookup ? ' (and neither is "' . $varName . self::SECRET_FILE_SUFFIX . '")' : '' ) . ' (referenced as "%env(' . $expression . ')%" in ' . $sourceDescription . '). Set it in the process environment, a provisioned secret file, or a .env file.' );
 		}
 
 		// Apply processors right-to-left (inner → outer).
@@ -243,6 +307,36 @@ final class envVarResolver {
 
 
 	/**
+	 * The `secret` lookup: prefer the file named by `{NAME}_FILE`, else the plain variable.
+	 * A `_FILE` variable that is set but unreadable is an error, never a fall-back — see the
+	 * class docblock.
+	 *
+	 * @throws \gcgov\framework\services\environment\environmentException
+	 */
+	private static function lookupSecret( string $varName, string $expression, string $sourceDescription ): ?string {
+		$fileVarName = $varName . self::SECRET_FILE_SUFFIX;
+		$path        = self::lookupEnv( $fileVarName );
+
+		if( $path===null ) {
+			return self::lookupEnv( $varName );
+		}
+
+		if( !is_file( $path ) || !is_readable( $path ) ) {
+			throw new environmentException( 'Secret file for "%env(' . $expression . ')%" in ' . $sourceDescription . ' does not exist or is not readable: "' . $path . '" (from ' . $fileVarName . '). The secret is not falling back to ' . $varName . ' — fix the mount or unset ' . $fileVarName . '.' );
+		}
+
+		$contents = file_get_contents( $path );
+		if( $contents===false ) {
+			throw new environmentException( 'Failed reading the secret file for "%env(' . $expression . ')%" in ' . $sourceDescription . ': "' . $path . '" (from ' . $fileVarName . ').' );
+		}
+
+		// Provisioned secret files conventionally end in a newline; a credential never
+		// legitimately has surrounding whitespace.
+		return trim( $contents );
+	}
+
+
+	/**
 	 * @param  mixed  $value
 	 *
 	 * @return mixed
@@ -250,14 +344,10 @@ final class envVarResolver {
 	 */
 	private static function applyProcessor( string $processor, mixed $value, string $expression, string $sourceDescription ): mixed {
 		switch( $processor ) {
-			case 'string':
-				return (string)$value;
-
 			case 'bool':
-				return self::toBool( $value );
+				$bool = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
 
-			case 'not':
-				return !self::toBool( $value );
+				return $bool ?? (bool)$value;
 
 			case 'int':
 				if( !is_numeric( trim( (string)$value ) ) ) {
@@ -265,13 +355,6 @@ final class envVarResolver {
 				}
 
 				return (int)$value;
-
-			case 'float':
-				if( !is_numeric( trim( (string)$value ) ) ) {
-					throw new environmentException( 'Cannot apply "float" to non-numeric value for "%env(' . $expression . ')%" in ' . $sourceDescription . '.' );
-				}
-
-				return (float)$value;
 
 			case 'trim':
 				return trim( (string)$value );
@@ -288,20 +371,6 @@ final class envVarResolver {
 
 				return $contents;
 
-			case 'base64':
-				// URL-safe tolerant: accept the URL-safe alphabet and missing padding.
-				$normalized = strtr( (string)$value, '-_', '+/' );
-				$padding    = strlen( $normalized ) % 4;
-				if( $padding>0 ) {
-					$normalized .= str_repeat( '=', 4 - $padding );
-				}
-				$decoded = base64_decode( $normalized, true );
-				if( $decoded===false ) {
-					throw new environmentException( 'Cannot apply "base64" for "%env(' . $expression . ')%" in ' . $sourceDescription . ': value is not valid base64.' );
-				}
-
-				return $decoded;
-
 			case 'json':
 				$decoded = json_decode( (string)$value, false );
 				if( json_last_error()!==JSON_ERROR_NONE ) {
@@ -311,21 +380,10 @@ final class envVarResolver {
 				return $decoded;
 
 			default:
-				throw new environmentException( 'Unknown environment processor "' . $processor . '" in "%env(' . $expression . ')%" (' . $sourceDescription . '). Supported: string, bool, not, int, float, trim, file, base64, json, default.' );
+				// parseExpression() has already rejected unknown processors, and `secret`
+				// is consumed before the chain is applied.
+				throw new environmentException( 'Environment processor "' . $processor . '" cannot be applied to a value in "%env(' . $expression . ')%" (' . $sourceDescription . ').' );
 		}
-	}
-
-
-	/**
-	 * @param  mixed  $value
-	 */
-	private static function toBool( mixed $value ): bool {
-		$bool = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
-		if( $bool===null ) {
-			return (bool)$value;
-		}
-
-		return $bool;
 	}
 
 
@@ -350,28 +408,32 @@ final class envVarResolver {
 	 * three sources by name (not per source): under CGI/FastCGI SAPIs request headers
 	 * reach the real process environment (getenv) and — with `variables_order=E` —
 	 * $_ENV, so filtering only $_SERVER would be bypassable.
-	 * Returns null only when the variable is genuinely unset (a set-but-empty
-	 * variable resolves to '', which also suppresses `default:`).
+	 *
+	 * A variable set to the empty string is reported as unset. Every reference is
+	 * required, so "" is never a meaningful configured value — treating it as one
+	 * would let a blank line in a .env satisfy a required secret.
 	 */
 	private static function lookupEnv( string $name ): ?string {
 		if( self::isBlockedName( $name ) ) {
 			return null;
 		}
 
+		$value = null;
+
 		if( array_key_exists( $name, $_ENV ) ) {
-			return (string)$_ENV[ $name ];
+			$value = (string)$_ENV[ $name ];
+		}
+		elseif( array_key_exists( $name, $_SERVER ) && is_scalar( $_SERVER[ $name ] ) ) {
+			$value = (string)$_SERVER[ $name ];
+		}
+		else {
+			$fromGetenv = getenv( $name );
+			if( $fromGetenv!==false ) {
+				$value = $fromGetenv;
+			}
 		}
 
-		if( array_key_exists( $name, $_SERVER ) && is_scalar( $_SERVER[ $name ] ) ) {
-			return (string)$_SERVER[ $name ];
-		}
-
-		$value = getenv( $name );
-		if( $value!==false ) {
-			return $value;
-		}
-
-		return null;
+		return ( $value===null || $value==='' ) ? null : $value;
 	}
 
 }

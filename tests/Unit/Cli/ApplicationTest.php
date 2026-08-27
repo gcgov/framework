@@ -14,7 +14,7 @@ final class ApplicationTest extends TestCase {
 	public function testAllBuiltInCommandsAreRegistered(): void {
 		$application = new application();
 
-		foreach( [ 'cli', 'cli:list', 'cert:generate-auth', 'db:restore', 'db:run', 'env', 'setup', 'deploy', 'completion:powershell', 'completion' ] as $commandName ) {
+		foreach( [ 'cli', 'cli:list', 'cert:generate-auth', 'db:run', 'env', 'init', 'migrate', 'completion:powershell', 'completion' ] as $commandName ) {
 			$this->assertTrue( $application->has( $commandName ), 'missing command: ' . $commandName );
 		}
 	}
@@ -22,7 +22,7 @@ final class ApplicationTest extends TestCase {
 	public function testNormalizeArgvJoinsSpaceSeparatedCommandNames(): void {
 		$application = new application();
 
-		$this->assertSame( [ 'gf', 'db:restore', '--from=prod' ], $application->normalizeArgv( [ 'gf', 'db', 'restore', '--from=prod' ] ) );
+		$this->assertSame( [ 'gf', 'db:run', 'db/seed.js' ], $application->normalizeArgv( [ 'gf', 'db', 'run', 'db/seed.js' ] ) );
 		$this->assertSame( [ 'gf', 'cert:generate-auth' ], $application->normalizeArgv( [ 'gf', 'cert', 'generate-auth' ] ) );
 	}
 

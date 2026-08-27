@@ -115,4 +115,78 @@ final class ConfigTest extends TestCase {
 		$this->assertTrue( ( new \ReflectionClass( config::class ) )->isFinal() );
 	}
 
+
+	/**
+	 * The keys are gitignored, so they are never in a built image and must be provisioned
+	 * to a path outside the application tree. Before v7 the path was hard-coded.
+	 */
+	public function testJwtKeyPathDefaultsToSrvButHonoursTheConfiguredPath(): void {
+		$unified = config::getEnvironmentConfig();
+		$original = $unified->jwtAuth->keyPath;
+
+		try {
+			$unified->jwtAuth->keyPath = '';
+			$this->assertSame( config::getSrvDir() . 'jwtCertificates/', config::getJwtKeyPath() );
+
+			$unified->jwtAuth->keyPath = '/run/secrets/jwt';
+			$this->assertSame( '/run/secrets/jwt/', config::getJwtKeyPath(), 'always returned with a trailing slash' );
+
+			$unified->jwtAuth->keyPath = '/run/secrets/jwt/';
+			$this->assertSame( '/run/secrets/jwt/', config::getJwtKeyPath(), 'a configured trailing slash is not doubled' );
+		}
+		finally {
+			$unified->jwtAuth->keyPath = $original;
+		}
+	}
+
+
+	/** Configuring issuer and audience separately from rootUrl/basePath only invites drift. */
+	public function testJwtIssuerAndAudienceDeriveFromTheApplicationUrlWhenNotSet(): void {
+		$unified = config::getEnvironmentConfig();
+		$originalIssuer   = $unified->jwtAuth->tokenIssuedBy;
+		$originalAudience = $unified->jwtAuth->tokenPermittedFor;
+
+		try {
+			$unified->jwtAuth->tokenIssuedBy     = '';
+			$unified->jwtAuth->tokenPermittedFor = '';
+			$this->assertSame( config::getRootUrl(), config::getTokenIssuedBy() );
+			$this->assertSame( config::getBasePath(), config::getTokenPermittedFor() );
+
+			$unified->jwtAuth->tokenIssuedBy = 'https://explicit.example.gov';
+			$this->assertSame( 'https://explicit.example.gov', config::getTokenIssuedBy() );
+		}
+		finally {
+			$unified->jwtAuth->tokenIssuedBy     = $originalIssuer;
+			$unified->jwtAuth->tokenPermittedFor = $originalAudience;
+		}
+	}
+
+
+	/** @return iterable<string, array{0: string}> */
+	public static function removedAccessorProvider(): iterable {
+		yield 'getServerName' => [ 'getServerName' ];
+		yield 'getCookieUrl' => [ 'getCookieUrl' ];
+		yield 'getPhpPath' => [ 'getPhpPath' ];
+	}
+
+
+	/**
+	 * Confirmed unread by the framework and by all five framework services before removal.
+	 *
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider('removedAccessorProvider')]
+	public function testAccessorsForUnreadConfigValuesAreGone( string $accessor ): void {
+		$this->assertFalse( method_exists( config::class, $accessor ) );
+	}
+
+
+	public function testUnreadConfigPropertiesAreGoneFromTheModel(): void {
+		$properties = array_keys( get_object_vars( new unifiedConfig() ) );
+
+		foreach( [ 'serverName', 'cookieUrl', 'phpPath' ] as $removed ) {
+			$this->assertNotContains( $removed, $properties );
+		}
+		$this->assertContains( 'app', $properties, 'app.guid stays — the oauth server uses it as the client_id' );
+	}
+
 }

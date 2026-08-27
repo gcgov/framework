@@ -24,5 +24,9 @@ production as a URL. Both failures were silent.
 - Optional integrations (Microsoft, PayJunction, SMTP) are **absent** from the template rather than
   present-and-blank. An Application adds the block when it needs it; a missing section hydrates to
   its defaults.
-- Removing `default:` also removed the resolver's greedy-argument parsing and its ban on `)` inside
-  a reference, which existed only to support it.
+- Removing `default:` removed the resolver's greedy-argument parsing, which existed only to let a
+  fallback literal contain colons. A reference still ends at the first `)` and a leftover `%env(`
+  after resolution is still an error — those are plain syntax rules that catch typos, not
+  consequences of the removed processor.
+- The processor set shrank to `secret, file, trim, int, bool, json`. `string`, `not`, `float` and
+  `base64` had no users, and each one is an API surface, a test and an error path to carry.

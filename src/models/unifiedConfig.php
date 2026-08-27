@@ -20,8 +20,7 @@ use JetBrains\PhpStorm\Deprecated;
  * Application code normally reads configuration through the static accessors on
  * \gcgov\framework\config; this model is the hydration target (via
  * services\environment\configLoader) and what appContext::loadConfig() returns
- * in the gf CLI. The CLI-only `environments` section of config.json is stripped
- * before hydration — see \gcgov\framework\models\config\variantEnvironment.
+ * in the gf CLI.
  */
 class unifiedConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
@@ -37,8 +36,6 @@ class unifiedConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	public string $type = '';
 
-	public string $serverName = '';
-
 	public string $rootUrl = '';
 
 	public string $basePath = '';
@@ -46,10 +43,6 @@ class unifiedConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 	#[Deprecated]
 	/** @deprecated */
 	public string $baseUrl = '';
-
-	public string $cookieUrl = '';
-
-	public string $phpPath = '';
 
 	/** @var \gcgov\framework\models\config\environment\mongoDatabase[] */
 	public array $mongoDatabases = [];
@@ -102,6 +95,18 @@ class unifiedConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	public function getBasePath(): string {
 		return '/' . trim( $this->basePath, '/ ' );
+	}
+
+
+	/** Token issuer, defaulting to the application's own root url. */
+	public function getTokenIssuedBy(): string {
+		return $this->jwtAuth->tokenIssuedBy!=='' ? $this->jwtAuth->tokenIssuedBy : $this->getRootUrl();
+	}
+
+
+	/** Token audience, defaulting to the application's own base path. */
+	public function getTokenPermittedFor(): string {
+		return $this->jwtAuth->tokenPermittedFor!=='' ? $this->jwtAuth->tokenPermittedFor : $this->getBasePath();
 	}
 
 

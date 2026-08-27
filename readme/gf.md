@@ -14,8 +14,8 @@ Run it with no arguments to see everything available:
 Tip: add `vendor/bin` to your PATH (or use `composer exec gf`) so you can type `gf` alone.
 Throughout this document `gf` means `vendor/bin/gf` (`vendor\bin\gf.bat` on Windows).
 
-Command names use the `namespace:command` convention (`db:restore`). The space-separated
-spelling also works — `gf db restore` resolves to `db:restore` automatically.
+Command names use the `namespace:command` convention (`db:run`). The space-separated
+spelling also works — `gf db run` resolves to `db:run` automatically.
 
 | Command | Replaces | Purpose |
 |---|---|---|
@@ -25,11 +25,10 @@ spelling also works — `gf db restore` resolves to `db:restore` automatically.
 | `gf chrome:install` | manual Chrome installs | Download chrome-headless-shell into srv/chrome |
 | `gf chrome:update` | — | Update chrome-headless-shell to current Stable + remove old versions |
 | `gf chrome:status` | — | Show whether chrome-headless-shell is installed and what version |
-| `gf db:restore` | `db/restore-live-to-local.ps1` | Copy a source environment's mongo databases into a target environment |
 | `gf db:run <script.js>` | ad-hoc `mongosh "<uri with password>" script.js` | Run a mongosh script using config-managed connections |
-| `gf env [<env>]` | manual `Copy-Item` steps | List config.json environments; validate that config resolves (active, or an environments.{name} entry) |
-| `gf setup` | `scripts/setup.ps1` | Bootstrap a freshly scaffolded application |
-| `gf deploy` | `update-production.ps1` | Tag-based production deployment |
+| `gf env` | manual `Copy-Item` steps | Validate that config.json resolves; `--list` its variables; `--init` a .env skeleton |
+| `gf init` | `scripts/setup.ps1` | Bootstrap a freshly scaffolded application (non-interactive) |
+| `gf migrate` | — | Convert a v6 application's configuration to v7 |
 | `gf completion` / `gf completion:powershell` | — | Shell tab completion |
 
 `gf` never requires a Windows shell: everything is implemented in PHP or shells out to
@@ -120,7 +119,7 @@ that touches the network, and a network failure there only warns).
   `srv/chrome/installation.json` manifest recording the active version; the directory is
   git-ignored automatically. Installation is atomic — an interrupted download never leaves a
   half-installed version.
-- `gf setup` runs the install automatically (`--skip-chrome` to opt out). `chrome:update` is
+- `gf init` runs the install automatically (`--skip-chrome` to opt out). `chrome:update` is
   idempotent and safe to run on a schedule.
 - Requires the PHP **zip** extension (`extension=zip` in php.ini on Windows, `php-zip` on Linux).
 - macOS note: if Gatekeeper ever blocks the binary, clear the quarantine attribute with
@@ -145,132 +144,97 @@ installation exists. The `chrome-php/chrome` library is a framework dependency, 
 
 ---
 
-## Databases: `gf db:restore` and `gf db:run`
+## Databases: `gf db:run`
 
-Connection strings come from `{root}/config.json` — never hardcode credentials in scripts
-again. The **local** side uses the active `mongoDatabases[]`; a **foreign** environment
-(`--from=prod`, `--env=prod`) resolves the `environments.{name}` entry of the same `config.json`,
-which references environment-prefixed variables (e.g. `PROD_MONGO_URI`) you keep in your
-gitignored `.env` (see [Environments](#environments-gf-env) below):
+Runs a `.js` script through `mongosh` against the application's configured connection, so scripts
+stop carrying hardcoded connection strings:
 
-```jsonc
-// config.json — the environments section is CLI-only (stripped at runtime)
-"environments": {
-  "prod": { "type": "prod",
-            "mongoDatabases": [ { "default": true, "database": "%env(PROD_MONGO_DATABASE)%", "uri": "%env(PROD_MONGO_URI)%" } ] }
-}
-```
-```ini
-# {root}/.env (gitignored)
-PROD_MONGO_URI=mongodb+srv://user:pass@prod-cluster/
-PROD_MONGO_DATABASE=app
+```bash
+gf db:run db/create-admin.js
+gf db:run db/seed.js --db=reporting      # pick a database when the app has several
+gf db:run db/report.js -- --quiet        # everything after -- goes to mongosh
 ```
 
-```
-gf db:restore                        # dump prod -> restore into the active configuration (--drop)
-gf db:restore --from=prod --to=local # --to also names an environments.{name} entry
-gf db:restore --db=AppsSchedule      # only the named database(s)
-gf db:restore --keep-dump --dump-dir=db/backup
-```
+Requires `mongosh` on PATH. Connection details come from `config.json`'s `mongoDatabases`; the URI
+is redacted in all output.
 
-- Source/target databases are paired by database name (falling back to the two `default`
-  entries); differing names are remapped with `--nsFrom/--nsTo`.
-- Restoring **into** the environment named `prod`, or into one whose `type` is `prod`, is refused
-  unless `--allow-prod`.
-- A pair whose source and target resolve to the **same uri and database** is refused outright —
-  that usually means an `environments.{name}` entry reused a local variable name instead of a
-  prefixed one. Validate with `gf env prod`.
-- Requires the [MongoDB Database Tools](https://www.mongodb.com/try/download/database-tools)
-  (`mongodump`, `mongorestore`) on PATH.
-- The plan (with passwords redacted) is shown and confirmed before anything runs; `--yes` skips.
-
-```
-gf db:run db/create-admin.js                 # against the active configuration's default db
-gf db:run db/migrate.js --env=prod --db=AppsSchedule
-gf db:run db/seed.js -- --quiet              # everything after -- goes to mongosh
-```
-
-Requires [mongosh](https://www.mongodb.com/try/download/shell) on PATH.
+> **`gf db:restore` was removed in v7.** It pulled another Environment's databases down to a
+> workstation, which meant every developer's `.env` held production credentials. Developers get
+> realistic data from the separate backup-restore workflow instead.
 
 ---
 
-## Environments: `gf env`
+## Configuration: `gf env`
 
-Environment selection is **environment-variable driven**: the committed root `config.json`
-references variables with `%env(...)%`, and whichever values the process environment (container
-env, Docker secrets, or `{root}/.env`) supplies *are* the environment. There is nothing to
-activate or copy. Foreign-environment connection info for the `db:*` commands lives in the
-CLI-only `environments` section of `config.json` (stripped at runtime).
+Configuration is one committed `config.json` whose environment-varying values are `%env(...)%`
+references, every one of them required. `gf env` is how you find out what an Environment is missing
+before the application does.
 
-`gf env` validates that model:
-
-```
-gf env              # list config.json environments + validate the ACTIVE configuration
-gf env prod         # resolve the environments.prod entry and validate it
+```bash
+gf env            # resolve config.json against the current environment
+gf env --list     # every variable it references, whether each is a secret, whether each is set
+gf env --init     # write a .env skeleton from that list (--force to overwrite)
 ```
 
-`gf env <name>` prints the resolved summary (type, databases with redacted URIs) and exits
-non-zero naming the first unresolvable variable. Run it before trusting an environment with
-`db:restore`/`db:run`. An `environments.{name}` entry should reference **environment-prefixed
-variable names** (e.g. `PROD_MONGO_URI`) so a missing value fails loudly rather than silently
-resolving to your local value.
+Validation prints the resolved type, urls, logging destination and Mongo connections (URIs
+redacted), or fails naming the first unresolvable variable. `--list` and `--init` read `config.json`
+without resolving anything, so they work on a fresh clone with no `.env` at all.
 
-### Migrating a v6 app to v7
+Because the manifest is derived from `config.json`, it cannot drift from it. `.env` also holds
+variables `config.json` never sees — compose ports, CORS origins — which live in the template's
+`.env.example`; `--init` does not touch an existing file.
 
-v6's split `app/config/app.json` + `environment-{env}.json` files and the `gf env` copy step
-are gone. To move an app onto v7:
-
-1. Commit a single **`config.json` at the application root**: merge the contents of the old
-   `app/config/app.json` (`app`, `email`, `settings` sections) and `app/config/environment.json`
-   (everything else) into one JSON object, with every secret and every per-environment value
-   referenced via `%env(...)%` — see [environment-variables.md](environment-variables.md) and
-   the app template's copy. Then delete the `app/config/` directory.
-2. For each old variant you need foreign-environment `db:*` access to, add an
-   `environments.{env}` entry to `config.json` (`type` literal + `mongoDatabases` with
-   environment-prefixed `%env()` names like `PROD_MONGO_URI`) and put those values in your
-   gitignored `{root}/.env`.
-3. Delete `environment-{env}.json`, `composer-{env}.json`, and `www/web-{env}.config`; commit
-   `composer.json` (and a static `www/web.config`, if the app still runs on IIS).
-4. Migrate `config::getAppConfig()` / `config::getEnvironmentConfig()` calls in app code to
-   the flattened accessors (`config::getBasePath()`, `config::getSettings()`,
-   `config::getMongoDatabases()`, …). The old methods still work — they are **deprecated
-   pass-throughs** returning the unified config object, which carries every former field and
-   helper — so this step can happen gradually after the upgrade.
-5. Bump `gcgov/framework` to `^v7.0`; verify with `gf env` and `gf env prod`.
+Full reference: **[Environment variables in config](environment-variables.md)**.
 
 ---
 
-## Project bootstrap: `gf setup`
+## Project bootstrap: `gf init`
 
-Interactive replacement for `scripts/setup.ps1`. Run once after scaffolding a project from
-`gcgov/framework-app-template` (after `composer install`): prompts for the project values,
-generates the app GUID, then replaces the `{placeholder}` tokens across the project's
-`.ini/.json/.php/.config/.bat/.ps1` files — including the per-environment `php.ini` files under
-`srv/` (`vendor/`, `.git/`, `node_modules/` are excluded). Pressing enter skips a value and
-leaves its token for a later re-run.
+Run once after scaffolding from `gcgov/framework-app-template`:
 
-Setup finishes by downloading chrome-headless-shell (the `gf chrome:install` step); a failure
-there — offline machine, missing php-zip — only prints a warning and never fails setup. Pass
-`--skip-chrome` to skip it entirely.
+```bash
+gf init --title="Timesheet API"
+```
+
+It writes the title and guid into `config.json`, writes a `.env` skeleton, generates JWT signing
+keypairs, and installs chrome-headless-shell. `--skip-env`, `--skip-keys` and `--skip-chrome` opt
+out of each step; `--guid` sets the guid explicitly.
+
+The guid is the OAuth `client_id`, so re-running `init` on an application that already has one keeps
+it rather than minting a new one and invalidating every registered client.
+
+It is deliberately **non-interactive**, which is what lets it run from a scaffolding script, a
+devcontainer `postCreateCommand`, or CI. It replaces v6's `gf setup` wizard, whose prompts filled
+`{placeholder}` tokens in `php.ini` and `web.config` files that no longer exist.
 
 ---
 
-## Deployment: `gf deploy`
+## Migrating a v6 application: `gf migrate`
 
-Cross-platform replacement for the per-app `update-production.ps1`:
+Converts the configuration half of a v6 application. Run it on a clean working tree so the result
+is reviewable as a diff:
 
+```bash
+gf migrate --dry-run     # show the plan
+gf migrate               # apply it
 ```
-gf deploy                        # interactive tag picker
-gf deploy --tag=v2.4.1 --yes     # non-interactive
-gf deploy --no-composer
-```
 
-Steps: `git fetch/pull` → pick a tag (newest first, `--tags=N` to widen) → confirm →
-`git checkout tags/<tag>` → `git submodule sync/update` → write
-`version.json` (`{"version": "<tag>", "inherit": true}`) → `composer update`.
-Any failing step aborts the deploy with that step's exit code. Configuration is committed
-(`config.json` + `%env()` values from the server's environment), so there is no
-config-activation step.
+It merges `app/config/app.json` and `app/config/environment.json` into `{root}/config.json`, turns
+their environment-varying values into `%env()` references (credentials become `%env(secret:…)%`),
+writes the extracted values to `.env`, and deletes the v6 IIS, batch and PowerShell files.
+
+What it will not do is guess. `sqlDatabases` credentials, a missing `app.guid`, and the removed
+`serverName` / `cookieUrl` / `phpPath` keys are reported for you to handle. It pins
+`logging.destination` to `"file"` so an application's logging does not silently change on upgrade —
+switch it to `"stderr"` when the application moves into a container.
+
+It does not write a Dockerfile, choose a Zone, or move secrets into the ops repository. Those need
+judgement; the companion skill covers them.
+
+> **`gf deploy` was removed in v7.** It deployed by running `git checkout` and `composer update` on
+> the server, which resolves dependencies in production at deploy time — two hosts on "the same tag"
+> could be running different code. A Release is now an immutable image pinned by digest, deployed by
+> a GitHub Actions workflow. See `docs/adr/0002-immutable-release-digest-pinning.md`.
 
 ---
 
@@ -284,8 +248,7 @@ config-activation step.
   ```
 
 Completion is dynamic: `gf cli <TAB>` suggests the application's actual CLI routes (with
-descriptions), `gf env <TAB>` (and `db:restore --from=<TAB>` etc.) suggests the config.json
-environments (from the `environments` section) present in the app.
+descriptions), `gf <TAB>` completes command names.
 
 ---
 
@@ -321,7 +284,7 @@ down gf itself (run with `-v` to see discovery errors).
 Useful helpers for custom commands (all in `\gcgov\framework\cli`):
 
 - `appContext::require()` / `appContext::locate()` — application root + config access
-- `appContext->loadConfig()` / `loadVariantEnvironment($name)` — resolve the active config, or one `environments.{name}` entry
+- `appContext->loadConfig()` / `configReferences()` — resolve config.json, or list what it references
 - `configLoader::load($root)` / `loadVariantEnvironment($root, $name)` — the shared config-load pipeline (also used by `gcgovrameworknfig`)
 - `mongoTools::findBinary()/redactUri()/uriWithDatabase()`
 - `phpProcess::findPhpBinary()/requiredIniFlags()/xdebugFlags()`
@@ -337,10 +300,9 @@ Useful helpers for custom commands (all in `\gcgov\framework\cli`):
 | `app\cli\prod.bat /cli/x` (Task Scheduler) | `vendor\bin\gf.bat cli /cli/x` |
 | `app\cli\local-debug.bat /cli/x` | `vendor/bin/gf cli /cli/x --debug` |
 | `scripts\create-jwt-keys.ps1` | `vendor/bin/gf cert:generate-auth` |
-| `scripts\setup.ps1` | `vendor/bin/gf setup` |
-| `db\restore-live-to-local.ps1` | `vendor/bin/gf db:restore --from=prod` |
+| `scripts\setup.ps1` | `vendor/bin/gf init --title="…"` |
 | `mongosh "mongodb://user:pass@..." db\fix.js` | `vendor/bin/gf db:run db/fix.js --env=prod` |
-| `update-production.ps1` | `vendor/bin/gf deploy` |
+| `update-production.ps1` | removed — deployment is a GitHub Actions workflow (ADR 0002) |
 | `Copy-Item composer-local.json composer.json` (+ 2 more) | nothing — config is committed and environment-variable driven (v7); `gf env` validates it |
 
 Files an app can delete once migrated: `app/cli/local.bat`, `app/cli/local-debug.bat`,
@@ -352,7 +314,7 @@ Reference any secrets that were hardcoded in those scripts via `%env(...)%` in t
 the root `config.json` — the `db:*` commands and the request lifecycle both resolve
 them. Keep the actual values in the process environment, Docker/Kubernetes secrets, or a
 gitignored `.env` file (per-variant values for the `db:*` commands go in gitignored
-the config.json `environments` section). See **[Environment variables in config](environment-variables.md)**
+See **[Environment variables in config](environment-variables.md)**
 and **[Migrating a v6 app to v7](#migrating-a-v6-app-to-v7)** above.
 
 For example, instead of a plaintext URI:

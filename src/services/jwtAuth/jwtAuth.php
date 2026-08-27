@@ -29,21 +29,20 @@ class jwtAuth {
 
 	public function __construct( ?string $guid = null ) {
 
-		//standard config
-		if( file_exists( config::getSrvDir().'/jwtCertificates/' ) ) {
-			$this->keyPath = config::getSrvDir().'/jwtCertificates/';
-		}
-		else {
-			$this->keyPath = dirname( __FILE__ ) . '/jwtCertificates/';
+		// Signing keys: jwtAuth.keyPath when configured, else {root}/srv/jwtCertificates.
+		// A container points keyPath at a provisioned read-only mount — the keys are
+		// secrets and are never baked into an image.
+		$this->keyPath = config::getJwtKeyPath();
+		if( !is_dir( $this->keyPath ) ) {
+			throw new configException( 'JWT key directory does not exist: ' . $this->keyPath . '. Generate keys with `vendor/bin/gf cert:generate-auth`, or point "jwtAuth.keyPath" in config.json at the directory they are provisioned to.' );
 		}
 
-		//jwt config
-		$jwtAuthConfig = config::getJwtAuth();
-		if( empty( $jwtAuthConfig->tokenIssuedBy ) || empty( $jwtAuthConfig->tokenPermittedFor ) ) {
-			throw new configException( 'Missing "jwtAuth" section of /config.json' );
+		// Issuer and audience default to the application's own rootUrl / basePath.
+		$this->issuedBy     = config::getTokenIssuedBy();
+		$this->permittedFor = config::getTokenPermittedFor();
+		if( $this->issuedBy==='' || $this->permittedFor==='' ) {
+			throw new configException( 'Cannot determine the JWT issuer and audience: set "rootUrl" and "basePath" in config.json, or set "jwtAuth.tokenIssuedBy" and "jwtAuth.tokenPermittedFor" explicitly.' );
 		}
-		$this->issuedBy     = $jwtAuthConfig->tokenIssuedBy;
-		$this->permittedFor = $jwtAuthConfig->tokenPermittedFor;
 
 		//guid config
 		if( !file_exists( $this->keyPath . 'guids.json' ) ) {
@@ -99,12 +98,12 @@ class jwtAuth {
 
 
 	private function getPrivateKeyPath(): string {
-		return $this->keyPath . '/private-' . $this->guid . '.pem';
+		return $this->keyPath . 'private-' . $this->guid . '.pem';
 	}
 
 
 	private function getPublicKeyPath(): string {
-		return $this->keyPath . '/public-' . $this->guid . '.pem';
+		return $this->keyPath . 'public-' . $this->guid . '.pem';
 	}
 
 
@@ -355,7 +354,7 @@ class jwtAuth {
 		$jwksKeys = [];
 
 		foreach( $this->guids as $guid ) {
-			$pub_key    = openssl_pkey_get_public( file_get_contents( $this->keyPath . '/public-' . $guid . '.pem' ) );
+			$pub_key    = openssl_pkey_get_public( file_get_contents( $this->keyPath . 'public-' . $guid . '.pem' ) );
 			$keyData    = openssl_pkey_get_details( $pub_key );
 			$jwksKeys[] = [
 				'alg' => 'RS512',
