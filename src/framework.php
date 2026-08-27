@@ -19,9 +19,10 @@ final class framework {
 
 		//appConfig
 		\app\app::_before();
-		// Constructed for its side effects only: since Framework Services moved into
-		// config.json, the instance itself has nothing the lifecycle needs to read.
-		new \app\app();
+		// Held for the lifetime of the request, as it always has been. Since Framework
+		// Services moved into config.json there is nothing left to ask it for, but an
+		// application may still do work in its constructor.
+		$app = new \app\app();
 
 		//router
 		\app\router::_before();

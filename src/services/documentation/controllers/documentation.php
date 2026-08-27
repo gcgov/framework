@@ -87,7 +87,7 @@ class documentation implements controller {
 			$exclusions[] = $frameworkSrc . '/models/authUser.php';
 		}
 
-		return array_values( $exclusions );
+		return $exclusions;
 	}
 
 
