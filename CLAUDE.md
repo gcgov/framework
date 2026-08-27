@@ -608,4 +608,4 @@ isolation boundary) are different things, and that v6's "environment variant" no
 ADRs recorded so far: 0001 fail-closed configuration · 0002 immutable Release pinned by digest ·
 0003 secrets never decrypt in CI or on hosts · 0004 one self-hosted runner per Zone ·
 0005 Framework Services are built in and config-activated · 0006 Let's Encrypt DNS-01 on one
-registered domain every Zone shares · 0007 a dedicated GCP project for deployment secrets.
+registered domain every Zone shares · 0007 Azure Key Vault per Zone for deployment secrets.
