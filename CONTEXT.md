@@ -14,9 +14,16 @@ repository and depending on the framework as a library.
 _Avoid_: project, site, instance, consumer
 
 **Framework Service**:
-An installable extension that contributes routes, controllers, an auth guard, and CLI commands to
-an Application when the Application registers its namespace.
+An optional part of the framework that contributes routes, controllers and an auth guard to an
+Application when the Application enables it in the `services` section of its Unified Config. A
+Framework Service ships inside the framework; it is not separately installable.
 _Avoid_: plugin, module, extension, package
+
+**Provider**:
+One of the ways the authentication Framework Service can establish an identity — a full OAuth server,
+or the exchange of a Microsoft token the front end already holds. Exactly one is selected, because
+`provider` is a single key.
+_Avoid_: driver, strategy, backend, adapter
 
 **Scaffold**:
 The one-time act of creating a new Application from the application template.
@@ -130,3 +137,10 @@ recognized as history rather than reintroduced.
   along with the ability to read another Environment's database from a workstation.
 - **Scaffolding token** — a marker replaced once at Scaffold time. Replaced by Config References
   and by generated developer environment files.
+- **Service namespace registration** — the array of namespace strings an Application returned from
+  `\app\app::registerFrameworkServiceNamespaces()` to enable Framework Services. Replaced by the
+  `services` section of the Unified Config, so that enabling a service and configuring it are one
+  statement. The separately published `gcgov/framework-service-*` packages remain real, but only for
+  v6 Applications; the framework conflicts with them.
+- **Auth plugin** — either of the two separate authentication packages. There is now one
+  authentication Framework Service with two Providers.

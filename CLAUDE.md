@@ -1,6 +1,6 @@
 # CLAUDE.md — gcgov/framework
 
-Guidance for Claude when working **on this framework** or **on any application/plugin built on it**.
+Guidance for Claude when working **on this framework** or **on any application built on it**.
 This file is the fast path to a correct mental model. For exhaustive reference, see `README.md` and the
 `readme/` directory (especially `readme/mongodb.md`).
 
@@ -13,7 +13,7 @@ SSR apps) for Garrett County Government. Composer package name: `gcgov/framework
 `gcgov\framework\` → `src/`.
 
 A full API with Microsoft OAuth authentication, user CRUD, and OpenAPI docs can be assembled with **almost
-no custom code** by installing framework-service plugins (see §12). The framework's standout feature is its
+no custom code** by enabling Framework Services in config.json (see §12). The framework's standout feature is its
 **MongoDB document-modeling system** (`\gcgov\framework\services\mongodb`), which is where most of the code
 and most of the complexity lives (§7).
 
@@ -48,7 +48,7 @@ phpstan.neon.dist          # PHPStan level config; phpstan-stubs/ holds stubs
 - **Class names are lowercase**: `class inspection`, `class user`, `class router`, `class app`,
   `controllerDataResponse`. This is deliberate and pervasive. File name == class name (`inspection.php`).
 - App code lives under namespace `\app` mapped to the app's `/app` directory. Framework code is
-  `\gcgov\framework\...`. Plugins are `\gcgov\framework\services\<plugin>\...`.
+  `\gcgov\framework\...`. Framework Services are `\gcgov\framework\services\<name>\...`.
 - Do not "modernize" to StudlyCase class names — you will break PSR-4 autoloading and every reference.
 
 ---
@@ -60,7 +60,7 @@ An app that runs a full request lifecycle must supply, in its `/app` directory:
 | File | Class | Must implement |
 |------|-------|----------------|
 | `/app/app.php` | `\app\app` | `\gcgov\framework\interfaces\app` |
-| `/app/router.php` | `\app\router` | `\gcgov\framework\interfaces\router` |
+| `/app/router.php` | `\app\router` | `\gcgov\framework\interfaces\appRouter` |
 | `/app/renderer.php` | `\app\renderer` | `\gcgov\framework\interfaces\render` |
 | `/app/controllers/*.php` | e.g. `\app\controllers\widget` | `\gcgov\framework\interfaces\controller` |
 
@@ -101,9 +101,10 @@ hooks defined by the `lifecycle\before` / `lifecycle\after` interfaces:
 ```
 www/index.php
  app::_before()
- new app()  →  app->registerFrameworkServiceNamespaces()   # returns plugin namespaces to load
+ new app()                                # no longer asked which services to load
  router::_before()
- new framework\router(serviceNamespaces)  # instantiates each plugin's \{ns}\router if present, then \app\router
+ new framework\router()                   # health, then each service enabled in config.json's
+                                          # `services` section, then \app\router
  framework\router->route()                # FastRoute dispatch + auth guards → routeHandler (or routeException)
  router::_after()
  renderer::_before()
@@ -119,14 +120,14 @@ www/index.php
 
 Rules a controller method must obey:
 - **Always return a `controllerResponse` subtype (§6). Never `die()`/`exit`** — it skips the rest of the
-  lifecycle. (The documentation plugin's `yaml()` is the one deliberate exception.)
+  lifecycle. (The documentation service's `yaml()` is the one deliberate exception.)
 - Route method parameters are bound positionally from the URL pattern placeholders.
 
 ---
 
 ## 5. Routing
 
-`\app\router::getRoutes()` returns `\gcgov\framework\models\route[]`. Plugin routers contribute routes too;
+`\app\router::getRoutes()` returns `\gcgov\framework\models\route[]`. Service routers contribute routes too;
 the framework merges **service routes first, then app routes** (`framework\router::getRoutes()`).
 
 ```php
@@ -148,19 +149,23 @@ $routes[] = new route('POST',   'structure/{_id}', '\app\controllers\structure',
 $routes[] = new route('CLI',    '/cli/cleanup',    '\app\controllers\cli\import','cleanup',false);
 ```
 If the app is not served at the domain root, prepend a base path (commonly
-`config::getBasePath()`, which is what plugin routers use).
+`config::getBasePath()`, which is what service routers use).
 
 ### Authentication guard flow (`framework\router::route()`)
 For a matched route with `authentication === true`:
 1. `\app\router::authentication($routeHandler)` runs **first** (your custom checks). Return `false` → 401.
-2. Then **each plugin router's** `authentication()` runs — unless `\app\router` defines
-   `getRunFrameworkServiceRouteAuthentication($routeHandler): bool` and returns `false` for that route.
-3. Auth plugins (oauth-server / auth-ms-front) validate the JWT from the `Authorization: Bearer …` header
+2. Then **each enabled service router's** `authentication()` runs — unless `\app\router` implements
+   `\gcgov\framework\interfaces\router\skipsServiceAuthentication` and returns `false` for that route.
+3. The auth service validates the JWT from the `Authorization: Bearer …` header
    (or `?fileAccessToken=` when `allowShortLivedUrlTokens`), populate the request-scoped `authUser`, and
    enforce `requiredRoles` (missing header → 401, missing role → 403).
 
-Routes with `authentication === false` skip all of this. There is **no built-in auth**; it comes from a
-plugin (§12). A `routeException` thrown anywhere in this flow becomes the HTTP error response.
+Routes with `authentication === false` skip all of this. A `routeException` thrown anywhere in this flow
+becomes the HTTP error response.
+
+**The framework refuses to boot** if any route sets `authentication: true` while no auth service is
+enabled and `\app\router::providesAuthentication()` returns `false` — such routes look protected and are
+open to anyone, because the scaffolded `authentication()` returns `true`.
 
 ---
 
@@ -332,7 +337,7 @@ exposed **directly on `config`** — there are no separate appConfig/environment
 `getRootUrl()`, `getBaseUrl()`, `getBasePath()`, `getLogging()`, `getMongoDatabases()`,
 `getSqlDatabases()`, `getDefaultSqlDatabase()`, `getSqlDatabaseByName($name)`, `getMicrosoft()`,
 `getJwtAuth()`, `getTokenIssuedBy()`, `getTokenPermittedFor()`, `getJwtKeyPath()`,
-`getPayjunction()`, `getAppDictionary()`.
+`getPayjunction()`, `getAppDictionary()`, `getServices()`, `getCronMonitor()`.
 `serverName`, `cookieUrl` and `phpPath` were **removed in v7** — nothing read them (confirmed across
 the framework and all five framework services). The PHP interpreter is `GF_PHP` / `gf cli --php`.
 
@@ -370,7 +375,7 @@ environment, Docker/K8s secrets, or a `.env` file — the basis of Docker hostin
 {
   "app":      { "title": "...", "guid": "..." },
   "email":    { "fromAddress": "", "fromName": "", "useSMTP": false, "SMTPHost": "", "SMTPPort": 587, "...": "" },
-  "settings": { "useSession": false, "forceMfaForPasswordUsers": false },
+  "settings": { "forceMfaForPasswordUsers": false },
   "type": "local|prod", "rootUrl": "", "basePath": "",
   "logging": { "lifecycle": false, "renderer": false,
                "destination": "stderr|file|both" },       // stderr (default) emits JSON lines
@@ -381,9 +386,21 @@ environment, Docker/K8s secrets, or a `.env` file — the basis of Docker hostin
   "jwtAuth":       { "tokenIssuedBy": "", "tokenPermittedFor": "",   // empty → derived from rootUrl / basePath
                      "redirectAfterLoginUrl": "", "redirectAfterLogoutUrl": "",
                      "keyPath": "" },                     // empty → {root}/srv/jwtCertificates
-  "appDictionary": { }   // free-form key/values plugins read (e.g. cronMonitorUrl)
+  "cronMonitor":   { "url": "" },   // empty disables cron run reporting
+  "services": {                     // presence enables; absent = off; contents are that service's settings
+    "auth":          { "provider": "oauth",   // "oauth" | "msFront" — required when auth is present
+                       "blockNewUsers": true,
+                       "defaultNewUserRoles": [],
+                       "oauth": { "authorizeUrlParameters": {} } },  // only for provider "oauth"
+    "userCrud":      { },
+    "documentation": { }
+  },
+  "appDictionary": { }   // free-form key/values an application reads
 }
 ```
+`services.auth` is fail-closed: an unknown `provider`, or a block for the provider that is **not**
+selected, is a startup failure. A missing block for the provider that *is* selected hydrates to its
+defaults, like every other section.
 
 ---
 
@@ -392,13 +409,13 @@ environment, Docker/K8s secrets, or a `.env` file — the basis of Docker hostin
 | Call | Purpose |
 |------|---------|
 | `services\log::{debug,info,notice,warning,error,critical,alert,emergency}($channel,$msg,$context=[])` | Monolog-backed. Destination is `logging.destination`: `stderr` (default, JSON lines) / `file` (`/logs/{channel}.log`) / `both`. |
-| `services\request::getAuthUser(): authUser` | Request-scoped authenticated user (roles, id, email…). Populated by the auth plugin's guard. |
+| `services\request::getAuthUser(): authUser` | Request-scoped authenticated user (roles, id, email…). Populated by the auth service's guard. |
 | `services\request::getUserClassFqdn(): string` | Resolves the app's user model FQDN: `\app\models\user`, else the Mongo `…\models\auth\user`. |
 | `services\request::getPostData(): array` | Parsed request body. |
 | `services\guid::create($trim=true)` | GUID string. |
 | `services\http::statusText($code)` | HTTP status text. |
 | `services\formatting::fileName() / xlsxTabName() / getDateIntervalHumanText()` | Sanitizers/formatters. |
-| `services\jwtAuth\jwtAuth` | JWT create/validate for access & refresh tokens; JWKS. Used by auth plugins — don't hand-roll auth. |
+| `services\jwtAuth\jwtAuth` | JWT create/validate for access & refresh tokens; JWKS. Used by the auth service — don't hand-roll auth. |
 | `services\chrome\chrome::getExecutablePath() / ::getBrowserFactory()` | Headless Chrome: path to the gf-installed chrome-headless-shell binary, or a ready `\HeadlessChromium\BrowserFactory` (chrome-php/chrome). Throws `serviceException` until `gf chrome:install` has run. |
 | `new services\pdodb\pdodb($readOnly=true, $databaseName='')` | Thin PDO wrapper using `sqlDatabases` config (read vs write account). |
 | `services\microsoft\*` | **Deprecated** — use `andrewsauder/microsoftServices` instead. |
@@ -445,8 +462,9 @@ List routes with `gf cli:list`; debug with `gf cli /path --debug`.
 - `aggregation()` does **not** auto-apply the typemap.
 - Deeply nested/mutually-referential models can infinite-loop the typemap → use
   `#[excludeFromTypemapWhenThisClassNotRoot]`.
-- There's no auth without an auth plugin; and auth plugins register a **global guard** over every
-  `authentication:true` route in the app.
+- There's no auth without `services.auth`; it registers a **global guard** over every
+  `authentication:true` route. The framework refuses to boot if authenticated routes exist without it
+  (and without `\app\router::providesAuthentication()`), rather than serving them unprotected.
 - Set `logging.lifecycle=true` in `config.json` to trace the entire pipeline when debugging routing/auth.
 - Every `%env()` reference is required — there is no default and `FOO=` counts as unset. `gf env` says
   which one is missing.
@@ -456,36 +474,44 @@ List routes with `gf cli:list`; debug with `gf cli /path --debug`.
 
 ---
 
-## 12. Extensions / plugins
+## 12. Framework Services
 
-Register a plugin by adding its namespace to `\app\app::registerFrameworkServiceNamespaces()`; the framework
-then auto-discovers `\{namespace}\router` and merges its routes + auth guard.
+Framework Services ship **inside** the framework (`src/services/`). Enable one by adding its block to the
+`services` section of `config.json` — presence enables, and the block's contents are its settings, so
+activation and configuration are one statement. See ADR 0005.
 
-| Plugin (repo) | Namespace to register | Adds |
-|---------------|-----------------------|------|
-| `gcgov/framework-service-documentation` | `\gcgov\framework\services\documentation` | `GET /documentation.yaml` (OpenAPI from annotations). |
-| `gcgov/framework-service-auth-ms-front` | `\gcgov\framework\services\authmsfront` | Exchange a Microsoft token for an app JWT; global JWT guard. |
-| `gcgov/framework-service-auth-oauth-server` | `\gcgov\framework\services\authoauth` | Full OAuth server (password + third-party + MFA); global JWT guard. |
-| `gcgov/framework-service-user-crud` | `\gcgov\framework\services\usercrud` | `/user` CRUD over the resolved user model. |
-| `gcgov/framework-service-gcgov-cron-monitor` | `\gcgov\framework\services\cronMonitor` | Report cron start/end to a monitor service. |
+| Config key | Namespace | Adds |
+|------------|-----------|------|
+| `services.auth` (`provider: "oauth"`) | `\gcgov\framework\services\auth` | Full OAuth server (password + third-party + MFA), JWKS, file tokens, global JWT guard. |
+| `services.auth` (`provider: "msFront"`) | same | Exchange a Microsoft token the front end holds for an app JWT, plus the same JWKS/file tokens/guard. |
+| `services.userCrud` | `\gcgov\framework\services\userCrud` | `/user` CRUD over the resolved user model (`User.Read` / `User.Write`). |
+| `services.documentation` | `\gcgov\framework\services\documentation` | `GET /documentation.yaml` (OpenAPI from annotations). |
 
-Each plugin repo has its own `CLAUDE.md` with specifics. Only **one** authentication plugin should be active
-at a time (oauth-server OR auth-ms-front).
+There is **one** auth service with two providers, so two cannot be active at once — it is unrepresentable
+rather than merely discouraged.
+
+`\gcgov\framework\services\cronMonitor\cronMonitor` is **not** a Framework Service: it registers no
+routes and takes no part in the lifecycle. Construct it directly and configure `cronMonitor.url`.
+
+The separately published `gcgov/framework-service-*` packages still exist for **v6** applications. The
+framework declares a `conflict` against all five, so a v7 application cannot install both.
 
 ---
 
-## 13. Authoring a new plugin (framework-service)
-- `composer.json`: `"type": "framework-service"`, PSR-4 `gcgov\framework\services\<name>\ → src/`.
-- Provide `src/router.php` = `\gcgov\framework\services\<name>\router implements \gcgov\framework\interfaces\router`
-  with `getRoutes()`, `authentication()`, static `_before()/_after()`. Prefix routes with
-  `config::getBasePath()`.
-- Controllers live under `\gcgov\framework\services\<name>\controllers\…` and implement `controller`.
-- Config via a singleton (`getInstance()`) the app tweaks in `app::_before()` (see oauth-server's `oauthConfig`),
-  and/or `config.json` `appDictionary` (via `config::getAppDictionary()`).
-- Return `false` from a plugin `authentication()` only to deny; return `true` to allow.
-- Optional: contribute gf commands with `src/cli/commandProvider.php` =
-  `\gcgov\framework\services\<name>\cli\commandProvider implements \gcgov\framework\cli\commandProvider`
-  returning symfony/console command instances (namespace the command names, e.g. `docs:regenerate`). See §16.
+## 13. Adding a new Framework Service
+Services live in this repository; there is no out-of-tree extension point (ADR 0005). An application
+needing routes of its own puts them in `\app\router`, which already runs first in the guard chain.
+
+- Code in `src/services/<name>/`, namespace `\gcgov\framework\services\<name>`.
+- `src/services/<name>/router.php` implements `\gcgov\framework\interfaces\router` — just `getRoutes()`
+  and `authentication()`, no lifecycle hooks. Prefix routes with `config::getBasePath()`.
+- Controllers under `\gcgov\framework\services\<name>\controllers\…` implementing `controller`.
+- Config: add a nullable property to `\gcgov\framework\models\config\services` and a DTO beside it in
+  `src/models/config/services/`. Nullable means absent = disabled. Give the router its typed config as a
+  constructor argument — no singletons.
+- Construct it in `framework\router::__construct()` behind `if( $services-><name> !== null )`.
+- Return `false` from `authentication()` only to deny; `true` to allow.
+- Mirror the tests under `tests/Unit/Services/<Name>/`. `composer ci` before pushing.
 
 ---
 
@@ -507,7 +533,7 @@ at a time (oauth-server OR auth-ms-front).
 - Core file examples: `readme/{index.php,cli-index.php,app.php,router.php,renderer.php}.md`.
 - **Mongo (authoritative, deep)**: `readme/mongodb.md`.
 - **gf CLI (authoritative)**: `readme/gf.md`.
-- A real, minimal consuming controller: the user-crud plugin's `src/controllers/user.php`.
+- A real, minimal consuming controller: `src/services/userCrud/controllers/user.php`.
 
 ---
 
@@ -549,9 +575,10 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
   The interpreter must be the CLI binary — `php-cgi`/`php-fpm`/`php-win` are swapped for the
   `php`/`php.exe` beside them, else rejected; the child always gets `-dregister_argc_argv=1`, and
   `internal/run-route.php` assumes neither `$argv` nor `STDERR` exists until it has checked.
-- **Expandability**: apps (`\app\cli\commandProvider`) and plugins
-  (`{ns}\cli\commandProvider`) implement `\gcgov\framework\cli\commandProvider::getCommands()`.
-  Discovery is fail-safe — errors never break gf (visible with `-v`).
+- **Expandability**: an app implements `\app\cli\commandProvider`
+  (`\gcgov\framework\cli\commandProvider::getCommands()`); discovery is fail-safe — errors never
+  break gf (visible with `-v`). Framework Services register commands directly in
+  `application::__construct()`, since they are part of the framework.
 - When adding a command: lowercase lowerCamelCase class in `src/cli/commands/`, `#[AsCommand]`
   attribute, register it in `application::__construct()`, throw `cliException` for user errors,
   add a mirrored test in `tests/Unit/Cli/`. Keep the logic in a pure static method the test can
@@ -579,4 +606,5 @@ Single-context: one root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.
 isolation boundary) are different things, and that v6's "environment variant" no longer exists.
 
 ADRs recorded so far: 0001 fail-closed configuration · 0002 immutable Release pinned by digest ·
-0003 secrets never decrypt in CI or on hosts · 0004 one self-hosted runner per Zone.
+0003 secrets never decrypt in CI or on hosts · 0004 one self-hosted runner per Zone ·
+0005 Framework Services are built in and config-activated.

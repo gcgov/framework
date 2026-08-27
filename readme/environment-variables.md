@@ -160,7 +160,7 @@ says so.
 ```jsonc
 {
   "app":      { "title": "Permits API", "guid": "…" },   // literals: they never vary
-  "settings": { "useSession": false },
+  "settings": { "forceMfaForPasswordUsers": false },
 
   "type":     "%env(APP_TYPE)%",
   "rootUrl":  "%env(APP_ROOT_URL)%",

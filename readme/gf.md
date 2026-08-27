@@ -277,7 +277,8 @@ class commandProvider implements \gcgov\framework\cli\commandProvider {
 
 Commands are ordinary [symfony/console](https://symfony.com/doc/current/console.html) commands.
 gf discovers providers in the `\app` namespace and in every namespace the app registers via
-`\app\app::registerFrameworkServiceNamespaces()`. Name plugin commands with a namespace prefix
+Framework Services register their commands directly in `application::__construct()`, since they are
+part of the framework. Name commands with a namespace prefix
 (`docs:regenerate`) to avoid collisions. Discovery is fail-safe: a broken provider never takes
 down gf itself (run with `-v` to see discovery errors).
 

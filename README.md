@@ -345,18 +345,26 @@ Write user connection: `new gcgov\framework\services\pdodb\pdodb(false, $databas
 ## Extensions
 Extensions add service or app level functionality to the app that registers them. Extensions may expose new endpoints.
 
-* **Open API Documentation** `gcgov/framework-service-documentation`
-    * https://github.com/gcgov/framework-service-documentation
-    * Add namespace `\gcgov\framework\services\documentation` to `\app\app->registerFrameworkServiceNamespaces()`
-* **Microsoft Auth Token Exchange** `gcgov/framework-service-auth-ms`
-    * https://github.com/gcgov/framework-service-auth-ms-front
-    * Add namespace `\gcgov\framework\services\authmsfront` to `\app\app->registerFrameworkServiceNamespaces()`
-* **Oauth Server Service** `gcgov/framework-service-auth-oauth-server`
-    * https://github.com/gcgov/framework-service-auth-oauth-server
-    * Add namespace `\gcgov\framework\services\authoauth` to `\app\app->registerFrameworkServiceNamespaces()`
-* **User CRUD** `gcgov/framework-service-user-crud`
-    * https://github.com/gcgov/framework-service-user-crud
-    * Add namespace `\gcgov\framework\services\usercrud` to `\app\app->registerFrameworkServiceNamespaces()`
-* **Cron Monitor** `gcgov/framework-service-gcgov-cron-monitor`
-    * https://github.com/gcgov/framework-service-gcgov-cron-monitor/
-    * Add namespace `gcgov\framework\services\cronMonitor` to `\app\app->registerFrameworkServiceNamespaces()`
+Framework Services ship inside the framework. Enable one by adding its block to the `services`
+section of `config.json` — presence enables it, and the block's contents are its settings.
+
+```jsonc
+"services": {
+  "auth":          { "provider": "oauth" },   // or "msFront"
+  "userCrud":      { },
+  "documentation": { }
+}
+```
+
+* **Authentication** `services.auth` — one service, two providers.
+    * `provider: "oauth"` — full OAuth server: password, third-party and authorization-code grants, MFA.
+    * `provider: "msFront"` — exchange a Microsoft token the front end already holds for an app JWT.
+    * Either way you get `/.well-known/jwks.json`, `/auth/fileToken`, and a JWT guard over every
+      `authentication: true` route.
+* **User CRUD** `services.userCrud` — `/user` CRUD over the resolved user model.
+* **Open API Documentation** `services.documentation` — `GET /documentation.yaml`.
+* **Cron Monitor** — not a Framework Service; construct
+  `\gcgov\framework\services\cronMonitor\cronMonitor` directly and set `cronMonitor.url`.
+
+The separately published `gcgov/framework-service-*` packages remain available for **v6** applications.
+The framework conflicts with them, so a v7 application cannot install both.
