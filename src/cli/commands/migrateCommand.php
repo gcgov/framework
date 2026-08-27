@@ -78,6 +78,40 @@ final class migrateCommand extends Command {
 		'composer-prod.json',
 	];
 
+	/**
+	 * v6 Framework Service namespaces, and the config.json `services` key each becomes.
+	 *
+	 * @var array<string, string>
+	 */
+	public const array SERVICE_NAMESPACES = [
+		'gcgov\\framework\\services\\documentation' => 'documentation',
+		'gcgov\\framework\\services\\usercrud'      => 'userCrud',
+		'gcgov\\framework\\services\\authoauth'     => 'auth:oauth',
+		'gcgov\\framework\\services\\authmsfront'   => 'auth:msFront',
+		'gcgov\\framework\\services\\cronMonitor'   => 'cronMonitor',
+	];
+
+	/**
+	 * Service configuration that used to be applied by calling a singleton in
+	 * \app\app::_before(). The values are arbitrary PHP expressions, so these are
+	 * reported for the developer to transcribe rather than guessed at.
+	 *
+	 * @var array<string, string>
+	 */
+	public const array SINGLETON_CALLS = [
+		'setBlockNewUsers'          => 'services.auth.blockNewUsers / services.auth.defaultNewUserRoles',
+		'setAuthorizeUrlParameters' => 'services.auth.oauth.authorizeUrlParameters',
+	];
+
+	/** Framework Service packages that are now part of the framework itself. */
+	public const array SERVICE_PACKAGES = [
+		'gcgov/framework-service-auth-oauth-server',
+		'gcgov/framework-service-auth-ms-front',
+		'gcgov/framework-service-user-crud',
+		'gcgov/framework-service-documentation',
+		'gcgov/framework-service-gcgov-cron-monitor',
+	];
+
 
 	protected function configure(): void {
 		$this->addOption( 'dry-run', null, InputOption::VALUE_NONE, 'Show what would change without writing anything' );
@@ -119,9 +153,15 @@ final class migrateCommand extends Command {
 			throw new cliException( $context->getConfigPath() . ' already exists — this application appears to be migrated. Pass --force to overwrite it.' );
 		}
 
+		$appPhpPath = $context->rootDir . '/app/app.php';
+		$detected   = file_exists( $appPhpPath )
+			? self::detectServices( (string)file_get_contents( $appPhpPath ) )
+			: [ 'services' => [], 'singletons' => [] ];
+
 		$plan = self::plan(
 			self::readJson( $appJsonPath ),
-			self::readJson( $environmentJsonPath )
+			self::readJson( $environmentJsonPath ),
+			$detected
 		);
 
 		$io->title( 'v6 → v7 migration' . ( $dryRun ? ' (dry run)' : '' ) );
@@ -138,6 +178,23 @@ final class migrateCommand extends Command {
 			$io->section( 'Review these yourself' );
 			foreach( $plan[ 'warnings' ] as $warning ) {
 				$io->text( '  · ' . $warning );
+			}
+		}
+
+		$composerPath    = $context->rootDir . '/composer.json';
+		$composerRemoved = [];
+		$composerJson    = null;
+		if( file_exists( $composerPath ) ) {
+			$decoded = json_decode( (string)file_get_contents( $composerPath ), true );
+			if( is_array( $decoded ) ) {
+				[ 'json' => $composerJson, 'removed' => $composerRemoved ] = self::removeServiceRequires( $decoded );
+			}
+		}
+		if( count( $composerRemoved )>0 ) {
+			$io->section( 'composer.json' );
+			$io->text( 'These are part of the framework now, and conflict with it:' );
+			foreach( $composerRemoved as $package ) {
+				$io->text( '  - ' . $package );
 			}
 		}
 
@@ -162,6 +219,13 @@ final class migrateCommand extends Command {
 
 		$this->writeEnvFile( $context->getEnvFilePath(), $plan[ 'env' ], $plan[ 'secrets' ] );
 
+		if( count( $composerRemoved )>0 && is_array( $composerJson ) ) {
+			$encodedComposer = json_encode( $composerJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+			if( $encodedComposer===false || file_put_contents( $composerPath, $encodedComposer . "\n" )===false ) {
+				throw new cliException( 'Failed writing ' . $composerPath );
+			}
+		}
+
 		if( !$input->getOption( 'keep-dead-files' ) ) {
 			foreach( $deadFiles as $deadFile ) {
 				@unlink( $context->rootDir . '/' . $deadFile );
@@ -169,6 +233,9 @@ final class migrateCommand extends Command {
 		}
 
 		$io->success( 'Migrated. Review the diff, then run `gf env` to confirm the configuration resolves.' );
+		if( count( $composerRemoved )>0 ) {
+			$io->text( 'Run `composer update` — composer.json changed.' );
+		}
 		$io->text( 'Still to do by hand: the Dockerfile and compose entry, the Zone this application belongs in, and moving its secrets into the ops repository.' );
 
 		return Command::SUCCESS;
@@ -181,10 +248,11 @@ final class migrateCommand extends Command {
 	 *
 	 * @param  array<string, mixed>  $appJson          Decoded app/config/app.json
 	 * @param  array<string, mixed>  $environmentJson  Decoded app/config/environment.json
+	 * @param  array{services: string[], singletons: string[]}  $detected  Result of detectServices()
 	 *
 	 * @return array{config: array<string, mixed>, env: array<string, string>, secrets: array<string, bool>, warnings: string[]}
 	 */
-	public static function plan( array $appJson, array $environmentJson ): array {
+	public static function plan( array $appJson, array $environmentJson, array $detected = [ 'services' => [], 'singletons' => [] ] ): array {
 		$config   = $environmentJson;
 		$env      = [];
 		$secrets  = [];
@@ -248,6 +316,40 @@ final class migrateCommand extends Command {
 			$warnings[] = 'app.guid is empty. The oauth server uses it as the OAuth client_id, so set it before deploying.';
 		}
 
+		// Framework Services: from namespaces returned by \app\app to a config section.
+		$services = [];
+		foreach( $detected[ 'services' ] ?? [] as $service ) {
+			if( $service==='cronMonitor' ) {
+				continue;
+			}
+			if( str_starts_with( $service, 'auth:' ) ) {
+				$provider = substr( $service, 5 );
+				if( isset( $services[ 'auth' ] ) ) {
+					$warnings[] = 'Both authentication services were registered. Only one provider can be active, so "' . $services[ 'auth' ][ 'provider' ] . '" was kept — change services.auth.provider if that is the wrong one.';
+					continue;
+				}
+				$services[ 'auth' ] = [ 'provider' => $provider ];
+				continue;
+			}
+			$services[ $service ] = new \stdClass();
+		}
+		if( count( $services )>0 ) {
+			$config[ 'services' ] = $services;
+		}
+
+		// cronMonitor is no longer a Framework Service, so its url gets a typed home of
+		// its own rather than living in the untyped appDictionary.
+		$cronMonitorUrl = $config[ 'appDictionary' ][ 'cronMonitorUrl' ] ?? null;
+		if( is_string( $cronMonitorUrl ) && $cronMonitorUrl!=='' ) {
+			$config[ 'cronMonitor' ] = [ 'url' => $cronMonitorUrl ];
+			unset( $config[ 'appDictionary' ][ 'cronMonitorUrl' ] );
+			$warnings[] = 'appDictionary.cronMonitorUrl moved to cronMonitor.url. Update any application code still reading it from appDictionary.';
+		}
+
+		foreach( $detected[ 'singletons' ] ?? [] as $call ) {
+			$warnings[] = $call . '() is called in app/app.php. That configuration moved to ' . ( self::SINGLETON_CALLS[ $call ] ?? 'config.json' ) . ' — copy the values across by hand, then delete the call.';
+		}
+
 		ksort( $env );
 
 		return [ 'config' => $config, 'env' => $env, 'secrets' => $secrets, 'warnings' => $warnings ];
@@ -256,6 +358,77 @@ final class migrateCommand extends Command {
 
 	public static function reference( string $varName, bool $isSecret ): string {
 		return '%env(' . ( $isSecret ? 'secret:' : '' ) . $varName . ')%';
+	}
+
+
+	/**
+	 * Find the Framework Services an application registers, and the service-configuration
+	 * singletons it calls, by reading app/app.php.
+	 *
+	 * Comments are stripped with the tokenizer rather than by matching text, because the
+	 * scaffolded app.php ships the alternatives commented out directly above the live
+	 * array — a plain search would report services the application does not run.
+	 *
+	 * Impure input, pure function: execute() reads the file, this interprets it.
+	 *
+	 * @return array{services: string[], singletons: string[]}
+	 */
+	public static function detectServices( string $appSource ): array {
+		$code = '';
+		foreach( @token_get_all( $appSource ) as $token ) {
+			if( is_array( $token ) ) {
+				if( $token[ 0 ]===T_COMMENT || $token[ 0 ]===T_DOC_COMMENT ) {
+					continue;
+				}
+				$code .= $token[ 1 ];
+				continue;
+			}
+			$code .= $token;
+		}
+
+		$services = [];
+		foreach( self::SERVICE_NAMESPACES as $namespace => $service ) {
+			if( str_contains( $code, $namespace ) ) {
+				$services[] = $service;
+			}
+		}
+
+		$singletons = [];
+		foreach( array_keys( self::SINGLETON_CALLS ) as $call ) {
+			if( str_contains( $code, $call ) ) {
+				$singletons[] = $call;
+			}
+		}
+
+		return [ 'services' => $services, 'singletons' => $singletons ];
+	}
+
+
+	/**
+	 * Drop the Framework Service packages from an application's composer.json.
+	 *
+	 * The framework declares a `conflict` against them, so leaving them in place makes the
+	 * application unresolvable rather than merely untidy.
+	 *
+	 * @param  array<string, mixed>  $composerJson
+	 *
+	 * @return array{json: array<string, mixed>, removed: string[]}
+	 */
+	public static function removeServiceRequires( array $composerJson ): array {
+		$removed = [];
+		foreach( [ 'require', 'require-dev' ] as $section ) {
+			if( !isset( $composerJson[ $section ] ) || !is_array( $composerJson[ $section ] ) ) {
+				continue;
+			}
+			foreach( self::SERVICE_PACKAGES as $package ) {
+				if( array_key_exists( $package, $composerJson[ $section ] ) ) {
+					unset( $composerJson[ $section ][ $package ] );
+					$removed[] = $package;
+				}
+			}
+		}
+
+		return [ 'json' => $composerJson, 'removed' => array_values( array_unique( $removed ) ) ];
 	}
 
 
