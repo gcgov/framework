@@ -48,8 +48,16 @@ final class AppConfigModelsTest extends TestCase {
 
 	public function testSettingsDefaults(): void {
 		$settings = new settings();
-		$this->assertFalse( $settings->useSession );
 		$this->assertFalse( $settings->forceMfaForPasswordUsers );
+	}
+
+
+	/**
+	 * useSession was declared, documented, and read by nothing — not the framework, not a
+	 * Framework Service, not any application. It was removed rather than carried forward.
+	 */
+	public function testUseSessionIsGone(): void {
+		$this->assertFalse( property_exists( settings::class, 'useSession' ) );
 	}
 
 	public function testAllConfigsExtendJsonDeserialize(): void {

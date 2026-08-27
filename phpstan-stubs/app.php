@@ -12,18 +12,15 @@ namespace app;
 class app implements \gcgov\framework\interfaces\app {
 	public static function _before(): void {}
 	public static function _after(): void {}
-
-
-    public function registerFrameworkServiceNamespaces(): array
-    {
-        return [];
-    }
-
 }
 
-class router implements \gcgov\framework\interfaces\router {
+class router implements \gcgov\framework\interfaces\appRouter {
 	public static function _before(): void {}
 	public static function _after(): void {}
+
+	public function providesAuthentication(): bool {
+		return false;
+	}
 
 	/**
 	 * @return \gcgov\framework\models\route[]

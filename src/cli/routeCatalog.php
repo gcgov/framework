@@ -37,7 +37,7 @@ final class routeCatalog {
 		$context->assertAppLoadable();
 
 		try {
-			return \gcgov\framework\router::getMergedRoutes( $context->getServiceNamespaces() );
+			return \gcgov\framework\router::getMergedRoutes();
 		}
 		catch( \gcgov\framework\exceptions\configException $e ) {
 			throw new cliException( 'Could not load routes: ' . $e->getMessage() . ' Ensure {root}/config.json exists and every %env(...) it references has a value (validate with `gf env`).', 0, $e );

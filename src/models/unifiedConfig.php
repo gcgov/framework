@@ -6,11 +6,13 @@ namespace gcgov\framework\models;
 use gcgov\framework\models\config\app\app;
 use gcgov\framework\models\config\app\email;
 use gcgov\framework\models\config\app\settings;
+use gcgov\framework\models\config\environment\cronMonitor;
 use gcgov\framework\models\config\environment\jwtAuth;
 use gcgov\framework\models\config\environment\logging;
 use gcgov\framework\models\config\environment\microsoft;
 use gcgov\framework\models\config\environment\payjunction;
 use gcgov\framework\models\config\environment\sqlDatabase;
+use gcgov\framework\models\config\services;
 use JetBrains\PhpStorm\Deprecated;
 
 /**
@@ -58,6 +60,12 @@ class unifiedConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	public logging $logging;
 
+	public cronMonitor $cronMonitor;
+
+	// --- framework services ---
+
+	public services $services;
+
 	public array $appDictionary = [];
 
 
@@ -69,6 +77,8 @@ class unifiedConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 		$this->jwtAuth     = new jwtAuth();
 		$this->payjunction = new payjunction();
 		$this->logging     = new logging();
+		$this->cronMonitor = new cronMonitor();
+		$this->services    = new services();
 	}
 
 	protected function _afterJsonDeserialize(): void {
@@ -76,7 +86,7 @@ class unifiedConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 		// constructor, leaving typed-non-nullable properties uninitialized.
 		// Use reflection so we can ask the engine about init state without
 		// PHPStan narrowing the check away.
-		foreach( [ 'app' => app::class, 'email' => email::class, 'settings' => settings::class, 'microsoft' => microsoft::class, 'jwtAuth' => jwtAuth::class, 'payjunction' => payjunction::class, 'logging' => logging::class ] as $property => $class ) {
+		foreach( [ 'app' => app::class, 'email' => email::class, 'settings' => settings::class, 'microsoft' => microsoft::class, 'jwtAuth' => jwtAuth::class, 'payjunction' => payjunction::class, 'logging' => logging::class, 'cronMonitor' => cronMonitor::class, 'services' => services::class ] as $property => $class ) {
 			if( !( new \ReflectionProperty( $this, $property ) )->isInitialized( $this ) ) {
 				$this->$property = new $class();
 			}

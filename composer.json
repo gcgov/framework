@@ -38,7 +38,18 @@
 		"ext-pdo": "*",
 		"ext-sodium": "*",
 		"ext-openssl": "*",
-		"spatie/typescript-transformer": "^2.4"
+		"spatie/typescript-transformer": "^2.4",
+		"doctrine/annotations": "^2.0",
+		"robthree/twofactorauth": "^3.0",
+		"bacon/bacon-qr-code": "^3.0",
+		"andrewsauder/microsoft-services": "^1.4"
+	},
+	"conflict": {
+		"gcgov/framework-service-auth-oauth-server": "*",
+		"gcgov/framework-service-auth-ms-front": "*",
+		"gcgov/framework-service-user-crud": "*",
+		"gcgov/framework-service-documentation": "*",
+		"gcgov/framework-service-gcgov-cron-monitor": "*"
 	},
 	"suggest": {
 		"ext-zip": "Required by `gf chrome:install` / `gf chrome:update` to extract the chrome-headless-shell download"

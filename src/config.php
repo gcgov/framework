@@ -6,11 +6,13 @@ namespace gcgov\framework;
 use gcgov\framework\models\config\app\app;
 use gcgov\framework\models\config\app\email;
 use gcgov\framework\models\config\app\settings;
+use gcgov\framework\models\config\environment\cronMonitor;
 use gcgov\framework\models\config\environment\jwtAuth;
 use gcgov\framework\models\config\environment\logging;
 use gcgov\framework\models\config\environment\microsoft;
 use gcgov\framework\models\config\environment\payjunction;
 use gcgov\framework\models\config\environment\sqlDatabase;
+use gcgov\framework\models\config\services;
 use gcgov\framework\models\unifiedConfig;
 
 
@@ -327,6 +329,23 @@ final class config {
 	/** @throws \gcgov\framework\exceptions\configException */
 	public static function getAppDictionary(): array {
 		return self::unifiedConfig()->appDictionary;
+	}
+
+
+	/**
+	 * Which Framework Services this application runs. A service whose block is absent is
+	 * not constructed and contributes no routes.
+	 *
+	 * @throws \gcgov\framework\exceptions\configException
+	 */
+	public static function getServices(): services {
+		return self::unifiedConfig()->services;
+	}
+
+
+	/** @throws \gcgov\framework\exceptions\configException */
+	public static function getCronMonitor(): cronMonitor {
+		return self::unifiedConfig()->cronMonitor;
 	}
 
 }

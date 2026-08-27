@@ -19,13 +19,14 @@ final class framework {
 
 		//appConfig
 		\app\app::_before();
-		$app = new \app\app();
-        $serviceNamespaces = $app->registerFrameworkServiceNamespaces();
+		// Constructed for its side effects only: since Framework Services moved into
+		// config.json, the instance itself has nothing the lifecycle needs to read.
+		new \app\app();
 
 		//router
 		\app\router::_before();
 		try {
-			$router = new \gcgov\framework\router( $serviceNamespaces );
+			$router = new \gcgov\framework\router();
 			$routeHandler  = $router->route();
 		}
 		catch( routeException $e ) {

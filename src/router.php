@@ -4,46 +4,52 @@ namespace gcgov\framework;
 
 use gcgov\framework\exceptions\routeException;
 use gcgov\framework\services\log;
-use ReflectionClass;
 
 final class router {
 
-	private \gcgov\framework\interfaces\router $appRouter;
+	private \gcgov\framework\interfaces\appRouter $appRouter;
 
 	/** @var \gcgov\framework\interfaces\router[] $serviceRouters  */
 	private array $serviceRouters = [];
 
 	/**
-	 * @param string[] $serviceNamespaces
+	 * Framework Services are declared in config.json's `services` section. Each is
+	 * constructed here only if its block is present, and is handed its own typed
+	 * configuration — there is no discovery step and no service configures itself from a
+	 * singleton the application had to remember to tweak in \app\app::_before().
 	 *
-	 * @throws \gcgov\framework\exceptions\routeException
+	 * @throws \gcgov\framework\exceptions\configException
 	 */
-	public function __construct( array $serviceNamespaces ) {
+	public function __construct() {
 		if(config::getLogging()->lifecycle) {
 			log::debug( 'Framework Lifecycle', '-Router- constructing framework\router' );
-			log::debug( 'Framework Lifecycle', '-Router- check for routers in services' );
 		}
 
 		// The framework's own routes (health checks) come first and are not opt-in: a
 		// deploy pipeline cannot gate on an endpoint an application chose not to have.
 		$this->serviceRouters[] = new \gcgov\framework\services\health\router();
 
-		foreach($serviceNamespaces as $serviceNamespace) {
-			try {
-				$reflectionClassOfServiceRouter = new ReflectionClass( $serviceNamespace . '\router' );
-				if(config::getLogging()->lifecycle) {
-					log::debug( 'Framework Lifecycle', '-Router- instantiate ' . $serviceNamespace . '\router' );
-				}
-				$serviceRouter = $reflectionClassOfServiceRouter->newInstance();
-				if(!($serviceRouter instanceof \gcgov\framework\interfaces\router)) {
-					error_log($serviceNamespace.'\router must implement \gcgov\framework\interfaces\router if it wants to be used as a router by gcgov\framework');
-					continue;
-				}
-				$this->serviceRouters[] = $serviceRouter;
+		$services = config::getServices();
+
+		if( $services->auth!==null ) {
+			if(config::getLogging()->lifecycle) {
+				log::debug( 'Framework Lifecycle', '-Router- enable auth service (' . $services->auth->provider . ')' );
 			}
-			catch( \ReflectionException $e ) {
-				//service does not have a router, no problem
+			$this->serviceRouters[] = new \gcgov\framework\services\auth\router( $services->auth );
+		}
+
+		if( $services->userCrud!==null ) {
+			if(config::getLogging()->lifecycle) {
+				log::debug( 'Framework Lifecycle', '-Router- enable userCrud service' );
 			}
+			$this->serviceRouters[] = new \gcgov\framework\services\userCrud\router();
+		}
+
+		if( $services->documentation!==null ) {
+			if(config::getLogging()->lifecycle) {
+				log::debug( 'Framework Lifecycle', '-Router- enable documentation service' );
+			}
+			$this->serviceRouters[] = new \gcgov\framework\services\documentation\router();
 		}
 
 		if(config::getLogging()->lifecycle) {
@@ -56,6 +62,7 @@ final class router {
 	/**
 	 * @return \gcgov\framework\models\routeHandler
 	 * @throws \gcgov\framework\exceptions\routeException
+	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	public function route(): \gcgov\framework\models\routeHandler {
 		if(config::getLogging()->lifecycle) {
@@ -64,6 +71,9 @@ final class router {
 
 		//get all routes
 		$routes = $this->getRoutes();
+
+		// Refuse to serve routes that believe they are protected but are not.
+		self::assertAuthenticationIsProvided( $routes, config::getServices()->auth!==null, $this->appRouter->providesAuthentication() );
 
 		//map routes to \FastRoute dispatcher
 		$routeDispatcher = \FastRoute\simpleDispatcher( function( \FastRoute\RouteCollector $r ) use ( $routes ) {
@@ -114,7 +124,7 @@ final class router {
 				}
 
 				$runServiceRouting = true;
-				if(method_exists($this->appRouter, 'getRunFrameworkServiceRouteAuthentication')) {
+				if($this->appRouter instanceof \gcgov\framework\interfaces\router\skipsServiceAuthentication) {
 					$runServiceRouting = $this->appRouter->getRunFrameworkServiceRouteAuthentication( $routeHandler );
 				}
 				if($runServiceRouting) {
@@ -123,12 +133,12 @@ final class router {
 					}
 					foreach($this->serviceRouters as $serviceRouter) {
 						if(config::getLogging()->lifecycle) {
-							log::debug( 'Framework Lifecycle', '-Router- run framework\services\\' . get_class( $serviceRouter ) . '\router authentication()' );
+							log::debug( 'Framework Lifecycle', '-Router- run ' . get_class( $serviceRouter ) . ' authentication()' );
 						}
 						$serviceAllowRoute = $serviceRouter->authentication( $routeHandler );
 						if(!$serviceAllowRoute) {
 							if(config::getLogging()->lifecycle) {
-								log::debug( 'Framework Lifecycle', '-Router- framework\services\\' . get_class( $serviceRouter ) . '\router authentication() returned false; raising route exception' );
+								log::debug( 'Framework Lifecycle', '-Router- ' . get_class( $serviceRouter ) . ' authentication() returned false; raising route exception' );
 							}
 							throw new \gcgov\framework\exceptions\routeException ( 'Authentication failed', 401 );
 						}
@@ -149,17 +159,53 @@ final class router {
 
 
 	/**
-	 * Build the full merged route table (service routes first, then app routes) without
-	 * dispatching a request. Used by the gf CLI to enumerate routes.
+	 * Routes that declare authentication:true are only actually guarded by an
+	 * authentication service, or by an application that authenticates its own routes.
+	 * With neither, \app\router::authentication() is the only guard left — and the
+	 * scaffolded implementation of it returns true for everyone, so those routes would be
+	 * open to the world while looking protected in the route table.
 	 *
-	 * @param string[] $serviceNamespaces Namespaces returned by \app\app::registerFrameworkServiceNamespaces()
+	 * Refusing to serve is the only safe reading: a configuration that cannot protect what
+	 * it claims to protect is a broken configuration, not a permissive one.
+	 *
+	 * @param  \gcgov\framework\models\route[]  $routes
+	 *
+	 * @throws \gcgov\framework\exceptions\configException
+	 */
+	public static function assertAuthenticationIsProvided( array $routes, bool $authServiceEnabled, bool $appProvidesAuthentication ): void {
+		if( $authServiceEnabled || $appProvidesAuthentication ) {
+			return;
+		}
+
+		$unguarded = [];
+		foreach( $routes as $route ) {
+			if( $route->authentication ) {
+				$unguarded[] = ( is_array( $route->httpMethod ) ? implode( '|', $route->httpMethod ) : $route->httpMethod ) . ' ' . $route->route;
+			}
+		}
+
+		if( count( $unguarded )===0 ) {
+			return;
+		}
+
+		throw new \gcgov\framework\exceptions\configException( count( $unguarded ) . ' route(s) require authentication but no authentication service is enabled: ' . implode( ', ', $unguarded ) . '. Enable one by adding a "services": { "auth": { "provider": "oauth" } } block to config.json, or — if \app\router authenticates these routes itself — have it implement \gcgov\framework\interfaces\appRouter::providesAuthentication() returning true.', 500 );
+	}
+
+
+	/**
+	 * Build the full merged route table (framework routes first, then enabled Framework
+	 * Services, then the application) without dispatching a request. Used by the gf CLI to
+	 * enumerate routes.
+	 *
+	 * Deliberately does not run assertAuthenticationIsProvided(): enumerating the routes of
+	 * a misconfigured application is exactly when that listing is most useful.
 	 *
 	 * @return \gcgov\framework\models\route[]
 	 * @throws \gcgov\framework\exceptions\routeException
-	 * @throws \gcgov\framework\exceptions\configException Missing/invalid app/config/environment.json
+	 * @throws \gcgov\framework\exceptions\configException Missing/invalid {root}/config.json
 	 */
-	public static function getMergedRoutes( array $serviceNamespaces ): array {
-		return ( new self( $serviceNamespaces ) )->getRoutes();
+	public static function getMergedRoutes(): array {
+		return ( new self() )->getRoutes();
 	}
 
 

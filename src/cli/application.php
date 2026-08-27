@@ -83,9 +83,12 @@ final class application extends \Symfony\Component\Console\Application {
 
 
 	/**
-	 * Register commands contributed by the app (\app\cli\commandProvider) and by each
-	 * framework-service plugin ({serviceNamespace}\cli\commandProvider). Failures never
-	 * break gf itself — built-in commands always remain available.
+	 * Register commands contributed by the application (\app\cli\commandProvider).
+	 * Failures never break gf itself — built-in commands always remain available.
+	 *
+	 * Framework Services no longer contribute commands through discovery: they live in
+	 * the framework now, so a service command is registered in this constructor like any
+	 * other built-in.
 	 */
 	private function discoverProviderCommands(): void {
 		try {
@@ -94,14 +97,9 @@ final class application extends \Symfony\Component\Console\Application {
 				return;
 			}
 
-			$namespaces   = $context->getServiceNamespaces();
-			$namespaces[] = '\app';
-
-			foreach( $namespaces as $namespace ) {
-				$providerClass = '\\' . trim( $namespace, '\\' ) . '\cli\commandProvider';
-				if( class_exists( $providerClass ) && is_a( $providerClass, commandProvider::class, true ) ) {
-					$this->addCommands( $providerClass::getCommands() );
-				}
+			$providerClass = '\app\cli\commandProvider';
+			if( class_exists( $providerClass ) && is_a( $providerClass, commandProvider::class, true ) ) {
+				$this->addCommands( $providerClass::getCommands() );
 			}
 		}
 		catch( \Throwable $e ) {

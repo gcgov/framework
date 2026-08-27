@@ -11,7 +11,7 @@ use gcgov\framework\models\unifiedConfig;
  * gf command tiers:
  *  - no context needed:  list, help, completion — work anywhere
  *  - root only:          env, db:*, cert:*, deploy — need locate() + config JSON
- *  - app boot:           cli, cli:list — need assertAppLoadable() + getServiceNamespaces()
+ *  - app boot:           cli, cli:list — need assertAppLoadable()
  */
 final class appContext {
 
@@ -135,21 +135,6 @@ final class appContext {
 		if( !class_exists( '\app\app' ) ) {
 			throw new cliException( '\app\app is not autoloadable. Run gf from the application root via vendor/bin/gf so the application autoloader is used. Application root detected: ' . $this->rootDir );
 		}
-	}
-
-
-	/**
-	 * Service namespaces registered by the app. Instantiates \app\app but deliberately
-	 * does NOT run \app\app::_before() — no lifecycle side effects for enumeration.
-	 *
-	 * @return string[]
-	 * @throws \gcgov\framework\cli\cliException
-	 */
-	public function getServiceNamespaces(): array {
-		$this->assertAppLoadable();
-		$app = new \app\app();
-
-		return $app->registerFrameworkServiceNamespaces();
 	}
 
 
