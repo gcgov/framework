@@ -127,6 +127,28 @@ by tag or branch. Deploying and rolling back are both the act of pointing a host
 Release.
 _Avoid_: version, build, deployment
 
+**Ops Project**:
+The cloud project holding the keys that encrypt the Ops Repo, one per Zone, and nothing else. Kept
+apart from the project holding an Application's data-encryption keys, because those are reachable
+from a host and these must never be.
+_Avoid_: KMS project, secrets project, security project
+
+**Delegation Zone**:
+A DNS zone holding only the ACME challenge records for one Zone, so that Zone's DNS credential can be
+scoped to it rather than to a domain that serves traffic.
+_Avoid_: ACME zone, challenge domain, validation domain
+
+**Break-glass Key**:
+The offline key every file in the Ops Repo is encrypted to in addition to its Zone's key, so that a
+total loss of cloud access is still recoverable. Retrieving it obliges replacing it.
+_Avoid_: recovery key, backup key, master key
+
+**Escrow Custodian**:
+One of the two named people who may retrieve the Break-glass Key from physical escrow, drawn from
+different reporting lines so that retrieval crosses a departmental boundary and is witnessed by
+someone with no stake in it.
+_Avoid_: key holder, key owner, keeper
+
 ### Retired language
 
 These terms named real things in v6 and no longer name anything. They are listed so that they are
