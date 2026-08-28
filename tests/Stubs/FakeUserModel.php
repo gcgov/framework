@@ -64,6 +64,11 @@ class user implements \gcgov\framework\interfaces\auth\user {
 		if ( !( $object instanceof self ) ) {
 			throw new \InvalidArgumentException( 'Expected ' . self::class );
 		}
+		// Mirrors the real model: an insert mints the _id, so an object arriving without
+		// one is a create rather than an error.
+		if ( !isset( $object->_id ) || $object->_id === '' ) {
+			$object->_id = 'generated-' . count( self::$records );
+		}
 		self::$records[ $object->_id ] = $object;
 		return $object;
 	}

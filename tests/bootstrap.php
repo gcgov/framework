@@ -11,6 +11,9 @@ if ( !extension_loaded( 'mongodb' ) ) {
 	require __DIR__ . '/Shims/MongoDBShims.php';
 }
 
+// Shared test helpers. tests/ is not PSR-4 autoloaded, so they are required here.
+require __DIR__ . '/Support/seedsFrameworkConfig.php';
+
 // Several framework call sites reflect on \app\app to derive directories.
 // Stub the class so tests that touch config::getAppDir() can boot.
 if ( !class_exists( '\app\app' ) ) {

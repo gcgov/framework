@@ -68,15 +68,35 @@ class documentation implements controller {
 	 * framework's must not also appear in the document as a second schema of the same name.
 	 *
 	 * @return string[]
+	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	private function getExcludeDirectoriesFiles(): array {
 		$frameworkSrc = dirname( __DIR__, 3 );
 
 		$exclusions = [];
 
-		$vendor = config::getRootDir() . '/vendor';
-		if( file_exists( $vendor ) ) {
-			$exclusions[] = $vendor;
+		// No blanket {root}/vendor exclusion. Under a normal Composer install the framework
+		// itself lives at {root}/vendor/gcgov/framework, so excluding the whole tree was a
+		// prefix match over every framework path just added to the scan list — the
+		// Framework Service annotations this class exists to publish were added and then
+		// immediately dropped again, and only a symlinked development checkout behaved as
+		// documented. The scan list is explicit (see getScanDirectories()), so nothing under
+		// vendor is reached except the framework, which is what we want reached.
+
+		// A Framework Service that is not enabled contributes no routes, so documenting its
+		// annotations would advertise endpoints that 404.
+		$services = config::getServices();
+		if( $services->auth===null ) {
+			$exclusions[] = $frameworkSrc . '/services/auth';
+		}
+		else {
+			$exclusions[] = $frameworkSrc . '/services/auth/providers/' . ( $services->auth->isOauth() ? 'msFront' : 'oauth' );
+		}
+		if( $services->userCrud===null ) {
+			$exclusions[] = $frameworkSrc . '/services/userCrud';
+		}
+		if( $services->documentation===null ) {
+			$exclusions[] = $frameworkSrc . '/services/documentation';
 		}
 
 		if( class_exists( '\app\models\user' ) ) {

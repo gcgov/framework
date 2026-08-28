@@ -50,4 +50,47 @@ final class EnvCommandTest extends TestCase {
 		self::assertStringEndsWith( "\n", $rendered );
 	}
 
+
+	/**
+	 * `gf env --init` promises in its own help text that it "leaves anything already in the
+	 * file alone". It used to write the skeleton over the top of the file whenever --force
+	 * was given — which is exactly what a developer does after the already-exists refusal —
+	 * destroying every filled-in value and every variable config.json knows nothing about.
+	 */
+	public function testDeclaredNamesFindsExistingAssignments(): void {
+		$declared = self::declaredNames( <<<'ENV'
+			# a comment
+			APP_TYPE=local
+			MONGO_URI='mongodb://localhost'
+			export EXPORTED=1
+			SPACED = value
+			# MONGO_URI_FILE=/run/secrets/mongo_uri
+			COMPOSE_PORT=8080
+			ENV );
+
+		self::assertArrayHasKey( 'APP_TYPE', $declared );
+		self::assertArrayHasKey( 'MONGO_URI', $declared );
+		self::assertArrayHasKey( 'EXPORTED', $declared, 'an export prefix is still a declaration' );
+		self::assertArrayHasKey( 'SPACED', $declared );
+		self::assertArrayHasKey( 'COMPOSE_PORT', $declared, 'variables config.json never mentions still count' );
+	}
+
+
+	public function testDeclaredNamesIgnoresCommentedHints(): void {
+		$declared = self::declaredNames( "# MONGO_URI_FILE=/run/secrets/mongo_uri
+#APP_TYPE=local
+" );
+
+		self::assertArrayNotHasKey( 'MONGO_URI_FILE', $declared, 'a commented hint is guidance, not a declaration' );
+		self::assertArrayNotHasKey( 'APP_TYPE', $declared );
+	}
+
+
+	/** Reflection, because the parser is a private detail of the command. */
+	private static function declaredNames( string $env ): array {
+		$method = new \ReflectionMethod( envCommand::class, 'declaredNames' );
+
+		return $method->invoke( null, $env );
+	}
+
 }

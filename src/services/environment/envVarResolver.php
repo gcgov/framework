@@ -345,9 +345,18 @@ final class envVarResolver {
 	private static function applyProcessor( string $processor, mixed $value, string $expression, string $sourceDescription ): mixed {
 		switch( $processor ) {
 			case 'bool':
+				// Fails closed, like "int" immediately below. The fallback used to be
+				// `?? (bool)$value`, which turned every unrecognised value — "flase",
+				// "disabled", "off ", "2" — into TRUE with no error: a typo in
+				// AUTH_BLOCK_NEW_USERS or LOGGING_LIFECYCLE resolved silently to the wrong
+				// setting and `gf env` reported success. ADR 0001 removed the default:
+				// processor to keep exactly this from happening one processor over.
 				$bool = filter_var( $value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+				if( $bool===null ) {
+					throw new environmentException( 'Cannot apply "bool" to value "' . (string)$value . '" for "%env(' . $expression . ')%" in ' . $sourceDescription . '. Use one of: 1/0, true/false, yes/no, on/off.' );
+				}
 
-				return $bool ?? (bool)$value;
+				return $bool;
 
 			case 'int':
 				if( !is_numeric( trim( (string)$value ) ) ) {
@@ -434,6 +443,21 @@ final class envVarResolver {
 		}
 
 		return ( $value===null || $value==='' ) ? null : $value;
+	}
+
+
+	/**
+	 * Whether a reference is satisfied by the current environment, by either the plain name
+	 * or its {NAME}_FILE companion.
+	 *
+	 * Shared with `gf env --list` so the diagnostic and the resolver cannot disagree about
+	 * what "set" means. The command reimplemented this inline and got two things wrong that
+	 * lookupEnv() already handles: it skipped the blocked-CGI-name rule, and its
+	 * `?? ... ?: ''` chain collapsed a legitimate "0" to '' — reporting MISSING for every
+	 * variable holding the value that %env(bool:...)% false is written as.
+	 */
+	public static function isSatisfied( string $name ): bool {
+		return self::lookupEnv( $name )!==null || self::lookupEnv( $name . self::SECRET_FILE_SUFFIX )!==null;
 	}
 
 }

@@ -18,18 +18,33 @@ use GuzzleHttp\Exception\GuzzleException;
  */
 class cronMonitor {
 
-	private string                               $jobId;
-	private \GuzzleHttp\Client                   $client;
-	private \GuzzleHttp\Promise\PromiseInterface $jobPromise;
+	private string                                $jobId;
+	private ?\GuzzleHttp\Client                   $client     = null;
+	private ?\GuzzleHttp\Promise\PromiseInterface $jobPromise = null;
 
 	public function __construct( string $jobId ) {
-		$this->jobId  = $jobId;
+		$this->jobId = $jobId;
+
+		// An empty url disables reporting, as the config docblock and CLAUDE.md §8 both
+		// say. Without this guard the documented off switch did nothing: the constructor
+		// built a client with an empty base_uri and fired a request at a hostless relative
+		// URI, and because the rejection only surfaces in end()'s wait(), every cron run on
+		// a default-configured application blocked on one doomed request and then issued a
+		// second. The constructor is also the one place in this fail-safe class with no
+		// try/catch, so its contract only held from the second line on.
+		if( !config::getCronMonitor()->isConfigured() ) {
+			return;
+		}
+
 		$this->client = new \GuzzleHttp\Client( [ 'base_uri' => config::getCronMonitor()->url ] );
 		// Fired asynchronously so the start ping overlaps the job rather than delaying it.
 		$this->jobPromise = $this->client->requestAsync( 'GET', 'jobHistory/start/' . $this->jobId );
 	}
 
 	public function end(): void {
+		if( $this->client===null || $this->jobPromise===null ) {
+			return;
+		}
 
 		$runId = '';
 		//make sure the job started and get the run id from it's response

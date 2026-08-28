@@ -29,6 +29,12 @@ final class config {
 
 	private static string $rootDir = '';
 
+	/** @deprecated v7 — memoized view backing the deprecated getAppConfig() pass-through. */
+	private static ?\gcgov\framework\models\appConfig $appConfig = null;
+
+	/** The unifiedConfig $appConfig is a view onto, so the memo cannot go stale. */
+	private static ?unifiedConfig $appConfigSource = null;
+
 	private static string $appDir = '';
 
 	private static string $modelsDir = '';
@@ -185,13 +191,25 @@ final class config {
 	/**
 	 * @deprecated v7 — use the flattened static accessors instead: `config::getAppConfig()->settings` becomes
 	 *             `config::getSettings()`, `->app` becomes `config::getApp()`, `->email` becomes `config::getEmail()`.
-	 *             Returns a v6-shaped VIEW (app/email/settings only) over the unified config, so existing
-	 *             call sites — including ones that serialize the object — keep their exact v6 behavior.
+	 *             Returns a v6-shaped VIEW (app/email/settings only) over the unified config. Reading the
+	 *             sections and serializing the object both work; see the class docblock for what a v6
+	 *             appConfig could do that this cannot.
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	#[\JetBrains\PhpStorm\Deprecated( reason: 'v7: config values are exposed directly on config', replacement: '\gcgov\framework\config' )]
 	public static function getAppConfig(): \gcgov\framework\models\appConfig {
-		return new \gcgov\framework\models\appConfig( self::unifiedConfig() );
+		// Memoized, as it was in v6. A fresh view per call is not only an allocation on a
+		// path that may run per document — it also breaks identity, so a v6 call site that
+		// compared or cached the object saw a different one every time. Keyed on the
+		// unifiedConfig it views, so replacing the configuration (as the tests do) does not
+		// leave a view onto the old sections behind.
+		$unifiedConfig = self::unifiedConfig();
+		if( self::$appConfig===null || self::$appConfigSource!==$unifiedConfig ) {
+			self::$appConfigSource = $unifiedConfig;
+			self::$appConfig       = new \gcgov\framework\models\appConfig( $unifiedConfig );
+		}
+
+		return self::$appConfig;
 	}
 
 
@@ -244,6 +262,17 @@ final class config {
 	/** Normalized '/api' style ('/' at domain root). @throws \gcgov\framework\exceptions\configException */
 	public static function getBasePath(): string {
 		return self::unifiedConfig()->getBasePath();
+	}
+
+
+	/**
+	 * The base path in the form a route pattern is built from: '' at the domain root, '/api' otherwise.
+	 * Use this, not getBasePath(), when prefixing a route — see {@see unifiedConfig::getRoutePrefix()}.
+	 *
+	 * @throws \gcgov\framework\exceptions\configException
+	 */
+	public static function getRoutePrefix(): string {
+		return self::unifiedConfig()->getRoutePrefix();
 	}
 
 
@@ -314,9 +343,7 @@ final class config {
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	public static function getJwtKeyPath(): string {
-		$configured = trim( self::unifiedConfig()->jwtAuth->keyPath );
-
-		return rtrim( $configured!=='' ? str_replace( '\\', '/', $configured ) : self::getSrvDir() . 'jwtCertificates', '/' ) . '/';
+		return self::unifiedConfig()->getJwtKeyPath( self::getSrvDir() );
 	}
 
 

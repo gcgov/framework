@@ -99,12 +99,46 @@ class unifiedConfig extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 
 	public function getBaseUrl(): string {
-		return rtrim( $this->rootUrl, '/ ' ) . '/' . trim( $this->basePath, '/ ' );
+		return rtrim( rtrim( $this->rootUrl, '/ ' ) . '/' . trim( $this->basePath, '/ ' ), '/' );
 	}
 
 
 	public function getBasePath(): string {
 		return '/' . trim( $this->basePath, '/ ' );
+	}
+
+
+	/**
+	 * The base path in the form a route pattern is built from: '' at the domain root,
+	 * '/api' otherwise.
+	 *
+	 * {@see getBasePath()} cannot serve this purpose. It returns '/' at the domain root
+	 * — correct for the token audience, which is its other use — and concatenating that
+	 * with a leading-slash route yields '//user', which FastRoute registers and matches
+	 * as that literal string. Every router prefixing a route uses this instead.
+	 */
+	public function getRoutePrefix(): string {
+		return rtrim( $this->getBasePath(), '/' );
+	}
+
+
+	/**
+	 * Where the JWT signing keypairs live: jwtAuth.keyPath when set, else
+	 * {srvDir}/jwtCertificates. Always returned with a trailing slash.
+	 *
+	 * The srv directory is an argument because the two callers reach it differently — the
+	 * request lifecycle through config::getSrvDir(), the gf CLI through appContext, which
+	 * never boots \app. They previously resolved the location independently, so
+	 * `gf cert:generate-auth` wrote keys to srv/jwtCertificates while jwtAuth looked in the
+	 * configured keyPath and reported the very command that had just run as the remedy.
+	 */
+	public function getJwtKeyPath( string $srvDir ): string {
+		$configured = trim( $this->jwtAuth->keyPath );
+		if( $configured!=='' ) {
+			return rtrim( str_replace( '\\', '/', $configured ), '/' ) . '/';
+		}
+
+		return rtrim( str_replace( '\\', '/', $srvDir ), '/' ) . '/jwtCertificates/';
 	}
 
 

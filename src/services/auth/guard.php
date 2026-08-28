@@ -11,7 +11,12 @@ use gcgov\framework\exceptions\serviceException;
  * Provider-independent: both providers mint framework access tokens with the same keys
  * and claims, so verifying one is the same work either way. This existed as ~50 near
  * identical lines in each auth package; the only differences were a local variable name
- * and the wording of the 403.
+ * and the wording of a message.
+ *
+ * Authentication only. Authorization — the route's requiredRoles — belongs to
+ * {@see \gcgov\framework\router::assertRequiredRoles()}, because a route declaring roles
+ * must have them enforced whether or not this optional service is the thing that
+ * authenticated the caller.
  */
 final class guard {
 
@@ -51,12 +56,12 @@ final class guard {
 			throw new routeException( 'Token validation failed: ' . implode( ', ', $violationMessages ), 401, $e );
 		}
 
-		foreach( $routeHandler->requiredRoles as $requiredRole ) {
-			if( !in_array( $requiredRole, $authUser->roles ) ) {
-				throw new routeException( 'User does not have the permission "' . $requiredRole . '" required to access this content', 403 );
-			}
-		}
-
+		// requiredRoles is NOT checked here. It is declared on the framework's own route
+		// model and enforced by router::assertRequiredRoles() once the whole guard chain has
+		// run, so it holds for routes this service never sees — an application that
+		// authenticates itself, or one that opts out through skipsServiceAuthentication.
+		// This guard's job is the part only it can do: validate the token and establish the
+		// user the router then checks.
 		return true;
 	}
 

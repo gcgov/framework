@@ -60,6 +60,12 @@ final class configLoader {
 			throw new environmentException( 'Missing config file: ' . $configFile );
 		}
 
+		// The references themselves do not need resolving, but the caller asks whether each
+		// one is SET — and on a developer machine the answers live in {root}/.env. Without
+		// this, `gf env --list` reported every variable MISSING while `gf env` on the same
+		// machine resolved the same config.json successfully.
+		dotEnvLoader::loadOnce( $rootDir );
+
 		$decoded = json_decode( (string)file_get_contents( $configFile ), false );
 		if( !$decoded instanceof \stdClass ) {
 			throw new environmentException( 'Failed to parse ' . $configFile . ': the file is not a valid JSON object.' );

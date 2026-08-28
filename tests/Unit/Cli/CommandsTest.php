@@ -18,7 +18,6 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(certGenerateAuthCommand::class)]
 #[CoversClass(completionPowershellCommand::class)]
 #[CoversClass(envCommand::class)]
-#[CoversClass(setupCommand::class)]
 final class CommandsTest extends TestCase {
 
 	private string $tempRootDir = '';

@@ -16,7 +16,7 @@ class router implements \gcgov\framework\interfaces\router {
 
 	public function getRoutes(): array {
 		return [
-			new route( 'GET', config::getBasePath() . '/documentation.yaml', '\gcgov\framework\services\documentation\controllers\documentation', 'yaml', false, description: 'OpenAPI document generated from source annotations.' )
+			new route( 'GET', config::getRoutePrefix() . '/documentation.yaml', '\gcgov\framework\services\documentation\controllers\documentation', 'yaml', false, description: 'OpenAPI document generated from source annotations.' )
 		];
 	}
 

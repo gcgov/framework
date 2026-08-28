@@ -30,7 +30,7 @@ composer install
 The framework expects these app classes/files to exist in your `/app` directory:
 
 * `\app\app` implementing `\gcgov\framework\interfaces\app`
-* `\app\router` implementing `\gcgov\framework\interfaces\router`
+* `\app\router` implementing `\gcgov\framework\interfaces\appRouter`
 * `\app\renderer` implementing `\gcgov\framework\interfaces\render`
 
 Controllers should implement `\gcgov\framework\interfaces\controller`.
@@ -213,12 +213,17 @@ gf cli /structure/cleanup        # run a CLI route (replaces app/cli/{env}.bat)
 gf cli /structure/cleanup --debug# run with Xdebug (replaces local-debug.bat)
 gf cli:list                      # list the app's CLI routes
 gf cert:generate-auth            # JWT signing keys (replaces create-jwt-keys.ps1)
-gf db:restore --from=prod        # pull a source env's mongo dbs into the local env
 gf db:run db/script.js           # run a mongosh script with config-managed credentials
-gf env prod                      # validate the config.json environments.prod entry resolves
-gf setup                         # bootstrap a scaffolded app (replaces setup.ps1)
-gf deploy                        # tag-based deployment (replaces update-production.ps1)
+gf env                           # validate config.json resolves against this environment
+gf env --list                    # every variable config.json references, and which are set
+gf env --init                    # write/extend the .env skeleton from config.json
+gf init --title="My API"         # bootstrap a scaffolded app (replaces setup.ps1)
+gf migrate                       # convert a v6 application to the v7 layout
 ```
+
+Removed in v7: `deploy` (a Release is an immutable image pinned by digest — see ADR 0002),
+`db:restore` (it required production credentials on every workstation), and `setup`
+(replaced by the non-interactive `init`).
 
 Tab completion is available for bash/zsh/fish (`gf completion --help`) and PowerShell
 (`gf completion:powershell`), including dynamic completion of the app's CLI route names.
@@ -228,7 +233,7 @@ Apps and plugins can add their own gf commands via a `cli\commandProvider` class
 
 The legacy per-app entry (`> app/cli/{env}.bat {url-path}`, `local-debug.bat` for XDebug) keeps
 working, but new apps should use gf. The `scripts/*.ps1` files shipped with the framework are
-deprecated in favor of `gf setup` and `gf cert:generate-auth`.
+deprecated in favor of `gf init` and `gf cert:generate-auth`.
 
 ## Framework Services
 

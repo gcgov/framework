@@ -5,6 +5,7 @@ namespace gcgov\framework\cli\commands;
 use gcgov\framework\cli\appContext;
 use gcgov\framework\cli\cliException;
 use gcgov\framework\cli\mongoTools;
+use gcgov\framework\services\environment\envVarResolver;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -102,23 +103,75 @@ final class envCommand extends Command {
 	}
 
 
+	/**
+	 * Write, or extend, the .env skeleton.
+	 *
+	 * Additive by default, which is what the help text has always promised: a .env carries
+	 * variables config.json knows nothing about (compose ports, CORS origins, GF_PHP) along
+	 * with the values the developer has already filled in, and this command cannot
+	 * reconstruct any of them. It used to replace the file wholesale whenever --force was
+	 * given, which is exactly what a developer reaching for --force after the
+	 * already-exists refusal would do.
+	 *
+	 * --force keeps its meaning — rewrite from config.json alone — but now says what it
+	 * discards, and is no longer needed merely to pick up a newly added reference.
+	 */
 	private function writeEnvFile( appContext $context, SymfonyStyle $io, bool $force ): int {
-		$envPath = $context->getEnvFilePath();
+		$envPath    = $context->getEnvFilePath();
+		$references = $context->configReferences();
 
-		if( file_exists( $envPath ) && !$force ) {
-			throw new cliException( $envPath . ' already exists. Pass --force to overwrite it, or `gf env --list` to see what it should contain. (A .env usually holds values this command cannot know — overwriting is deliberately opt-in.)' );
+		$existing = file_exists( $envPath ) ? (string)file_get_contents( $envPath ) : '';
+
+		if( $existing!=='' && $force ) {
+			$io->warning( 'Replacing ' . $envPath . ' from config.json. Every value it holds, and every variable config.json does not reference, is discarded.' );
+			$existing = '';
 		}
 
-		$references = $context->configReferences();
-		$contents   = $this->renderEnvFile( $references );
+		if( $existing==='' ) {
+			$contents = $this->renderEnvFile( $references );
+			$added    = count( $references );
+		}
+		else {
+			$declared = self::declaredNames( $existing );
+			$missing  = array_filter( $references, static fn( bool $isSecret, string $name ): bool => !isset( $declared[ $name ] ) && !isset( $declared[ $name . envVarResolver::SECRET_FILE_SUFFIX ] ), ARRAY_FILTER_USE_BOTH );
+
+			if( count( $missing )===0 ) {
+				$io->success( $envPath . ' already declares every variable config.json references. Nothing to add.' );
+
+				return Command::SUCCESS;
+			}
+
+			$contents = rtrim( $existing, "\n" ) . "\n\n" . implode( "\n", array_merge( [ '# Added by `gf env --init` from config.json.' ], self::renderReferenceLines( $missing ) ) ) . "\n";
+			$added    = count( $missing );
+		}
 
 		if( file_put_contents( $envPath, $contents )===false ) {
 			throw new cliException( 'Failed writing ' . $envPath );
 		}
 
-		$io->success( 'Wrote ' . $envPath . ' with ' . count( $references ) . ' variable(s). Fill in the values — the application will not start until every one has one.' );
+		$io->success( 'Wrote ' . $envPath . ' with ' . $added . ' variable(s). Fill in the values — the application will not start until every one has one.' );
 
 		return Command::SUCCESS;
+	}
+
+
+	/**
+	 * The variable names a .env already declares, so --init can skip them.
+	 *
+	 * Only uncommented `NAME=` assignments count: a commented `# NAME_FILE=` hint is
+	 * guidance, not a declaration.
+	 *
+	 * @return array<string, true>
+	 */
+	private static function declaredNames( string $env ): array {
+		$names = [];
+		foreach( preg_split( '/\R/', $env ) ?: [] as $line ) {
+			if( preg_match( '/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/', $line, $m )===1 ) {
+				$names[ $m[ 1 ] ] = true;
+			}
+		}
+
+		return $names;
 	}
 
 
@@ -134,6 +187,20 @@ final class envCommand extends Command {
 			'',
 		];
 
+		return implode( "\n", array_merge( $lines, self::renderReferenceLines( $references ) ) ) . "\n";
+	}
+
+
+	/**
+	 * The variable lines themselves, shared by the fresh-file and append paths so the two
+	 * cannot describe the secret convention differently.
+	 *
+	 * @param  array<string, bool>  $references  variable name => is a secret
+	 *
+	 * @return string[]
+	 */
+	private static function renderReferenceLines( array $references ): array {
+		$lines   = [];
 		$secrets = array_keys( array_filter( $references ) );
 		$plain   = array_keys( array_filter( $references, static fn( bool $isSecret ): bool => !$isSecret ) );
 
@@ -151,19 +218,13 @@ final class envCommand extends Command {
 			}
 		}
 
-		return implode( "\n", $lines ) . "\n";
+		return $lines;
 	}
 
 
 	/** Whether a variable currently has a value, by either the plain or the _FILE name. */
 	private function isSet( string $name ): bool {
-		foreach( [ $name, $name . \gcgov\framework\services\environment\envVarResolver::SECRET_FILE_SUFFIX ] as $candidate ) {
-			if( ( $_ENV[ $candidate ] ?? $_SERVER[ $candidate ] ?? getenv( $candidate ) ?: '' )!=='' ) {
-				return true;
-			}
-		}
-
-		return false;
+		return envVarResolver::isSatisfied( $name );
 	}
 
 }
