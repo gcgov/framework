@@ -145,6 +145,8 @@ final class router {
 					}
 				}
 
+				self::assertRequiredRoles( $routeHandler );
+
 				if(config::getLogging()->lifecycle) {
 					log::debug( 'Framework Lifecycle', '-Router- return route handler to framework\framework' );
 				}
@@ -155,6 +157,55 @@ final class router {
 		http_response_code( 500 );
 		throw new \gcgov\framework\exceptions\routeException( 'Routing failed', 500 );
 
+	}
+
+
+	/**
+	 * Enforce the route's declared requiredRoles.
+	 *
+	 * requiredRoles is declared on route and carried into routeHandler — framework-level
+	 * models present on every route of every application — but the only code that ever read
+	 * it was the guard inside the OPTIONAL auth service. Two supported configurations
+	 * therefore declared roles that nothing checked, while looking protected in the route
+	 * table, in `gf cli:list` and in review:
+	 *
+	 *   · no services.auth block, with \app\router::providesAuthentication() returning true.
+	 *     The boot check is satisfied, and userCrud::authentication() returns true
+	 *     unconditionally — so the framework's own /user routes ran with User.Read and
+	 *     User.Write checked by nobody.
+	 *   · any route where skipsServiceAuthentication skipped the service guards, taking the
+	 *     one role check in the codebase with them.
+	 *
+	 * Enforcing here — after the app router and every service router have run — puts the
+	 * check at the layer that declares the field, and means the answer no longer depends on
+	 * which optional service happens to be enabled. The auth service's guard keeps doing
+	 * what only it can do: validate the token and populate authUser.
+	 *
+	 * @throws \gcgov\framework\exceptions\routeException
+	 */
+	private static function assertRequiredRoles( \gcgov\framework\models\routeHandler $routeHandler ): void {
+		if( count( $routeHandler->requiredRoles )===0 ) {
+			return;
+		}
+
+		$authUser = \gcgov\framework\services\request::getAuthUser();
+
+		// The route names roles but nothing established a user, so there is nothing to check
+		// them against. Fail closed: this is the case the boot check cannot see, because an
+		// \app\router::authentication() that returns true is indistinguishable from one that
+		// verified something. The detail goes to the log — it is a deployment
+		// misconfiguration, not something the caller can act on.
+		if( $authUser->userId==='' ) {
+			log::warning( 'Framework Lifecycle', '-Router- route "' . $routeHandler->class . '::' . $routeHandler->method . '" requires role(s) ' . implode( ', ', $routeHandler->requiredRoles ) . ' but no authenticated user was established. Enable services.auth, or have the authenticator populate the request-scoped authUser via request::getAuthUser()->setFromUser().' );
+
+			throw new routeException( 'Authentication failed', 401 );
+		}
+
+		foreach( $routeHandler->requiredRoles as $requiredRole ) {
+			if( !$authUser->hasRole( $requiredRole ) ) {
+				throw new routeException( 'User does not have the permission "' . $requiredRole . '" required to access this content', 403 );
+			}
+		}
 	}
 
 
@@ -173,6 +224,17 @@ final class router {
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	public static function assertAuthenticationIsProvided( array $routes, bool $authServiceEnabled, bool $appProvidesAuthentication ): void {
+		// Contradictory rather than dangerous, and independent of how the application
+		// authenticates: an unauthenticated route returns before the guard chain, so its
+		// roles can never be checked by anything. Warned rather than refused — such a route
+		// works today with its roles inert, and failing an application's boot over a
+		// declaration that never did anything is disproportionate.
+		foreach( $routes as $route ) {
+			if( !$route->authentication && count( $route->requiredRoles )>0 ) {
+				log::warning( 'Framework Lifecycle', '-Router- route "' . $route->route . '" declares requiredRoles but authentication:false, so the roles are never checked. Set authentication:true, or drop the roles.' );
+			}
+		}
+
 		if( $authServiceEnabled || $appProvidesAuthentication ) {
 			return;
 		}

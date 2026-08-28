@@ -16,9 +16,12 @@ use PHPUnit\Framework\TestCase;
  *
  * Everything past token validation needs real signing keys, so what is covered here is the
  * part that runs before them: where a token is read from, and the per-route opt-in that
- * governs whether a URL-borne token is accepted. The role comparison the guard performs is
- * covered in tests/Unit/Models/AuthUserRolesTest.php, where the narrowing it depends on
- * lives.
+ * governs whether a URL-borne token is accepted.
+ *
+ * The guard deliberately does NOT check requiredRoles. That moved to
+ * router::assertRequiredRoles() so it applies however the caller was authenticated — see
+ * tests/Unit/RequiredRolesTest.php — and this class asserts the guard has not quietly kept
+ * a second copy, which is the duplication that let the two enforcement paths disagree.
  */
 #[CoversClass(guard::class)]
 final class GuardTest extends TestCase {
@@ -99,6 +102,28 @@ final class GuardTest extends TestCase {
 
 	private function routeHandler( bool $allowShortLivedUrlTokens = false ): routeHandler {
 		return new routeHandler( '\app\controllers\widget', 'getOne', true, [ 'Widget.Read' ], $allowShortLivedUrlTokens );
+	}
+
+
+	/**
+	 * Authorization is not this class's job. A second copy of the role loop here would
+	 * reintroduce exactly the split that made requiredRoles enforceable on one path and not
+	 * the other.
+	 */
+	public function testGuardDoesNotCheckRequiredRolesItself(): void {
+		$source = (string)file_get_contents( __DIR__ . '/../../../../src/services/auth/guard.php' );
+
+		self::assertStringNotContainsString( 'requiredRoles as $requiredRole', $source, 'the role loop belongs to router::assertRequiredRoles()' );
+		self::assertStringNotContainsString( 'required to access this content', $source, 'the 403 belongs to router::assertRequiredRoles()' );
+	}
+
+
+	/** Establishing the user is this class's job, and the router's check depends on it. */
+	public function testGuardPopulatesTheRequestScopedAuthUser(): void {
+		$source = (string)file_get_contents( __DIR__ . '/../../../../src/services/auth/guard.php' );
+
+		self::assertStringContainsString( 'request::getAuthUser()', $source );
+		self::assertStringContainsString( 'setFromJwtToken', $source );
 	}
 
 }

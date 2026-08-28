@@ -22,6 +22,13 @@ interface appRouter extends router, lifecycle\before, lifecycle\after {
 	 * Return true only if this router's own authentication() genuinely establishes and
 	 * verifies the caller's identity. Returning true without doing so re-opens exactly
 	 * the hole the check exists to close.
+	 *
+	 * "Establishes" is literal: populate the request-scoped user with
+	 * `\gcgov\framework\services\request::getAuthUser()->setFromUser( $user )`. The
+	 * framework enforces each route's requiredRoles against it after the guard chain
+	 * ({@see \gcgov\framework\router::assertRequiredRoles()}), so a router that verifies
+	 * identity without recording it leaves those routes refused with a 401 rather than
+	 * silently unchecked.
 	 */
 	public function providesAuthentication() : bool;
 }

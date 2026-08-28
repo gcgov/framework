@@ -45,7 +45,7 @@ class route {
 	 * @param string       $class          Fully qualified class name to initialize when this url is triggered. Ie: '\app\controllers\widget'
 	 * @param string       $method         Method inside the $class to call when this URL is triggered. Ie: 'getOne'. Method must have paramters that match the route pattern placeholders. In this example, getOne method must accept one parameter. Ie: getOne( string  $_id )
 	 * @param bool         $authentication Whether authentication is required to access this route. Functionality to respond to this must be implemented in \app\router\authentication()
-	 * @param array        $requiredRoles  If authentication is required, the roles required of the use to access this route. Functionality to respond to this must be implemented in \app\router\authentication(). If not using roles for a route or at all, just skip including this parameter.
+	 * @param array        $requiredRoles  If authentication is required, the roles the user must hold to reach this route. Enforced by the framework in router::assertRequiredRoles() once the guard chain has run — not by \app\router::authentication(), which no longer has to implement anything for roles to take effect. If not using roles for a route or at all, just skip including this parameter.
 	 * @param bool         $allowShortLivedUrlTokens Authentication token can be provided in url
 	 * @param string       $description    Optional human readable description of the route; surfaced by `gf cli:list` and shell completion
 	 */

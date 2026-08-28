@@ -30,9 +30,11 @@ class router implements \gcgov\framework\interfaces\router {
 
 
 	/**
-	 * This service enforces nothing itself. Its routes require authentication, and the
-	 * framework refuses to boot when authenticated routes exist with no authentication
-	 * service enabled — so "installed but unguarded" is no longer reachable.
+	 * This service enforces nothing itself, and no longer needs to. Its routes require
+	 * authentication, the framework refuses to boot when authenticated routes exist with no
+	 * authentication service enabled, and the User.Read / User.Write these routes declare
+	 * are enforced by router::assertRequiredRoles() whatever authenticated the caller — so
+	 * "installed but unguarded" is unreachable for both halves, not just the first.
 	 */
 	public function authentication( \gcgov\framework\models\routeHandler $routeHandler ): bool {
 		return true;

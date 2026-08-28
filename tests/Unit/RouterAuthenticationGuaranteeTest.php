@@ -80,4 +80,21 @@ final class RouterAuthenticationGuaranteeTest extends TestCase {
 		$this->expectNotToPerformAssertions();
 	}
 
+
+	/**
+	 * requiredRoles on an unauthenticated route is contradictory — the route returns before
+	 * the guard chain, so the roles can never be checked. It is warned, not refused: the
+	 * declaration was already inert, so failing an application's boot over it would break
+	 * something that works rather than protect anything.
+	 */
+	public function testRolesOnAnUnauthenticatedRouteWarnRatherThanRefuse(): void {
+		$this->expectNotToPerformAssertions();
+
+		router::assertAuthenticationIsProvided(
+			[ new route( 'GET', '/widget', '\app\controllers\widget', 'getAll', false, [ 'Widget.Read' ] ) ],
+			false,
+			false
+		);
+	}
+
 }

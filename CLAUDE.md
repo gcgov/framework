@@ -163,8 +163,15 @@ For a matched route with `authentication === true`:
 2. Then **each enabled service router's** `authentication()` runs — unless `\app\router` implements
    `\gcgov\framework\interfaces\router\skipsServiceAuthentication` and returns `false` for that route.
 3. The auth service validates the JWT from the `Authorization: Bearer …` header
-   (or `?fileAccessToken=` when `allowShortLivedUrlTokens`), populate the request-scoped `authUser`, and
-   enforce `requiredRoles` (missing header → 401, missing role → 403).
+   (or `?fileAccessToken=` when `allowShortLivedUrlTokens`) and populates the request-scoped
+   `authUser` (missing header → 401).
+4. Finally `framework\router` itself enforces the route's `requiredRoles` against that
+   `authUser` — **after** the whole chain, so it holds however the caller was authenticated,
+   including on routes that opted out at step 2 (missing role → 403; no user established at
+   all → 401). Roles are declared on `route`, so the framework enforces them; `\app\router`
+   does not have to implement anything for them to take effect, but a router that
+   authenticates its own routes must record the caller with
+   `request::getAuthUser()->setFromUser($user)` or those routes are refused.
 
 Routes with `authentication === false` skip all of this. A `routeException` thrown anywhere in this flow
 becomes the HTTP error response.
@@ -475,6 +482,9 @@ List routes with `gf cli:list`; debug with `gf cli /path --debug`.
 - There's no auth without `services.auth`; it registers a **global guard** over every
   `authentication:true` route. The framework refuses to boot if authenticated routes exist without it
   (and without `\app\router::providesAuthentication()`), rather than serving them unprotected.
+- `requiredRoles` is enforced by `framework\router`, not by the auth service — so it applies to
+  self-authenticated routes and to `skipsServiceAuthentication` opt-outs too. Whatever authenticates
+  must populate `authUser`, or a role-gated route 401s.
 - Set `logging.lifecycle=true` in `config.json` to trace the entire pipeline when debugging routing/auth.
 - Every `%env()` reference is required — there is no default and `FOO=` counts as unset. `gf env` says
   which one is missing.
