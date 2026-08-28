@@ -1,5 +1,16 @@
 # Production secrets never decrypt in CI, and hosts hold no decryption key
 
+> **Amended twice since acceptance.** The decision below — operator-workstation decryption,
+> no key on a host or in CI — stands unchanged. Two details in its summary do not:
+>
+> - **The wrapping key is Azure Key Vault, one vault and one key per Zone**, not GCP KMS.
+>   Superseded by ADR 0007. (MongoDB queryable encryption keeps its own Cloud KMS key in
+>   GCP; that is a different key and is untouched.)
+> - **The plaintext lands in `/etc/gcgov/secrets/<component>/` on the host**, not
+>   `/run/secrets`. `/run` is a tmpfs, so anything written there is gone after a reboot and
+>   every container fails to start on the way back up. `/run/secrets/<component>` is what
+>   the *container* sees — the bind-mount target, not the host path.
+
 Secrets live SOPS-encrypted in the `gcgov/deploy` Ops Repo, encrypted to a **GCP KMS key per Zone**
 plus one offline age key held as break-glass. An operator decrypts on their own workstation and
 writes the plaintext to the host as files under `/run/secrets` — a **Provisioning** step deliberately
