@@ -157,6 +157,32 @@ class user implements controller {
 		$userJSON = file_get_contents( 'php://input' );
 		try {
 			$user = $userClassName::jsonDeserialize( $userJSON );
+		}
+		catch( modelException $e ) {
+			throw new controllerException( $e->getMessage(), $e->getCode(), $e );
+		}
+
+		// The URL decides which document is written — not the body. This method used to
+		// ignore $_id entirely, so a caller holding User.Write could POST to their own
+		// /user/{_id} with a body naming any other account and overwrite it, roles
+		// included. The URL is also the only part a reverse proxy, an audit log or a
+		// route-level policy can see, so it has to be the part that binds.
+		//
+		// Compared as strings rather than coerced to a type: getId() is declared
+		// string|int|ObjectId, and an application may substitute its own user model.
+		if( $_id==='new' ) {
+			// A create must create. Without this, POST /user/new carrying an existing
+			// account's _id would overwrite that account — the same hole by another route.
+			unset( $user->_id );
+		}
+		elseif( !isset( $user->_id ) || (string)$user->_id==='' ) {
+			throw new controllerException( 'The request body must carry the _id it is being saved to', 400 );
+		}
+		elseif( (string)$user->_id!==$_id ) {
+			throw new controllerException( 'The _id in the request body does not match the _id in the url', 400 );
+		}
+
+		try {
 			$userClassName::save( $user );
 		}
 		catch( modelException $e ) {

@@ -10,26 +10,19 @@ use gcgov\framework\models\route;
  * the application — every application gets it, because a deploy pipeline cannot gate on an
  * endpoint that some applications chose not to have.
  *
- * These routes are merged FIRST, before Framework Services and before the application, so
- * an application that happens to define its own /health keeps working: FastRoute rejects
- * duplicate route definitions, so any collision surfaces at boot rather than in production.
+ * These routes are merged FIRST, before Framework Services and before the application, and
+ * router::getRoutes() drops a framework route the application also defines — so an
+ * application that happens to define its own /health keeps both that route and the rest of
+ * its surface. The override is logged.
  */
 final class router implements \gcgov\framework\interfaces\router {
-
-	public static function _before(): void {
-	}
-
-
-	public static function _after(): void {
-	}
-
 
 	/**
 	 * @return \gcgov\framework\models\route[]
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	public function getRoutes(): array {
-		$basePath = rtrim( config::getBasePath(), '/' );
+		$basePath = config::getRoutePrefix();
 
 		return [
 			new route( 'GET', $basePath . '/health', '\gcgov\framework\services\health\controllers\health', 'live', false, description: 'Liveness: the process is able to serve. No I/O.' ),

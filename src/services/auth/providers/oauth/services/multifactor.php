@@ -8,6 +8,7 @@ use gcgov\framework\exceptions\modelDocumentNotFoundException;
 use gcgov\framework\exceptions\modelException;
 use gcgov\framework\services\auth\providers\oauth\models\configureMfaResponse;
 use gcgov\framework\services\auth\providers\oauth\models\requireMfaResponse;
+use gcgov\framework\services\log;
 use gcgov\framework\services\mongodb\models\auth\userMultifactor;
 use RobThree\Auth\TwoFactorAuthException;
 
@@ -60,7 +61,7 @@ class multifactor {
 			userMultifactor::save( $userMultifactor );
 		}
 		catch( modelException $e ) {
-			error_log( $e );
+			log::error( 'auth', 'Failed to save MFA secret', [ 'exception' => $e ] );
 			throw new controllerException( 'Failed to save MFA secret', 500 );
 		}
 
@@ -81,7 +82,6 @@ class multifactor {
 		try {
 			$userClassName = \gcgov\framework\services\request::getUserClassFqdn();
 			$user          = $userClassName::getOne( $userId );
-			error_log( $user->password );
 			$userMultifactor = userMultifactor::getOneBy( [ '_id' => $userMultifactorId, 'userId' => $user->_id ] );
 		}
 		catch( modelDocumentNotFoundException|modelException $e ) {
@@ -162,8 +162,7 @@ class multifactor {
 			userMultifactor::save( $userMultifactor );
 		}
 		catch( \Exception $e ) {
-			error_log( 'Failed to save MFA timeslice' );
-			error_log( $e );
+			log::error( 'auth', 'Failed to save MFA timeslice', [ 'exception' => $e ] );
 		}
 
 		return true;

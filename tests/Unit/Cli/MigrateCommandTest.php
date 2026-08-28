@@ -6,6 +6,7 @@ namespace gcgov\framework\tests\Unit\Cli;
 
 use gcgov\framework\cli\commands\migrateCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -185,6 +186,38 @@ final class MigrateCommandTest extends TestCase {
 		rmdir( $root . '/app' );
 		rmdir( $root . '/www' );
 		rmdir( $root );
+	}
+
+
+	/**
+	 * The values gf migrate writes are the credentials lifted out of the v6 config. Written
+	 * bare they were silently corrupted: symfony/dotenv interpolates $VAR in an unquoted
+	 * value, treats a whitespace-preceded # as a comment, and rejects an embedded quote —
+	 * and because every %env() reference is required, the damage surfaced later as a
+	 * wrong-credential auth failure rather than a startup error.
+	 */
+	#[DataProvider('hostileEnvValues')]
+	public function testEnvValuesAreQuotedSoDotenvReadsThemBackUnchanged( string $value, string $description ): void {
+		$encoded = migrateCommand::encodeEnvValue( $value );
+		$parsed  = ( new \Symfony\Component\Dotenv\Dotenv() )->parse( 'SECRET=' . $encoded . "\n", '.env' );
+
+		self::assertSame( $value, $parsed[ 'SECRET' ], $description );
+	}
+
+
+	/** @return array<string, array{string, string}> */
+	public static function hostileEnvValues(): array {
+		return [
+			'plain'             => [ 'simpleValue', 'an ordinary value is unaffected' ],
+			'dollar signs'      => [ 'pa$$w0rd', '$ would otherwise be interpolated away' ],
+			'braced variable'   => [ 'a${HOME}b', '${...} would otherwise be expanded' ],
+			'hash'              => [ 'mongodb://u:p#1@host/db', '# would otherwise start a comment' ],
+			'space'             => [ 'two words', 'an unquoted space is a format error' ],
+			'single quote'      => [ "it's", 'the quote that terminates the quoting we add' ],
+			'double quote'      => [ 'say "hi"', 'the other quote character' ],
+			'backslash'         => [ 'back\\slash', 'a backslash must not escape anything' ],
+			'realistic uri'     => [ 'mongodb+srv://user:P@ss#w0rd$x@cluster.example.net/db?retryWrites=true', 'the shape gf migrate actually writes' ],
+		];
 	}
 
 }

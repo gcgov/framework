@@ -135,12 +135,12 @@ class auth implements controller {
 		}
 		unset( $_SESSION[ 'auth_state' ] );
 		if( !empty( $_GET[ 'state' ] ) ) {
-			$_SESSION[ 'auth_state' ] = urldecode( $_GET[ 'state' ] );
+			// No urldecode(): PHP has already percent-decoded $_GET, so decoding again turned
+			// a state of a%252Bb into 'a+b' and %250A into a literal newline.
+			$_SESSION[ 'auth_state' ] = (string)$_GET[ 'state' ];
 		}
 
-		$this->oauthHybridAuth( $_GET[ 'scope' ] );
-
-		return new controllerDataResponse();
+		return $this->oauthHybridAuth( $_GET[ 'scope' ] );
 	}
 
 
@@ -322,21 +322,7 @@ class auth implements controller {
 			throw new controllerException( 'Refresh token corrupted', 401 );
 		}
 
-		//create token for good user
-		$authUser = \gcgov\framework\services\request::getAuthUser();
-		$authUser->setFromUser( $user );
-
-		$jwtService  = new \gcgov\framework\services\jwtAuth\jwtAuth();
-		$accessToken = $jwtService->createAccessToken( $authUser );
-		try {
-			$refreshToken = $jwtService->createRefreshToken( $authUser );
-		}
-		catch( modelException $e ) {
-			throw new controllerException( 'Failed to create new refresh token', 500 );
-		}
-
-		return new stdAuthResponse( $accessToken, $refreshToken );
-
+		return $this->createAccessTokenResponse( $user );
 	}
 
 
@@ -367,26 +353,13 @@ class auth implements controller {
 			throw new controllerException( 'Authorization code corrupted', 401 );
 		}
 
-		//create token for good user
-		$authUser = \gcgov\framework\services\request::getAuthUser();
-		$authUser->setFromUser( $user );
-
-		$jwtService  = new \gcgov\framework\services\jwtAuth\jwtAuth();
-		$accessToken = $jwtService->createAccessToken( $authUser );
-		try {
-			$refreshToken = $jwtService->createRefreshToken( $authUser );
-		}
-		catch( modelException $e ) {
-			throw new controllerException( $e->getMessage(), 500, $e );
-		}
-
-		return new stdAuthResponse( $accessToken, $refreshToken );
+		return $this->createAccessTokenResponse( $user );
 	}
 
 	/**
 	 * @throws \gcgov\framework\exceptions\controllerException
 	 */
-	public function oauthHybridAuth( string $provider = '' ): void {
+	public function oauthHybridAuth( string $provider = '' ): controllerDataResponse {
 		$provider = strtolower( $provider );
 
 		if( $provider=='google' ) {
@@ -399,10 +372,10 @@ class auth implements controller {
 			$provider = "MicrosoftGraph";
 
 			if( empty( config::getMicrosoft()->clientId ) ) {
-				throw new controllerException( 'Microsoft client id has not been defined in the app config file. /app/config/environment.json > microsoft.clientId', 400 );
+				throw new controllerException( 'Microsoft client id has not been defined in config.json > microsoft.clientId', 400 );
 			}
 			if( empty( config::getMicrosoft()->clientSecret ) ) {
-				throw new controllerException( 'Microsoft client secret has not been defined in the app config file. /app/config/environment.json > microsoft.clientSecret', 400 );
+				throw new controllerException( 'Microsoft client secret has not been defined in config.json > microsoft.clientSecret', 400 );
 			}
 			if( empty( config::getMicrosoft()->tenant ) ) {
 				throw new controllerException( 'Microsoft tenant has not been defined in the app config file. /app/config/environment.json > microsoft.tenant', 400 );
@@ -471,7 +444,7 @@ class auth implements controller {
 			$adapter->disconnect();
 		}
 		catch( \Exception $e ) {
-			error_log( $e );
+			log::error( 'auth', 'Hybridauth provider authentication failed', [ 'exception' => $e ] );
 			$message = $e->getMessage();
 			switch( $e->getCode() ) {
 				case 0 :
@@ -503,8 +476,7 @@ class auth implements controller {
 					break;
 			}
 
-			header( 'Location: ' . config::getJwtAuth()->redirectAfterLoginUrl . '?errorMessage=' . urlencode( $message ) );
-			exit;
+			return self::redirect( config::getJwtAuth()->redirectAfterLoginUrl . '?errorMessage=' . urlencode( $message ) );
 		}
 
 		if( empty( $oauthProfile->email ) ) {
@@ -524,8 +496,7 @@ class auth implements controller {
 				rolesForNewUser:  $authConfig->defaultNewUserRoles );
 		}
 		catch( modelException $e ) {
-			header( 'Location: ' . config::getJwtAuth()->redirectAfterLoginUrl . '?errorMessage=' . urlencode( $e->getMessage() ) );
-			exit;
+			return self::redirect( config::getJwtAuth()->redirectAfterLoginUrl . '?errorMessage=' . urlencode( $e->getMessage() ) );
 		}
 
 		try {
@@ -540,15 +511,35 @@ class auth implements controller {
 
 		$appendState = '';
 		if( !empty( $_SESSION[ 'auth_state' ] ) ) {
-			$appendState = '&state=' . $_SESSION[ 'auth_state' ];
+			// Encoded, like the code parameter beside it. The state is client-supplied, so a
+			// raw '&' or '=' in it split into extra query parameters in the redirect — which
+			// broke the client's CSRF state comparison, and let whoever chose the state
+			// append parameters of their own to the URL the browser is sent to.
+			$appendState = '&state=' . urlencode( (string)$_SESSION[ 'auth_state' ] );
 		}
 
 		if( session_status()==PHP_SESSION_ACTIVE ) {
 			session_destroy();
 		}
 
-		header( 'Location: ' . config::getJwtAuth()->redirectAfterLoginUrl . '?code=' . urlencode( (string)$authorizationCode->_id ) . $appendState );
-		exit;
+		return self::redirect( config::getJwtAuth()->redirectAfterLoginUrl . '?code=' . urlencode( (string)$authorizationCode->_id ) . $appendState );
+	}
+
+
+	/**
+	 * A 302 as a controllerResponse.
+	 *
+	 * This path used to call header() then exit, which skipped controller::_after(),
+	 * \app\renderer::_after() and \app\app::_after() on every OAuth sign-in — the success
+	 * path included — so an application that releases resources or flushes state in those
+	 * hooks never ran them on the most security-relevant request it serves. CLAUDE.md §4
+	 * allows exactly one exception to the never-exit rule, and it is not this file.
+	 */
+	private static function redirect( string $url ): controllerDataResponse {
+		$response = new controllerDataResponse( null, [ new \gcgov\framework\models\controllerResponseHeader( 'Location', $url ) ] );
+		$response->setHttpStatus( 302 );
+
+		return $response;
 	}
 
 
@@ -574,8 +565,12 @@ class auth implements controller {
 		$jwt   = new \gcgov\framework\services\jwtAuth\jwtAuth();
 		$token = $jwt->createAccessToken( $authUser, $tokenExpiration );
 
+		// 0770, octal. This was written as the decimal literal 777, which is octal 1411:
+		// sticky bit set, owner r--, group --x, other --x. mkdir still returned true, so the
+		// guard below passed, and the write that follows then failed for any non-root
+		// process because the owner had neither write nor execute on its own directory.
 		if( !file_exists( config::getRootDir() . '/externalAppTokens/' ) ) {
-			$created = mkdir( config::getRootDir() . '/externalAppTokens/', 777, true );
+			$created = mkdir( config::getRootDir() . '/externalAppTokens/', 0770, true );
 			if( !$created ) {
 				log::warning( 'auth', 'Directory "' . config::getRootDir() . '/externalAppTokens/" does not exist and could not be created automatically. Create directory to continue.' );
 				throw new controllerException( 'Cannot create token because externalAppTokens directory does not exist' );
@@ -584,7 +579,12 @@ class auth implements controller {
 
 		$tokenFilePath = config::getRootDir() . '/externalAppTokens/' . formatting::fileName( $appName ) . '.txt';
 
-		file_put_contents( $tokenFilePath, $token->toString() );
+		// Checked: an unchecked write here reported a token file that was never created,
+		// and the caller had no way to tell.
+		if( file_put_contents( $tokenFilePath, $token->toString() )===false ) {
+			log::error( 'auth', 'Failed writing external app token to "' . $tokenFilePath . '"' );
+			throw new controllerException( 'Failed to write the external app token file', 500 );
+		}
 
 		return new controllerDataResponse( $tokenFilePath );
 	}
@@ -593,22 +593,22 @@ class auth implements controller {
 		//create token for valid user
 		$authUser = \gcgov\framework\services\request::getAuthUser();
 		$authUser->setFromUser( $user );
+
+		// One try, one catch. The outer catch here used to wrap the inner one and re-throw
+		// with the constructor arguments swapped — $e->getCode() as the message and
+		// $e->getMessage() as the int $code — so every failure on this path raised a
+		// TypeError instead of the 500 it meant to raise, and the renderer's
+		// controllerException branch never ran.
 		try {
-			$jwtService  = new \gcgov\framework\services\jwtAuth\jwtAuth();
-			$accessToken = $jwtService->createAccessToken( $authUser );
-
-			try {
-				$refreshToken = $jwtService->createRefreshToken( $authUser );
-			}
-			catch( modelException $e ) {
-				throw new controllerException( 'Server failed to create refresh token', 500, $e );
-			}
-
-			return new stdAuthResponse( $accessToken, $refreshToken );
+			$jwtService   = new \gcgov\framework\services\jwtAuth\jwtAuth();
+			$accessToken  = $jwtService->createAccessToken( $authUser );
+			$refreshToken = $jwtService->createRefreshToken( $authUser );
 		}
 		catch( \Exception $e ) {
-			throw new controllerException( $e->getCode(), $e->getMessage(), $e );
+			throw new controllerException( 'Server failed to create authentication tokens', 500, $e );
 		}
+
+		return new stdAuthResponse( $accessToken, $refreshToken );
 	}
 
 	/**

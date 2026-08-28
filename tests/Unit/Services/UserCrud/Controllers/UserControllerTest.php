@@ -99,6 +99,55 @@ final class UserControllerTest extends TestCase {
 		} );
 	}
 
+	/**
+	 * The URL decides which document is written. This method used to ignore its $_id
+	 * entirely, so a caller holding User.Write could POST to their own /user/{_id} with a
+	 * body naming any other account and overwrite it — roles included.
+	 */
+	public function testSaveRejectsABodyTargetingADifferentUser(): void {
+		$victim = new FakeUser();
+		$victim->_id = 'victim';
+		$victim->name = 'Victim';
+		FakeUser::$records[ 'victim' ] = $victim;
+
+		$this->withPhpInput( json_encode( [ '_id' => 'victim', 'name' => 'Owned' ] ), function() {
+			try {
+				( new user() )->save( 'attacker' );
+				$this->fail( 'the body must not be able to retarget the write' );
+			}
+			catch( controllerException $e ) {
+				$this->assertSame( 400, $e->getCode() );
+			}
+		} );
+
+		$this->assertSame( 'Victim', FakeUser::$records[ 'victim' ]->name, 'the other account must be untouched' );
+	}
+
+
+	public function testSaveRejectsABodyWithNoId(): void {
+		$this->withPhpInput( json_encode( [ 'name' => 'Nameless' ] ), function() {
+			$this->expectException( controllerException::class );
+			$this->expectExceptionCode( 400 );
+			( new user() )->save( 'u1' );
+		} );
+	}
+
+
+	/** POST /user/new must create, not overwrite whatever _id the body happens to carry. */
+	public function testSaveToNewDoesNotOverwriteAnExistingAccount(): void {
+		$victim = new FakeUser();
+		$victim->_id = 'victim';
+		$victim->name = 'Victim';
+		FakeUser::$records[ 'victim' ] = $victim;
+
+		$this->withPhpInput( json_encode( [ '_id' => 'victim', 'name' => 'Owned' ] ), function() {
+			( new user() )->save( 'new' );
+		} );
+
+		$this->assertSame( 'Victim', FakeUser::$records[ 'victim' ]->name, 'the named account must be untouched' );
+	}
+
+
 	public function testSaveWrapsModelExceptionInControllerException(): void {
 		FakeUser::$nextException = new modelException( 'validation failure', 422 );
 

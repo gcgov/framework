@@ -36,7 +36,10 @@ src/
 ├── cli/                   # the gf command line tool (§16): application, appContext, commands/*
 ├── interfaces/            # contracts an app must implement (app, router, render, controller, auth\user, ...)
 ├── models/                # route, routeHandler, controller*Response, authUser, config/* DTOs, customConstraints
-├── services/              # log, guid, http, formatting, request, jwtAuth, pdodb, microsoft(deprecated), mongodb/*
+├── services/              # framework services: log, guid, http, formatting, request, jwtAuth, pdodb,
+│                          #   chrome, cronMonitor, environment, microsoft(deprecated), mongodb/*
+│                          # Framework Services (§12): auth/, userCrud/, documentation/
+│                          # always-on: health/
 ├── exceptions/            # configException, routeException, controllerException, modelException, serviceException, ...
 └── traits/                # userTrait
 readme/                    # long-form docs (mongodb.md is the authoritative Mongo reference; gf.md for the CLI)
@@ -120,7 +123,8 @@ www/index.php
 
 Rules a controller method must obey:
 - **Always return a `controllerResponse` subtype (§6). Never `die()`/`exit`** — it skips the rest of the
-  lifecycle. (The documentation service's `yaml()` is the one deliberate exception.)
+  lifecycle. (The documentation service's `yaml()` is the one deliberate exception.) A redirect is a
+  response too: return a `controllerDataResponse` with a `Location` header and status 302.
 - Route method parameters are bound positionally from the URL pattern placeholders.
 
 ---
@@ -148,8 +152,10 @@ $routes[] = new route('GET',    'structure/{_id}', '\app\controllers\structure',
 $routes[] = new route('POST',   'structure/{_id}', '\app\controllers\structure', 'save',   true, [constants::ROLE_STRUCTURE_READ, constants::ROLE_STRUCTURE_WRITE]);
 $routes[] = new route('CLI',    '/cli/cleanup',    '\app\controllers\cli\import','cleanup',false);
 ```
-If the app is not served at the domain root, prepend a base path (commonly
-`config::getBasePath()`, which is what service routers use).
+If the app is not served at the domain root, prepend a base path: use
+`config::getRoutePrefix()`, which is what the framework's own routers use. (`getBasePath()`
+returns `/` at the domain root — right for the token audience, wrong for a route prefix,
+where it produces `//user`.)
 
 ### Authentication guard flow (`framework\router::route()`)
 For a matched route with `authentication === true`:
@@ -194,6 +200,10 @@ matching branch in `framework\renderer::render()`.
   decides the JSON error shape (template default: `{error, message, status}`).
 - Exception → status: `routeException`/`controllerException`/`modelException` carry a code used as the HTTP
   status; uncaught `\Throwable` → 500.
+- Anything thrown while routing that is **not** a `routeException` (`configException` from the fail-closed
+  checks, FastRoute's `BadRouteException`, a `\TypeError` from a mistyped `\app\router`) is caught by
+  `runApp()`, logged in full, and rendered as a generic 500 — the detail never reaches the client, because
+  those messages carry route patterns, config paths and environment-variable names.
 
 ---
 
@@ -334,7 +344,7 @@ returning group keys, and tag constraints with `groups: [...]`.
 exposed **directly on `config`** — there are no separate appConfig/environmentConfig objects (v7;
 `getAppConfig()`/`getEnvironmentConfig()` remain as deprecated pass-throughs returning the unified object):
 `config::getApp()` (title/guid), `getEmail()`, `getSettings()`, `getType()`, `isLocal()`,
-`getRootUrl()`, `getBaseUrl()`, `getBasePath()`, `getLogging()`, `getMongoDatabases()`,
+`getRootUrl()`, `getBaseUrl()`, `getBasePath()`, `getRoutePrefix()`, `getLogging()`, `getMongoDatabases()`,
 `getSqlDatabases()`, `getDefaultSqlDatabase()`, `getSqlDatabaseByName($name)`, `getMicrosoft()`,
 `getJwtAuth()`, `getTokenIssuedBy()`, `getTokenPermittedFor()`, `getJwtKeyPath()`,
 `getPayjunction()`, `getAppDictionary()`, `getServices()`, `getCronMonitor()`.
@@ -504,7 +514,7 @@ needing routes of its own puts them in `\app\router`, which already runs first i
 
 - Code in `src/services/<name>/`, namespace `\gcgov\framework\services\<name>`.
 - `src/services/<name>/router.php` implements `\gcgov\framework\interfaces\router` — just `getRoutes()`
-  and `authentication()`, no lifecycle hooks. Prefix routes with `config::getBasePath()`.
+  and `authentication()`, no lifecycle hooks. Prefix routes with `config::getRoutePrefix()`.
 - Controllers under `\gcgov\framework\services\<name>\controllers\…` implementing `controller`.
 - Config: add a nullable property to `\gcgov\framework\models\config\services` and a DTO beside it in
   `src/models/config/services/`. Nullable means absent = disabled. Give the router its typed config as a
@@ -549,13 +559,14 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
   `db:restore` (it required production credentials on every workstation), and `setup` (replaced by
   the non-interactive `init`, since bootstrap belongs in a scaffolding script or a devcontainer).
 - **`gf env`** validates that config.json resolves; `--list` prints every referenced variable and
-  whether it is currently set; `--init` writes the `.env` skeleton (refuses to overwrite without
-  `--force`). **`gf init --title="…"`** bootstraps a scaffolded app: title, guid, `.env`, JWT keys,
+  whether it is currently set; `--init` writes the `.env` skeleton, and on an existing file
+  **appends only the references it does not already declare** — a .env carries values and variables
+  config.json knows nothing about. `--force` rewrites from config.json alone, discarding both. **`gf init --title="…"`** bootstraps a scaffolded app: title, guid, `.env`, JWT keys,
   chrome. **`gf migrate`** converts a v6 app — its `plan()` is a pure function of `app.json` +
   `environment.json`, so it is unit-tested rather than run hopefully.
 - **chrome-headless-shell**: `chrome:install`/`chrome:update` download the Chrome for Testing
   Stable build for the current platform into `srv/chrome/{version}/` (manifest:
-  `srv/chrome/installation.json`; needs ext-zip; `gf setup` auto-installs, `--skip-chrome` opts
+  `srv/chrome/installation.json`; needs ext-zip; `gf init` auto-installs, `--skip-chrome` opts
   out; update prunes old versions). Apps consume it via `services\chrome\chrome` (§9); shared
   logic lives in `services/chrome/chromeInstallation.php`, download orchestration in
   `src/cli/chromeInstaller.php` (injectable Guzzle client — tests are network-free).
@@ -582,7 +593,7 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
 - When adding a command: lowercase lowerCamelCase class in `src/cli/commands/`, `#[AsCommand]`
   attribute, register it in `application::__construct()`, throw `cliException` for user errors,
   add a mirrored test in `tests/Unit/Cli/`. Keep the logic in a pure static method the test can
-  call directly (e.g. `migrateCommand::plan()`, `envCommand::renderEnvFile()`) rather than driving
+  call directly (e.g. `migrateCommand::plan()`, `migrateCommand::encodeEnvValue()`) rather than driving
   everything through CommandTester.
 
 ---

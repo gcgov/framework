@@ -12,7 +12,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand( name: 'cert:generate-auth', description: 'Generate the JWT signing keypairs in srv/jwtCertificates (replaces create-jwt-keys.ps1)' )]
+#[AsCommand( name: 'cert:generate-auth', description: 'Generate the JWT signing keypairs in jwtAuth.keyPath (default srv/jwtCertificates)' )]
 final class certGenerateAuthCommand extends Command {
 
 	protected function configure(): void {
@@ -32,8 +32,10 @@ final class certGenerateAuthCommand extends Command {
 			throw new cliException( '--count must be at least 1' );
 		}
 
-		$context        = appContext::require();
-		$certificateDir = $context->getSrvDir() . '/jwtCertificates';
+		$context = appContext::require();
+		// Resolved through the same accessor jwtAuth reads at runtime, so a configured
+		// jwtAuth.keyPath gets the keys written where the framework will look for them.
+		$certificateDir = rtrim( $context->loadConfig()->getJwtKeyPath( $context->getSrvDir() ), '/' );
 
 		$io = new SymfonyStyle( $input, $output );
 

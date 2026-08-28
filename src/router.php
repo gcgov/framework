@@ -213,23 +213,72 @@ final class router {
 	 * @return \gcgov\framework\models\route[]
 	 */
 	private function getRoutes(): array {
-		$routes = [];
+		$serviceRoutes = [];
 
 		foreach($this->serviceRouters as $serviceRouter) {
 			if(config::getLogging()->lifecycle) {
 				log::debug( 'Framework Lifecycle', '-Router- get service routes' );
 			}
-			$serviceRoutes = $serviceRouter->getRoutes();
-			$routes = array_merge( $routes, $serviceRoutes );
+			$serviceRoutes = array_merge( $serviceRoutes, $serviceRouter->getRoutes() );
 		}
 
 		if(config::getLogging()->lifecycle) {
 			log::debug( 'Framework Lifecycle', '-Router- get app routes' );
 		}
 		$appRoutes = $this->appRouter->getRoutes();
-		$routes = array_merge( $routes, $appRoutes );
 
-		return $routes;
+		// Where the application defines a route the framework already registers, the
+		// application wins and the framework's is dropped.
+		//
+		// FastRoute throws BadRouteException on a duplicate (method, pattern), and that
+		// exception is neither a routeException nor a configException — so a v6 application
+		// upgrading with its own /health did not lose /health, it lost EVERY route, with an
+		// empty 500 on every url. The health router's docblock already promised that such
+		// an application "keeps working"; nothing implemented it. Overriding is logged
+		// rather than silent, because a route disappearing from the framework's surface is
+		// worth noticing.
+		$appKeys = [];
+		foreach( $appRoutes as $appRoute ) {
+			foreach( self::routeKeys( $appRoute ) as $key ) {
+				$appKeys[ $key ] = true;
+			}
+		}
+
+		$routes = [];
+		foreach( $serviceRoutes as $serviceRoute ) {
+			$overridden = false;
+			foreach( self::routeKeys( $serviceRoute ) as $key ) {
+				if( isset( $appKeys[ $key ] ) ) {
+					$overridden = true;
+					break;
+				}
+			}
+
+			if( $overridden ) {
+				log::notice( 'Framework Lifecycle', '-Router- \app\router defines "' . $serviceRoute->route . '"; the framework route of the same name is not registered' );
+				continue;
+			}
+
+			$routes[] = $serviceRoute;
+		}
+
+		return array_merge( $routes, $appRoutes );
+	}
+
+
+	/**
+	 * The (method, pattern) pairs a route occupies. httpMethod is string|array, and a route
+	 * registered for several methods collides on each of them independently.
+	 *
+	 * @return string[]
+	 */
+	private static function routeKeys( \gcgov\framework\models\route $route ): array {
+		$keys = [];
+		foreach( (array)$route->httpMethod as $httpMethod ) {
+			$keys[] = strtoupper( (string)$httpMethod ) . ' ' . $route->route;
+		}
+
+		return $keys;
 	}
 
 

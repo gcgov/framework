@@ -6,7 +6,7 @@ namespace app;
 
 use gcgov\framework\models\route;
 
-class router implements \gcgov\framework\interfaces\router {
+class router implements \gcgov\framework\interfaces\appRouter {
 
 	public function __construct() {
 	}
@@ -68,10 +68,29 @@ class router implements \gcgov\framework\interfaces\router {
 		return true;
 	}
 	
-	//optional method that can be added to prevent the service authentication checks from running
-	//private $runFrameworkServiceRouteAuthentication = true;
-	//public function getRunFrameworkServiceRouteAuthentication(): bool {
-	//    return $this->runFrameworkServiceRouteAuthentication;
+	/**
+	 * Does this application authenticate its own routes?
+	 *
+	 * Required by \gcgov\framework\interfaces\appRouter. The framework refuses to boot
+	 * when routes declare authentication:true, no authentication service is enabled, and
+	 * this returns false — such routes would be reachable by anyone, because the
+	 * authentication() above returns true for every caller. Return true ONLY if
+	 * authentication() genuinely establishes and verifies the caller's identity.
+	 */
+	public function providesAuthentication() : bool {
+		return false;
+	}
+
+	//optional: to prevent the Framework Service auth guards from running for some routes,
+	//also implement \gcgov\framework\interfaces\router\skipsServiceAuthentication:
+	//
+	//    class router implements \gcgov\framework\interfaces\appRouter, \gcgov\framework\interfaces\router\skipsServiceAuthentication
+	//
+	//and add the method it declares. Note the $routeHandler parameter — the opt-out is
+	//per route, and was duck-typed via method_exists() before the interface existed:
+	//
+	//public function getRunFrameworkServiceRouteAuthentication( \gcgov\framework\models\routeHandler $routeHandler ): bool {
+	//    return true;
 	//}
 
 }

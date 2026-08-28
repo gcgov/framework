@@ -100,7 +100,7 @@ class authUser {
 		$this->externalProvider = $tokenUser[ 'externalProvider' ] ?? '';
 		$this->name             = $tokenUser[ 'name' ] ?? '';
 		$this->email            = $tokenUser[ 'email' ] ?? '';
-		$this->roles            = $tokenScopes;
+		$this->roles            = self::normalizeRoles( $tokenScopes );
 
 		return self::getInstance();
 	}
@@ -117,12 +117,33 @@ class authUser {
 		$this->name             = $user->getName();
 		$this->username         = $user->getUsername();
 		$this->email            = $user->getEmail();
-		$this->roles            = $user->getRoles();
+		$this->roles            = self::normalizeRoles( $user->getRoles() );
 		return self::getInstance();
 	}
 
+
+	/**
+	 * Narrow roles to strings.
+	 *
+	 * $roles is documented string[] but nothing enforced it, and both sources are untyped:
+	 * the token's `scope` claim is whatever JSON it carried, and the user model's roles
+	 * field is whatever the collection holds — BSON deserialization passes scalars through
+	 * untouched. A single non-string truthy element (roles: [true]) satisfied a loose
+	 * in_array() against EVERY required role, so a token carrying one authorized every
+	 * gated route. Narrowing here covers both setters and makes the strict comparisons in
+	 * hasRole() and the auth guard meaningful.
+	 *
+	 * @param  mixed[]  $roles
+	 *
+	 * @return string[]
+	 */
+	private static function normalizeRoles( array $roles ): array {
+		return array_values( array_filter( $roles, static fn( $role ): bool => is_string( $role ) ) );
+	}
+
+
 	public function hasRole( string $role ): bool {
-		return in_array( $role, $this->roles );
+		return in_array( $role, $this->roles, true );
 	}
 
 }

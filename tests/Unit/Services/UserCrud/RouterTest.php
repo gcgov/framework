@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace gcgov\framework\tests\Unit\Services\UserCrud;
 
+use gcgov\framework\tests\Support\seedsFrameworkConfig;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use gcgov\framework\services\userCrud\router;
@@ -12,14 +13,14 @@ use gcgov\framework\models\route;
 #[CoversClass(router::class)]
 final class RouterTest extends TestCase {
 
+	use seedsFrameworkConfig;
+
 	/**
 	 * Seed the base path explicitly rather than relying on whatever configuration a
 	 * previously-run test happened to leave behind.
 	 */
 	protected function setUp(): void {
-		$config           = new \gcgov\framework\models\unifiedConfig();
-		$config->basePath = 'api';
-		( new \ReflectionProperty( \gcgov\framework\config::class, 'unifiedConfig' ) )->setValue( null, $config );
+		$this->seedConfig( static fn( \gcgov\framework\models\unifiedConfig $c ) => $c->basePath = 'api' );
 	}
 
 

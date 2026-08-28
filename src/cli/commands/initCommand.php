@@ -97,28 +97,63 @@ final class initCommand extends Command {
 			throw new cliException( 'Missing ' . $configPath . '. Scaffold from gcgov/framework-app-template, which ships one.' );
 		}
 
-		$raw     = (string)file_get_contents( $configPath );
-		$decoded = json_decode( $raw, true );
-		if( !is_array( $decoded ) ) {
-			throw new cliException( 'Failed to parse ' . $configPath . ': the file is not a valid JSON object.' );
-		}
+		$identity = self::applyIdentity( (string)file_get_contents( $configPath ), $title, $guid, $configPath );
 
-		$existingGuid = (string)( $decoded[ 'app' ][ 'guid' ] ?? '' );
-		// The guid is the OAuth client_id: minting a new one for an application that already
-		// has one invalidates every registered client.
-		$decoded[ 'app' ][ 'guid' ] = $guid!=='' ? $guid : ( $existingGuid!=='' ? $existingGuid : guid::create() );
-		if( $title!=='' ) {
-			$decoded[ 'app' ][ 'title' ] = $title;
-		}
-
-		$encoded = json_encode( $decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
-		if( $encoded===false || file_put_contents( $configPath, $encoded . "\n" )===false ) {
+		if( file_put_contents( $configPath, $identity[ 'json' ] )===false ) {
 			throw new cliException( 'Failed writing ' . $configPath );
 		}
 
 		$io->section( 'Identity' );
-		$io->text( 'title: ' . ( $decoded[ 'app' ][ 'title' ] ?? '' ) );
-		$io->text( 'guid:  ' . $decoded[ 'app' ][ 'guid' ] . ( $existingGuid!=='' && $existingGuid===$decoded[ 'app' ][ 'guid' ] ? ' (kept)' : '' ) );
+		$io->text( 'title: ' . $identity[ 'title' ] );
+		$io->text( 'guid:  ' . $identity[ 'guid' ] . ( $identity[ 'guidKept' ] ? ' (kept)' : '' ) );
+	}
+
+
+	/**
+	 * Stamp the title and guid into a config.json document, returning the rewritten JSON.
+	 *
+	 * Pure, so the rewrite can be tested directly rather than through the filesystem.
+	 *
+	 * Decoded as objects rather than associative arrays: json_decode( $raw, true ) maps an
+	 * empty JSON object to [], which json_encode writes back as []. In config.json `{}`
+	 * carries meaning — `"services": { "userCrud": {} }` is how a Framework Service is
+	 * enabled, since presence is what activates it — so the assoc round-trip rewrote every
+	 * service block the template declared into an array that no longer hydrates the nullable
+	 * service properties, silently disabling userCrud and documentation on the very first
+	 * command a new project runs.
+	 *
+	 * @return array{json: string, title: string, guid: string, guidKept: bool}
+	 * @throws \gcgov\framework\cli\cliException
+	 */
+	public static function applyIdentity( string $rawConfigJson, string $title, string $guid, string $sourceDescription = 'config.json' ): array {
+		$decoded = json_decode( $rawConfigJson, false );
+		if( !$decoded instanceof \stdClass ) {
+			throw new cliException( 'Failed to parse ' . $sourceDescription . ': the file is not a valid JSON object.' );
+		}
+
+		if( !isset( $decoded->app ) || !$decoded->app instanceof \stdClass ) {
+			$decoded->app = new \stdClass();
+		}
+
+		$existingGuid = isset( $decoded->app->guid ) ? (string)$decoded->app->guid : '';
+		// The guid is the OAuth client_id: minting a new one for an application that already
+		// has one invalidates every registered client.
+		$decoded->app->guid = $guid!=='' ? $guid : ( $existingGuid!=='' ? $existingGuid : guid::create() );
+		if( $title!=='' ) {
+			$decoded->app->title = $title;
+		}
+
+		$encoded = json_encode( $decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+		if( $encoded===false ) {
+			throw new cliException( 'Failed encoding ' . $sourceDescription );
+		}
+
+		return [
+			'json'     => $encoded . "\n",
+			'title'    => isset( $decoded->app->title ) ? (string)$decoded->app->title : '',
+			'guid'     => (string)$decoded->app->guid,
+			'guidKept' => $existingGuid!=='' && $existingGuid===$decoded->app->guid,
+		];
 	}
 
 

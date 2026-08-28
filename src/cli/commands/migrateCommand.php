@@ -506,6 +506,25 @@ final class migrateCommand extends Command {
 
 
 	/**
+	 * Quote a value for .env.
+	 *
+	 * The values this command writes are the credentials lifted out of the v6 config —
+	 * MONGO_URI, MICROSOFT_CLIENT_SECRET, SMTP_PASSWORD, PAYJUNCTION_PASSWORD. Written bare
+	 * they are silently corrupted: symfony/dotenv interpolates $VAR in an unquoted value,
+	 * treats a whitespace-preceded # as the start of a comment, and rejects an embedded
+	 * quote outright. Because every %env() reference is required and '' counts as unset,
+	 * the damage surfaces later as a wrong-credential auth failure, not as a startup error.
+	 *
+	 * Single quotes suppress interpolation; an embedded single quote is closed, escaped and
+	 * reopened. Verified against symfony/dotenv 7 for values containing $, ${}, #, spaces,
+	 * both quote characters, backslashes and newlines.
+	 */
+	public static function encodeEnvValue( string $value ): string {
+		return "'" . str_replace( "'", "'\\''", $value ) . "'";
+	}
+
+
+	/**
 	 * @param  array<string, string>  $env
 	 * @param  array<string, bool>    $secrets
 	 *
@@ -520,10 +539,12 @@ final class migrateCommand extends Command {
 			'',
 		];
 		foreach( $env as $name => $value ) {
+			$lines[] = $name . '=' . self::encodeEnvValue( $value );
 			if( $secrets[ $name ] ?? false ) {
-				$lines[] = '# secret';
+				// Same convention `gf env --init` writes, so a migrated .env shows the file
+				// indirection it will need in production rather than a bare marker.
+				$lines[] = '# ' . $name . '_FILE=/run/secrets/' . strtolower( $name );
 			}
-			$lines[] = $name . '=' . $value;
 		}
 
 		if( file_exists( $path ) ) {

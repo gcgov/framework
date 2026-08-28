@@ -52,7 +52,10 @@ final class guard {
 		}
 
 		foreach( $routeHandler->requiredRoles as $requiredRole ) {
-			if( !in_array( $requiredRole, $authUser->roles ) ) {
+			// Strict: $authUser->roles is narrowed to strings by authUser::normalizeRoles(),
+			// and a loose comparison here would still match a required role against any
+			// truthy element were that ever to change.
+			if( !in_array( $requiredRole, $authUser->roles, true ) ) {
 				throw new routeException( 'User does not have the permission "' . $requiredRole . '" required to access this content', 403 );
 			}
 		}

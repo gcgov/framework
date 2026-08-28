@@ -247,6 +247,17 @@ final class config {
 	}
 
 
+	/**
+	 * The base path in the form a route pattern is built from: '' at the domain root, '/api' otherwise.
+	 * Use this, not getBasePath(), when prefixing a route — see {@see unifiedConfig::getRoutePrefix()}.
+	 *
+	 * @throws \gcgov\framework\exceptions\configException
+	 */
+	public static function getRoutePrefix(): string {
+		return self::unifiedConfig()->getRoutePrefix();
+	}
+
+
 	/** @throws \gcgov\framework\exceptions\configException */
 	public static function getLogging(): logging {
 		return self::unifiedConfig()->logging;
@@ -314,9 +325,7 @@ final class config {
 	 * @throws \gcgov\framework\exceptions\configException
 	 */
 	public static function getJwtKeyPath(): string {
-		$configured = trim( self::unifiedConfig()->jwtAuth->keyPath );
-
-		return rtrim( $configured!=='' ? str_replace( '\\', '/', $configured ) : self::getSrvDir() . 'jwtCertificates', '/' ) . '/';
+		return self::unifiedConfig()->getJwtKeyPath( self::getSrvDir() );
 	}
 
 

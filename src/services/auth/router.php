@@ -25,7 +25,7 @@ class router implements \gcgov\framework\interfaces\router {
 
 
 	public function getRoutes(): array {
-		$basePath = config::getBasePath();
+		$basePath = config::getRoutePrefix();
 
 		$routes = [
 			new route( 'GET', $basePath . '/.well-known/jwks.json', self::SHARED, 'jwks', false, description: 'Public keys for validating tokens this application issued.' ),

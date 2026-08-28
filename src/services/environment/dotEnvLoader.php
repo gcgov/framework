@@ -18,11 +18,9 @@ use Symfony\Component\Dotenv\Dotenv;
  * its own — a project keeping only machine-local values in `.env.local` loads
  * exactly like one with only `.env`.
  *
- * There is deliberately no APP_ENV cascade: environment selection is simply
- * which variables the process environment (or .env) supplies. The gf CLI reads
- * a *foreign* environment's values via the `environments.{name}` section of
- * config.json, referencing distinctly-named variables (e.g. PROD_MONGO_URI)
- * that live in the same `.env`.
+ * There is deliberately no APP_ENV cascade: an Environment IS the variable set the
+ * process is given, so environment selection is simply which variables the process
+ * environment (or .env) supplies. Nothing is activated, copied, or selected by name.
  */
 final class dotEnvLoader {
 

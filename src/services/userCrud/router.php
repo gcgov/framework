@@ -18,7 +18,7 @@ class router implements \gcgov\framework\interfaces\router {
 	private const CONTROLLER = '\gcgov\framework\services\userCrud\controllers\user';
 
 	public function getRoutes(): array {
-		$basePath = config::getBasePath();
+		$basePath = config::getRoutePrefix();
 
 		return [
 			new route( 'GET', $basePath . '/user', self::CONTROLLER, 'getAll', true, [ 'User.Read' ] ),

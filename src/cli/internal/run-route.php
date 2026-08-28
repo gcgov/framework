@@ -32,7 +32,7 @@ $gfWriteError = static function( string $message ): void {
 };
 
 if( PHP_SAPI!=='cli' ) {
-	$gfWriteError( 'application CLI routes must run under the PHP CLI binary, but this process is running the "' . PHP_SAPI . '" SAPI. Point gf at php/php.exe instead of php-cgi/php-fpm with `gf cli --php=<binary or directory>`, the GF_PHP environment variable, or "phpPath" in config.json.' );
+	$gfWriteError( 'application CLI routes must run under the PHP CLI binary, but this process is running the "' . PHP_SAPI . '" SAPI. Point gf at php/php.exe instead of php-cgi/php-fpm with `gf cli --php=<binary or directory>`, or the GF_PHP environment variable.' );
 	exit( 2 );
 }
 
