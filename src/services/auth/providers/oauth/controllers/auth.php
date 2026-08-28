@@ -527,6 +527,25 @@ class auth implements controller {
 
 
 	/**
+	 * The authenticated user's id as an ObjectId.
+	 *
+	 * `new ObjectId( $authUser->userId )` threw InvalidArgumentException when the token
+	 * carried no data.userId claim, which surfaced as an opaque 500 rather than the 401 it
+	 * actually is.
+	 *
+	 * @throws \gcgov\framework\exceptions\controllerException
+	 */
+	private static function authUserObjectId( \gcgov\framework\models\authUser $authUser ): \MongoDB\BSON\ObjectId {
+		try {
+			return new \MongoDB\BSON\ObjectId( $authUser->userId );
+		}
+		catch( \Throwable $e ) {
+			throw new controllerException( 'The access token does not identify a user', 401, $e );
+		}
+	}
+
+
+	/**
 	 * A 302 as a controllerResponse.
 	 *
 	 * This path used to call header() then exit, which skipped controller::_after(),
@@ -624,9 +643,17 @@ class auth implements controller {
 			throw new controllerException( 'Provided data is not in a valid format', 400, $e );
 		}
 
+		// Validated rather than passed straight through: userMultifactorId is nullable and
+		// client-supplied, while multifactor::verifyMfaSecret() declares it non-nullable, so
+		// a body omitting the field produced a TypeError and an opaque 500 where the
+		// deserialization guard above was meant to yield a 400.
+		if( $verifyMfaSecretRequest->userMultifactorId===null ) {
+			throw new controllerException( 'userMultifactorId is required', 400 );
+		}
+
 		$authUser = \gcgov\framework\services\request::getAuthUser();
 
-		$response = multifactor::verifyMfaSecret( new \MongoDB\BSON\ObjectId( $authUser->userId ), $verifyMfaSecretRequest->userMultifactorId, $verifyMfaSecretRequest->code );
+		multifactor::verifyMfaSecret( self::authUserObjectId( $authUser ), $verifyMfaSecretRequest->userMultifactorId, $verifyMfaSecretRequest->code );
 
 		$userClassName = \gcgov\framework\services\request::getUserClassFqdn();
 		return new controllerDataResponse( $this->createAccessTokenResponse( $userClassName::getOne($authUser->userId) ) );
@@ -647,7 +674,7 @@ class auth implements controller {
 
 		$authUser = \gcgov\framework\services\request::getAuthUser();
 
-		$valid = multifactor::isMfaCodeCorrect( new \MongoDB\BSON\ObjectId( $authUser->userId ), $verifyMfaCodeRequest->code );
+		$valid = multifactor::isMfaCodeCorrect( self::authUserObjectId( $authUser ), $verifyMfaCodeRequest->code );
 		if(!$valid) {
 			throw new controllerException('Invalid code', 500);
 		}

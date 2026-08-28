@@ -45,6 +45,13 @@ final class cliCommand extends Command {
 		$context = appContext::require();
 		$context->assertAppLoadable();
 
+		// Load .env before choosing the interpreter. findPhpBinary() falls back to
+		// getenv('GF_PHP'), and dotEnvLoader enables usePutenv() precisely so getenv() sees
+		// .env values — but nothing on this path had loaded it, so a GF_PHP set in {root}/.env
+		// (which the loader's own docblock offers as the example) was invisible and the route
+		// silently ran on whatever PHP happened to be on PATH.
+		\gcgov\framework\services\environment\dotEnvLoader::loadOnce( $context->rootDir );
+
 		$commandLine = array_merge( phpProcess::findPhpBinary( $input->getOption( 'php' ) ), phpProcess::requiredIniFlags() );
 
 		if( $input->getOption( 'debug' ) ) {

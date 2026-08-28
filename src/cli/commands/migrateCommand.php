@@ -238,6 +238,15 @@ final class migrateCommand extends Command {
 		}
 		$io->text( 'Still to do by hand: the Dockerfile and compose entry, the Zone this application belongs in, and moving its secrets into the ops repository.' );
 
+		$io->section( '\app\router' );
+		$io->text( 'Two router contracts changed in a way nothing else will tell you about:' );
+		$io->text( '  · It must now implement \gcgov\framework\interfaces\appRouter (which adds providesAuthentication()).' );
+		$io->text( '    Implementing only \gcgov\framework\interfaces\router is a TypeError on the first request.' );
+		$io->text( '  · The service-auth opt-out is now the \gcgov\framework\interfaces\router\skipsServiceAuthentication' );
+		$io->text( '    interface, not a duck-typed method. A getRunFrameworkServiceRouteAuthentication() left over from v6' );
+		$io->text( '    is silently ignored, so routes the application authenticates itself start returning 401 — and the' );
+		$io->text( '    method now takes a $routeHandler.' );
+
 		return Command::SUCCESS;
 	}
 
