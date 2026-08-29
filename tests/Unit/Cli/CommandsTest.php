@@ -77,6 +77,10 @@ final class CommandsTest extends TestCase {
 		$this->assertCount( 2, $guids );
 
 		foreach( $guids as $guid ) {
+			// Provisioning lowercases every secret filename it writes to the host, so the
+			// GUID inside the filename — and its guids.json spelling — must already be
+			// lowercase, or jwtAuth looks up a file that does not exist there.
+			$this->assertSame( strtolower( (string)$guid ), $guid, 'key GUIDs must be lowercase' );
 			$this->assertFileExists( $certificateDir . '/private-' . $guid . '.pem' );
 			$this->assertFileExists( $certificateDir . '/public-' . $guid . '.pem' );
 			$publicKey = openssl_pkey_get_public( (string)file_get_contents( $certificateDir . '/public-' . $guid . '.pem' ) );

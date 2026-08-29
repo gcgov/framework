@@ -71,7 +71,12 @@ final class certGenerateAuthCommand extends Command {
 
 		$guids = [];
 		for( $i = 0; $i<$count; $i++ ) {
-			$keyGuid = guid::create();
+			// Lowercased at the source: on Windows guid::create() returns uppercase GUIDs
+			// (com_create_guid), and the ops repository's provisioning lowercases every
+			// secret filename it writes to the host — so an uppercase GUID here would put
+			// a lowercase file on a case-sensitive filesystem while guids.json still
+			// names the uppercase spelling jwtAuth looks up, and every sign-in fails.
+			$keyGuid = strtolower( guid::create() );
 			$guids[] = $keyGuid;
 
 			$privateKey = openssl_pkey_new( [
