@@ -550,9 +550,9 @@ final class migrateCommand extends Command {
 		foreach( $env as $name => $value ) {
 			$lines[] = $name . '=' . self::encodeEnvValue( $value );
 			if( $secrets[ $name ] ?? false ) {
-				// Same convention `gf env --init` writes, so a migrated .env shows the file
-				// indirection it will need in production rather than a bare marker.
-				$lines[] = '# ' . $name . '_FILE=/run/secrets/' . strtolower( $name );
+				// The one writer of the secret-file convention, shared with `gf env --init`,
+				// so the two commands cannot describe the indirection differently.
+				$lines[] = envCommand::secretFileHint( $name );
 			}
 		}
 

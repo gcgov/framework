@@ -173,7 +173,10 @@ class user implements controller {
 		if( $_id==='new' ) {
 			// A create must create. Without this, POST /user/new carrying an existing
 			// account's _id would overwrite that account — the same hole by another route.
-			unset( $user->_id );
+			// The fresh identity is ASSIGNED rather than unset(): the model's $_id is a
+			// typed ObjectId that save() reads unconditionally, so an unset property is a
+			// fatal uninitialized-property Error on the framework's own create endpoint.
+			$user->_id = new \MongoDB\BSON\ObjectId();
 		}
 		elseif( !isset( $user->_id ) || (string)$user->_id==='' ) {
 			throw new controllerException( 'The request body must carry the _id it is being saved to', 400 );

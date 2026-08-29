@@ -60,19 +60,38 @@ final class health implements \gcgov\framework\interfaces\controller {
 		$healthy = true;
 
 		try {
-			foreach( config::getMongoDatabases() as $mongoDatabase ) {
-				$checks[ 'mongo:' . $mongoDatabase->database ] = self::pingMongo( $mongoDatabase );
-				if( $checks[ 'mongo:' . $mongoDatabase->database ]!=='ok' ) {
-					$healthy = false;
-				}
-			}
+			$mongoDatabases = config::getMongoDatabases();
+			$authEnabled    = config::getServices()->auth!==null;
+			$jwtKeyPath     = $authEnabled ? config::getJwtKeyPath() : '';
 		}
 		catch( \Throwable $e ) {
 			// Logged, not returned — see pingMongo(). A configException message carries the
 			// config file path and the name of the unresolved environment variable.
 			log::error( 'health', 'Readiness could not read configuration', [ 'exception' => $e ] );
+			$mongoDatabases     = [];
+			$authEnabled        = false;
+			$jwtKeyPath         = '';
 			$checks[ 'config' ] = 'failed';
 			$healthy            = false;
+		}
+
+		// pingMongo() never throws — see its contract — so the loop needs no guard.
+		foreach( $mongoDatabases as $mongoDatabase ) {
+			$status                                        = self::pingMongo( $mongoDatabase );
+			$checks[ 'mongo:' . $mongoDatabase->database ] = $status;
+			$healthy                                       = $healthy && $status==='ok';
+		}
+
+		// When the auth service is enabled, usable signing keys are a dependency like the
+		// database. Nothing else checks them before traffic arrives: sign-in is the first
+		// thing that constructs jwtAuth, so a missing or empty key mount (APP_JWT_KEY_PATH
+		// pointing at an unprovisioned directory) passed every health gate — deploy green,
+		// proxy green — and surfaced only as a configException on the first production
+		// sign-in.
+		if( $authEnabled ) {
+			$status              = self::jwtKeysStatus( $jwtKeyPath );
+			$checks[ 'jwtKeys' ] = $status;
+			$healthy             = $healthy && $status==='ok';
 		}
 
 		$response = new controllerDataResponse( [
@@ -127,6 +146,34 @@ final class health implements \gcgov\framework\interfaces\controller {
 
 			return 'failed';
 		}
+	}
+
+
+	/**
+	 * @return string 'ok' or 'failed' — never a thrown exception, and never the path:
+	 * like pingMongo(), the reason goes to the log rather than to a route that is
+	 * registered unauthenticated on every application.
+	 *
+	 * Mirrors jwtAuth's own key discovery: guids.json naming at least one guid whose
+	 * private and public pem files both exist beside it.
+	 */
+	private static function jwtKeysStatus( string $keyPath ): string {
+		$guidsFile = $keyPath . 'guids.json';
+		if( file_exists( $guidsFile ) ) {
+			$guids = json_decode( (string)file_get_contents( $guidsFile ) );
+			foreach( is_array( $guids ) ? $guids : [] as $guid ) {
+				if( !is_string( $guid ) ) {
+					continue;
+				}
+				if( file_exists( $keyPath . 'private-' . $guid . '.pem' ) && file_exists( $keyPath . 'public-' . $guid . '.pem' ) ) {
+					return 'ok';
+				}
+			}
+		}
+
+		log::warning( 'health', 'Readiness found no usable JWT signing keys in the configured key directory. Generate them with `vendor/bin/gf cert:generate-auth`, or point jwtAuth.keyPath (APP_JWT_KEY_PATH) at the provisioned directory.' );
+
+		return 'failed';
 	}
 
 }

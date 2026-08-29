@@ -7,6 +7,7 @@ use gcgov\framework\cli\cliException;
 use gcgov\framework\cli\mongoTools;
 use gcgov\framework\services\environment\envVarResolver;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -95,7 +96,12 @@ final class envCommand extends Command {
 
 		$rows = [];
 		foreach( $references as $name => $isSecret ) {
-			$rows[] = [ $name, $isSecret ? 'secret' : '', $this->isSet( $name ) ? 'set' : 'MISSING' ];
+			// A reserved CGI meta-variable name is never resolvable, whatever is set —
+			// reporting it as MISSING sends the developer filling in a value forever.
+			$state  = envVarResolver::isReservedName( $name )
+				? 'RESERVED — a CGI meta-variable name is never resolved; rename it'
+				: ( $this->isSet( $name ) ? 'set' : 'MISSING' );
+			$rows[] = [ $name, $isSecret ? 'secret' : '', $state ];
 		}
 		$io->table( [ 'Variable', 'Kind', 'Current environment' ], $rows );
 
@@ -132,7 +138,7 @@ final class envCommand extends Command {
 			$added    = count( $references );
 		}
 		else {
-			$declared = self::declaredNames( $existing );
+			$declared = self::declaredNames( $existing, $envPath );
 			$missing  = array_filter( $references, static fn( bool $isSecret, string $name ): bool => !isset( $declared[ $name ] ) && !isset( $declared[ $name . envVarResolver::SECRET_FILE_SUFFIX ] ), ARRAY_FILTER_USE_BOTH );
 
 			if( count( $missing )===0 ) {
@@ -158,17 +164,27 @@ final class envCommand extends Command {
 	/**
 	 * The variable names a .env already declares, so --init can skip them.
 	 *
-	 * Only uncommented `NAME=` assignments count: a commented `# NAME_FILE=` hint is
-	 * guidance, not a declaration.
+	 * Parsed with the same symfony/dotenv parser the framework loads the file with, so
+	 * "declared" here is exactly what the runtime will see. The hand-rolled regex this
+	 * replaces disagreed with it on multi-line quoted values: a NAME= at line start
+	 * inside one counted as a declaration, and --init skipped appending a variable the
+	 * file does not actually define. (A commented `# NAME_FILE=` hint is guidance, not a
+	 * declaration, in both readings.)
 	 *
 	 * @return array<string, true>
+	 * @throws \gcgov\framework\cli\cliException
 	 */
-	private static function declaredNames( string $env ): array {
+	private static function declaredNames( string $env, string $envPath ): array {
+		try {
+			$parsed = ( new Dotenv() )->parse( $env, $envPath );
+		}
+		catch( \Symfony\Component\Dotenv\Exception\FormatException $e ) {
+			throw new cliException( 'Cannot read ' . $envPath . ': ' . $e->getMessage(), 0, $e );
+		}
+
 		$names = [];
-		foreach( preg_split( '/\R/', $env ) ?: [] as $line ) {
-			if( preg_match( '/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/', $line, $m )===1 ) {
-				$names[ $m[ 1 ] ] = true;
-			}
+		foreach( array_keys( $parsed ) as $name ) {
+			$names[ (string)$name ] = true;
 		}
 
 		return $names;
@@ -205,7 +221,7 @@ final class envCommand extends Command {
 		$plain   = array_keys( array_filter( $references, static fn( bool $isSecret ): bool => !$isSecret ) );
 
 		foreach( $plain as $name ) {
-			$lines[] = $name . '=';
+			$lines[] = self::referenceLine( $name );
 		}
 
 		if( count( $secrets )>0 ) {
@@ -213,12 +229,40 @@ final class envCommand extends Command {
 			$lines[] = '# Secrets. In production these are provisioned as files and read through';
 			$lines[] = '# the companion {NAME}_FILE variable instead — set one or the other, never both.';
 			foreach( $secrets as $name ) {
-				$lines[] = $name . '=';
-				$lines[] = '# ' . $name . '_FILE=/run/secrets/' . strtolower( $name );
+				$lines[] = self::referenceLine( $name );
+				if( !envVarResolver::isReservedName( $name ) ) {
+					$lines[] = self::secretFileHint( $name );
+				}
 			}
 		}
 
 		return $lines;
+	}
+
+
+	/**
+	 * A live `NAME=` line — or, for a reserved CGI meta-variable name, guidance instead:
+	 * the resolver never satisfies such a name, so a live line would be filled in and
+	 * still report MISSING forever. The fix is renaming the reference, not a value.
+	 */
+	private static function referenceLine( string $name ): string {
+		return envVarResolver::isReservedName( $name )
+			? '# ' . $name . ' is a reserved CGI meta-variable name the framework never resolves — rename the %env(' . $name . ')% reference in config.json'
+			: $name . '=';
+	}
+
+
+	/**
+	 * The commented `{NAME}_FILE` hint written beside a secret's plain line — the one
+	 * writer of the convention, shared with `gf migrate` so the two commands cannot
+	 * describe it differently. The path carries the per-application segment the
+	 * deployment convention uses (bin/provision writes /etc/gcgov/secrets/<app>/<name>,
+	 * mounted into the container at /run/secrets/<app>/<name>): a set _FILE never falls
+	 * back, so a hint without the segment pointed everyone who uncommented it at a file
+	 * that never exists.
+	 */
+	public static function secretFileHint( string $name ): string {
+		return '# ' . $name . envVarResolver::SECRET_FILE_SUFFIX . '=/run/secrets/<app>/' . strtolower( $name );
 	}
 
 

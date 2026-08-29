@@ -228,10 +228,14 @@ final class router {
 		// authenticates: an unauthenticated route returns before the guard chain, so its
 		// roles can never be checked by anything. Warned rather than refused — such a route
 		// works today with its roles inert, and failing an application's boot over a
-		// declaration that never did anything is disproportionate.
-		foreach( $routes as $route ) {
-			if( !$route->authentication && count( $route->requiredRoles )>0 ) {
-				log::warning( 'Framework Lifecycle', '-Router- route "' . $route->route . '" declares requiredRoles but authentication:false, so the roles are never checked. Set authentication:true, or drop the roles.' );
+		// declaration that never did anything is disproportionate. Behind the lifecycle
+		// flag because routes are rebuilt per request: unconditional, this was one
+		// identical log line per request for the life of the deployment.
+		if( config::getLogging()->lifecycle ) {
+			foreach( $routes as $route ) {
+				if( !$route->authentication && count( $route->requiredRoles )>0 ) {
+					log::warning( 'Framework Lifecycle', '-Router- route "' . $route->route . '" declares requiredRoles but authentication:false, so the roles are never checked. Set authentication:true, or drop the roles.' );
+				}
 			}
 		}
 
@@ -296,51 +300,131 @@ final class router {
 		// exception is neither a routeException nor a configException — so a v6 application
 		// upgrading with its own /health did not lose /health, it lost EVERY route, with an
 		// empty 500 on every url. The health router's docblock already promised that such
-		// an application "keeps working"; nothing implemented it. Overriding is logged
-		// rather than silent, because a route disappearing from the framework's surface is
-		// worth noticing.
-		$appKeys = [];
-		foreach( $appRoutes as $appRoute ) {
-			foreach( self::routeKeys( $appRoute ) as $key ) {
-				$appKeys[ $key ] = true;
-			}
-		}
-
-		$routes = [];
-		foreach( $serviceRoutes as $serviceRoute ) {
-			$overridden = false;
-			foreach( self::routeKeys( $serviceRoute ) as $key ) {
-				if( isset( $appKeys[ $key ] ) ) {
-					$overridden = true;
-					break;
-				}
-			}
-
-			if( $overridden ) {
-				log::notice( 'Framework Lifecycle', '-Router- \app\router defines "' . $serviceRoute->route . '"; the framework route of the same name is not registered' );
-				continue;
-			}
-
-			$routes[] = $serviceRoute;
-		}
-
-		return array_merge( $routes, $appRoutes );
+		// an application "keeps working"; nothing implemented it.
+		return array_merge( self::serviceRoutesNotOverridden( $serviceRoutes, $appRoutes ), $appRoutes );
 	}
 
 
 	/**
-	 * The (method, pattern) pairs a route occupies. httpMethod is string|array, and a route
-	 * registered for several methods collides on each of them independently.
+	 * The service routes the application's own routes do NOT override.
 	 *
-	 * @return string[]
+	 * "Override" is judged the way FastRoute judges a duplicate — by the compiled shape of
+	 * the pattern, never its spelling. user/{id} and user/{_id} are the same route to the
+	 * dispatcher (a placeholder's name never reaches its regex), so comparing raw pattern
+	 * strings kept both registered, and BadRouteException at dispatcher build took every
+	 * url down — the exact outage this filter exists to prevent. A static application
+	 * route inside a variable service route's shape (user/me under the service's
+	 * user/{_id}) drops the service route for the same reason: service routes register
+	 * first, and FastRoute rejects a static route shadowed by an earlier variable one.
+	 *
+	 * Pure and public so the collision rules are testable with synthetic routes.
+	 *
+	 * @param  \gcgov\framework\models\route[]  $serviceRoutes
+	 * @param  \gcgov\framework\models\route[]  $appRoutes
+	 *
+	 * @return \gcgov\framework\models\route[]
 	 */
-	private static function routeKeys( \gcgov\framework\models\route $route ): array {
-		$keys = [];
-		foreach( (array)$route->httpMethod as $httpMethod ) {
-			$keys[] = strtoupper( (string)$httpMethod ) . ' ' . $route->route;
+	public static function serviceRoutesNotOverridden( array $serviceRoutes, array $appRoutes ): array {
+		$appKeys        = [];
+		$appStaticPaths = [];
+		foreach( $appRoutes as $appRoute ) {
+			foreach( (array)$appRoute->httpMethod as $httpMethod ) {
+				$method = strtoupper( (string)$httpMethod );
+				foreach( self::patternShapes( $appRoute->route ) as $shape ) {
+					$appKeys[ $method . ' ' . $shape[ 'signature' ] ] = true;
+					if( $shape[ 'regex' ]===null ) {
+						$appStaticPaths[ $method ][] = $shape[ 'signature' ];
+					}
+				}
+			}
 		}
 
-		return $keys;
+		$kept = [];
+		foreach( $serviceRoutes as $serviceRoute ) {
+			if( self::isOverriddenBy( $serviceRoute, $appKeys, $appStaticPaths ) ) {
+				if( config::getLogging()->lifecycle ) {
+					// Behind the lifecycle flag: routes are rebuilt per request, and an
+					// application using the override path deliberately would otherwise
+					// emit one identical notice per request for the life of the deploy.
+					log::notice( 'Framework Lifecycle', '-Router- \app\router defines "' . $serviceRoute->route . '"; the framework route of the same shape is not registered' );
+				}
+				continue;
+			}
+
+			$kept[] = $serviceRoute;
+		}
+
+		return $kept;
+	}
+
+
+	/**
+	 * @param  array<string, true>      $appKeys         'METHOD signature' the app occupies
+	 * @param  array<string, string[]>  $appStaticPaths  method => the app's static paths
+	 */
+	private static function isOverriddenBy( \gcgov\framework\models\route $serviceRoute, array $appKeys, array $appStaticPaths ): bool {
+		foreach( (array)$serviceRoute->httpMethod as $httpMethod ) {
+			$method = strtoupper( (string)$httpMethod );
+			foreach( self::patternShapes( $serviceRoute->route ) as $shape ) {
+				if( isset( $appKeys[ $method . ' ' . $shape[ 'signature' ] ] ) ) {
+					return true;
+				}
+				if( $shape[ 'regex' ]!==null ) {
+					foreach( $appStaticPaths[ $method ] ?? [] as $staticPath ) {
+						if( preg_match( '~^' . $shape[ 'regex' ] . '$~', $staticPath )===1 ) {
+							return true;
+						}
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+
+	/**
+	 * The shapes a FastRoute pattern occupies, one per optional-segment variant.
+	 *
+	 * `signature` keys the shape the way the dispatcher compiles it: literals verbatim,
+	 * each placeholder reduced to {its-regex} — so user/{id} and user/{_id} share a
+	 * signature while user/{id:\d+} has its own. `regex` is the anchored expression for a
+	 * variant carrying placeholders (null for a purely static one), used by the
+	 * static-shadowing check. A pattern the parser rejects falls back to its literal
+	 * spelling: FastRoute reports the malformed pattern itself at dispatcher build.
+	 *
+	 * @return array{signature: string, regex: string|null}[]
+	 */
+	public static function patternShapes( string $pattern ): array {
+		try {
+			$variants = ( new \FastRoute\RouteParser\Std() )->parse( $pattern );
+		}
+		catch( \FastRoute\BadRouteException ) {
+			return [ [ 'signature' => $pattern, 'regex' => null ] ];
+		}
+
+		$shapes = [];
+		foreach( $variants as $variant ) {
+			$signature = '';
+			$regex     = '';
+			$variable  = false;
+			foreach( $variant as $part ) {
+				if( is_array( $part ) ) {
+					// [ placeholder name, placeholder regex ] — the name never compiles.
+					$variable   = true;
+					$signature .= '{' . (string)$part[ 1 ] . '}';
+					$regex     .= '(' . (string)$part[ 1 ] . ')';
+				}
+				else {
+					$signature .= (string)$part;
+					$regex     .= preg_quote( (string)$part, '~' );
+				}
+			}
+
+			$shapes[] = [ 'signature' => $signature, 'regex' => $variable ? $regex : null ];
+		}
+
+		return $shapes;
 	}
 
 

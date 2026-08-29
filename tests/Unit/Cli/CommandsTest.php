@@ -88,6 +88,64 @@ final class CommandsTest extends TestCase {
 		$this->assertFileExists( $certificateDir . '/.gitignore', 'gitignore is copied from the jwtAuth service directory' );
 	}
 
+	/** A configured jwtAuth.keyPath wins, and a relative one anchors to the app root. */
+	public function testCertGenerateAuthHonorsAConfiguredKeyPath(): void {
+		if( !extension_loaded( 'openssl' ) ) {
+			$this->markTestSkipped( 'ext-openssl not loaded' );
+		}
+
+		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [ 'jwtAuth' => [ 'keyPath' => 'srv/authKeys' ] ] ) );
+
+		$commandTester = new CommandTester( new certGenerateAuthCommand() );
+		$exitCode      = $commandTester->execute( [ '--count' => '1', '--yes' => true ] );
+
+		$this->assertSame( 0, $exitCode );
+		$this->assertFileExists( $this->tempRootDir . '/srv/authKeys/guids.json' );
+	}
+
+
+	/**
+	 * `gf init` runs this command on a scaffold whose .env is still empty, so a failure
+	 * to resolve UNRELATED references (MONGO_URI among them) must not block key
+	 * generation — it needs only jwtAuth.keyPath.
+	 */
+	public function testCertGenerateAuthSucceedsWhenOnlyOtherReferencesAreUnresolved(): void {
+		if( !extension_loaded( 'openssl' ) ) {
+			$this->markTestSkipped( 'ext-openssl not loaded' );
+		}
+
+		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
+			'type'    => '%env(GF_TEST_CERT_ABSENT)%',
+			'jwtAuth' => [ 'keyPath' => 'srv/authKeys' ],
+		] ) );
+
+		$commandTester = new CommandTester( new certGenerateAuthCommand() );
+		$exitCode      = $commandTester->execute( [ '--count' => '1', '--yes' => true ] );
+
+		$this->assertSame( 0, $exitCode );
+		$this->assertFileExists( $this->tempRootDir . '/srv/authKeys/guids.json', 'the configured keyPath must still be honored' );
+	}
+
+
+	/** Only when the keyPath reference ITSELF has no value does the default apply — loudly. */
+	public function testCertGenerateAuthFallsBackToTheDefaultWhenTheKeyPathReferenceIsUnset(): void {
+		if( !extension_loaded( 'openssl' ) ) {
+			$this->markTestSkipped( 'ext-openssl not loaded' );
+		}
+
+		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
+			'jwtAuth' => [ 'keyPath' => '%env(GF_TEST_CERT_KEYPATH_ABSENT)%' ],
+		] ) );
+
+		$commandTester = new CommandTester( new certGenerateAuthCommand() );
+		$exitCode      = $commandTester->execute( [ '--count' => '1', '--yes' => true ] );
+
+		$this->assertSame( 0, $exitCode );
+		$this->assertFileExists( $this->tempRootDir . '/srv/jwtCertificates/guids.json' );
+		$this->assertStringContainsString( 'GF_TEST_CERT_KEYPATH_ABSENT', $commandTester->getDisplay(), 'the fallback must name the unresolved variable' );
+	}
+
+
 	public function testCertGenerateAuthRegenerationReplacesOldKeys(): void {
 		if( !extension_loaded( 'openssl' ) ) {
 			$this->markTestSkipped( 'ext-openssl not loaded' );

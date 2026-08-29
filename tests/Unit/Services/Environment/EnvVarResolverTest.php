@@ -145,6 +145,45 @@ final class EnvVarResolverTest extends TestCase {
 	}
 
 
+	/**
+	 * ADR 0001: the bool processor fails closed. It used to fall back to `(bool)$value`,
+	 * which turned every unrecognised value — "flase", "disabled", "2" — into TRUE with
+	 * no error, so a typo'd AUTH_BLOCK_NEW_USERS resolved silently to the wrong setting
+	 * while `gf env` reported success.
+	 */
+	public function testBoolProcessorRejectsAnUnrecognisedValue(): void {
+		$this->setEnv( 'GF_TEST_FLAG', 'flase' );
+
+		$this->expectException( environmentException::class );
+		$this->expectExceptionMessageMatches( '/bool/' );
+		$this->resolve( '{"flag":"%env(bool:GF_TEST_FLAG)%"}' );
+	}
+
+
+	public function testIsSatisfiedAcceptsThePlainOrTheFileName(): void {
+		$this->trackEnv( 'GF_TEST_SAT' );
+		self::assertFalse( envVarResolver::isSatisfied( 'GF_TEST_SAT' ) );
+
+		$this->setEnv( 'GF_TEST_SAT' . envVarResolver::SECRET_FILE_SUFFIX, '/run/secrets/app/sat' );
+		self::assertTrue( envVarResolver::isSatisfied( 'GF_TEST_SAT' ) );
+	}
+
+
+	/** A reserved CGI name is never satisfiable, even when genuinely set. */
+	public function testIsSatisfiedIsFalseForAReservedNameEvenWhenSet(): void {
+		$this->setEnv( 'SERVER_API_TOKEN', 'value' );
+
+		self::assertFalse( envVarResolver::isSatisfied( 'SERVER_API_TOKEN' ) );
+	}
+
+
+	public function testIsReservedNameMatchesPrefixesAndExactNames(): void {
+		self::assertTrue( envVarResolver::isReservedName( 'SERVER_API_TOKEN' ) );
+		self::assertTrue( envVarResolver::isReservedName( 'CONTENT_TYPE' ) );
+		self::assertFalse( envVarResolver::isReservedName( 'MONGO_URI' ) );
+	}
+
+
 	public function testProcessorsApplyRightToLeft(): void {
 		$path = tempnam( sys_get_temp_dir(), 'gf' );
 		self::assertIsString( $path );

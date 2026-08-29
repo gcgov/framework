@@ -56,6 +56,58 @@ final class RouteOverrideTest extends TestCase {
 
 
 	/**
+	 * FastRoute compiles a placeholder's regex, never its name, so user/{id} and
+	 * user/{_id} are the SAME route to the dispatcher — and must collide here, or both
+	 * register and BadRouteException takes every url down: the exact whole-surface outage
+	 * the override mechanism exists to prevent, for a v6 app whose placeholder is merely
+	 * spelled differently from the framework's.
+	 */
+	public function testPlaceholderSpellingDoesNotDefeatTheCollision(): void {
+		$framework = $this->routeKeys( new route( 'GET', '/api/user/{_id}', '\gcgov\framework\services\userCrud\controllers\user', 'getOne' ) );
+		$app       = $this->routeKeys( new route( 'GET', '/api/user/{userId}', '\app\controllers\user', 'getOne' ) );
+
+		self::assertSame( $framework, $app );
+	}
+
+
+	/** A custom placeholder regex compiles differently, so it is a different shape. */
+	public function testACustomPlaceholderRegexIsADifferentShape(): void {
+		$plain       = $this->routeKeys( new route( 'GET', '/api/user/{id}', '\app\controllers\user', 'getOne' ) );
+		$constrained = $this->routeKeys( new route( 'GET', '/api/user/{id:\d+}', '\app\controllers\user', 'getOne' ) );
+
+		self::assertSame( [], array_intersect( $plain, $constrained ) );
+	}
+
+
+	public function testOptionalSegmentsOccupyOneSlotPerVariant(): void {
+		$keys = $this->routeKeys( new route( 'GET', '/api/widget[/{id}]', '\app\controllers\widget', 'get' ) );
+
+		self::assertCount( 2, $keys );
+	}
+
+
+	/**
+	 * A static application route inside a variable service route's shape is also fatal:
+	 * service routes register first, and FastRoute rejects a static route shadowed by an
+	 * earlier variable one. The application's path must win there too.
+	 */
+	public function testAStaticAppRouteOverridesTheVariableServiceRouteThatWouldShadowIt(): void {
+		$service = [ new route( 'GET', '/api/user/{_id}', '\gcgov\framework\services\userCrud\controllers\user', 'getOne' ) ];
+		$app     = [ new route( 'GET', '/api/user/me', '\app\controllers\user', 'me' ) ];
+
+		self::assertSame( [], router::serviceRoutesNotOverridden( $service, $app ) );
+	}
+
+
+	public function testAnUnrelatedStaticAppRouteDropsNothing(): void {
+		$service = [ new route( 'GET', '/api/user/{_id}', '\gcgov\framework\services\userCrud\controllers\user', 'getOne' ) ];
+		$app     = [ new route( 'GET', '/api/widget/me', '\app\controllers\widget', 'me' ) ];
+
+		self::assertSame( $service, router::serviceRoutesNotOverridden( $service, $app ) );
+	}
+
+
+	/**
 	 * The merged table must never contain a duplicate (method, pattern) — that is exactly
 	 * what FastRoute rejects, and rejecting it takes the whole application down.
 	 */
@@ -72,11 +124,21 @@ final class RouteOverrideTest extends TestCase {
 	}
 
 
-	/** @return string[] */
+	/**
+	 * The (method, shape) slots a route occupies, built on the router's public
+	 * patternShapes() — the same signatures the override filter compares.
+	 *
+	 * @return string[]
+	 */
 	private function routeKeys( route $route ): array {
-		$method = new \ReflectionMethod( router::class, 'routeKeys' );
+		$keys = [];
+		foreach( (array)$route->httpMethod as $httpMethod ) {
+			foreach( router::patternShapes( $route->route ) as $shape ) {
+				$keys[] = strtoupper( (string)$httpMethod ) . ' ' . $shape[ 'signature' ];
+			}
+		}
 
-		return $method->invoke( null, $route );
+		return $keys;
 	}
 
 }

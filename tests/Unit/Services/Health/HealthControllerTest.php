@@ -95,6 +95,62 @@ final class HealthControllerTest extends TestCase {
 
 
 	/**
+	 * When the auth service is enabled, usable signing keys are a readiness dependency:
+	 * a missing or empty key mount used to pass every health gate — deploy green, proxy
+	 * green — and surface only as a configException on the first production sign-in.
+	 */
+	public function testMissingJwtKeysFailReadinessWhenAuthIsEnabled(): void {
+		$this->seedConfig( static function( unifiedConfig $c ): void {
+			$c->services->auth   = new \gcgov\framework\models\config\services\auth();
+			$c->jwtAuth->keyPath = sys_get_temp_dir() . '/gcgov-health-missing-keys-' . uniqid();
+		} );
+
+		$response = ( new health() )->ready();
+
+		$this->assertSame( 503, $response->getHttpStatus() );
+		$this->assertSame( 'failed', $response->getData()[ 'checks' ][ 'jwtKeys' ] );
+	}
+
+
+	public function testProvisionedJwtKeysPassReadinessWhenAuthIsEnabled(): void {
+		$keyDir = sys_get_temp_dir() . '/gcgov-health-keys-' . uniqid();
+		mkdir( $keyDir, 0777, true );
+		file_put_contents( $keyDir . '/guids.json', json_encode( [ 'abc' ] ) );
+		file_put_contents( $keyDir . '/private-abc.pem', 'pem' );
+		file_put_contents( $keyDir . '/public-abc.pem', 'pem' );
+
+		try {
+			$this->seedConfig( static function( unifiedConfig $c ) use ( $keyDir ): void {
+				$c->services->auth   = new \gcgov\framework\models\config\services\auth();
+				$c->jwtAuth->keyPath = $keyDir;
+			} );
+
+			$response = ( new health() )->ready();
+
+			$this->assertSame( 200, $response->getHttpStatus() );
+			$this->assertSame( 'ok', $response->getData()[ 'checks' ][ 'jwtKeys' ] );
+		}
+		finally {
+			unlink( $keyDir . '/guids.json' );
+			unlink( $keyDir . '/private-abc.pem' );
+			unlink( $keyDir . '/public-abc.pem' );
+			rmdir( $keyDir );
+		}
+	}
+
+
+	/** Readiness without the auth service must not demand keys nothing will read. */
+	public function testJwtKeysAreNotCheckedWhenAuthIsDisabled(): void {
+		$this->seedConfig();
+
+		$response = ( new health() )->ready();
+
+		$this->assertSame( 200, $response->getHttpStatus() );
+		$this->assertArrayNotHasKey( 'jwtKeys', $response->getData()[ 'checks' ] );
+	}
+
+
+	/**
 	 * The probe carries its own short timeouts so an unreachable database cannot park a
 	 * worker for the driver's 30s default — with a probe every few seconds that exhausts
 	 * the pool and 502s real traffic.

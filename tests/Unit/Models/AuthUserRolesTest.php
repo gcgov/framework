@@ -7,6 +7,8 @@ namespace gcgov\framework\tests\Unit\Models;
 use gcgov\framework\models\authUser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -71,7 +73,17 @@ final class AuthUserRolesTest extends TestCase {
 	}
 
 
-	/** The same narrowing has to apply to roles arriving from the user model, not only the token. */
+	/**
+	 * The same narrowing has to apply to roles arriving from the user model, not only the
+	 * token.
+	 *
+	 * In a separate process because the stub defines \app\models\user — and a process
+	 * that holds that class answers request::getUserClassFqdn() differently for every
+	 * later test (RequestTest asserts the framework default). Same isolation, and same
+	 * reason, as UserControllerTest.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
 	public function testRolesFromTheUserModelAreNarrowedToo(): void {
 		require_once __DIR__ . '/../../Stubs/FakeUserModel.php';
 

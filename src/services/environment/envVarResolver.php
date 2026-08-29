@@ -460,4 +460,15 @@ final class envVarResolver {
 		return self::lookupEnv( $name )!==null || self::lookupEnv( $name . self::SECRET_FILE_SUFFIX )!==null;
 	}
 
+
+	/**
+	 * Whether a name is reserved: a CGI meta-variable name this resolver never satisfies
+	 * from the ambient environment (see the class docblock). Public so `gf env` can say
+	 * "reserved — rename it" instead of reporting an unsatisfiable variable as MISSING
+	 * and writing a dead line into .env for the developer to fill in forever.
+	 */
+	public static function isReservedName( string $name ): bool {
+		return self::isBlockedName( $name );
+	}
+
 }

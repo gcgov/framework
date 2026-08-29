@@ -64,12 +64,10 @@ class user implements \gcgov\framework\interfaces\auth\user {
 		if ( !( $object instanceof self ) ) {
 			throw new \InvalidArgumentException( 'Expected ' . self::class );
 		}
-		// Mirrors the real model: an insert mints the _id, so an object arriving without
-		// one is a create rather than an error.
-		if ( !isset( $object->_id ) || $object->_id === '' ) {
-			$object->_id = 'generated-' . count( self::$records );
-		}
-		self::$records[ $object->_id ] = $object;
+		// Mirrors the real factory: save() reads $object->_id unconditionally to build its
+		// update filter, so an unset typed property is an Error here exactly as it is in
+		// production. A fresh identity comes from the caller — save() never mints one.
+		self::$records[ (string) $object->_id ] = $object;
 		return $object;
 	}
 

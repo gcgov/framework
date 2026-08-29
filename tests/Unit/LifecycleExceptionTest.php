@@ -83,7 +83,9 @@ final class LifecycleExceptionTest extends TestCase {
 		$routingBlock = $this->routingTryBlock( $source );
 
 		self::assertStringContainsString( 'log::critical', $routingBlock );
-		self::assertStringNotContainsString( "routeException( $e->getMessage()", $routingBlock );
+		// Single-quoted on purpose: the literal text being asserted absent contains
+		// `$e->getMessage()`, which double quotes would interpolate at runtime.
+		self::assertStringNotContainsString( 'routeException( $e->getMessage()', $routingBlock );
 		self::assertMatchesRegularExpression( '/new routeException\(\s*\'[^\']+\',\s*500/', $routingBlock );
 	}
 

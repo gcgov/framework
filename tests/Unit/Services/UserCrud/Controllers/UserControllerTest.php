@@ -148,6 +148,26 @@ final class UserControllerTest extends TestCase {
 	}
 
 
+	/**
+	 * The fresh identity must be ASSIGNED, not unset: the real model's $_id is a typed
+	 * ObjectId that factory::save() reads unconditionally, so an unset _id made every
+	 * POST /user/new a fatal uninitialized-property Error — the framework's own create
+	 * endpoint could never succeed. The stub's save() mirrors that unconditional read.
+	 */
+	public function testSaveToNewAssignsAFreshIdAndPersistsTheNewAccount(): void {
+		$this->withPhpInput( json_encode( [ '_id' => 'victim', 'name' => 'Newcomer' ] ), function() {
+			$response = ( new user() )->save( 'new' );
+			$this->assertInstanceOf( controllerDataResponse::class, $response );
+		} );
+
+		$created = array_filter( FakeUser::$records, static fn( FakeUser $record ): bool => $record->name==='Newcomer' );
+		$this->assertCount( 1, $created, 'the create must persist the new account' );
+		$createdId = (string) array_key_first( $created );
+		$this->assertNotSame( 'victim', $createdId, 'the body id must not survive a create' );
+		$this->assertNotSame( '', $createdId, 'save() must receive an initialized _id' );
+	}
+
+
 	public function testSaveWrapsModelExceptionInControllerException(): void {
 		FakeUser::$nextException = new modelException( 'validation failure', 422 );
 

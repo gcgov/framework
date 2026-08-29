@@ -87,7 +87,7 @@ $routes[] = new route( 'CLI', '/cli/generate-shifts', '\app\controllers\cli\gene
 ## JWT signing keys: `gf cert:generate-auth`
 
 ```
-gf cert:generate-auth            # 5 RSA-2048 keypairs -> srv/jwtCertificates + guids.json
+gf cert:generate-auth            # 5 RSA-2048 keypairs -> jwtAuth.keyPath (default srv/jwtCertificates) + guids.json
 gf cert:generate-auth --count=3 --yes
 ```
 
@@ -173,7 +173,7 @@ before the application does.
 ```bash
 gf env            # resolve config.json against the current environment
 gf env --list     # every variable it references, whether each is a secret, whether each is set
-gf env --init     # write a .env skeleton from that list (--force to overwrite)
+gf env --init     # write a .env skeleton, or append what an existing file lacks (--force rewrites)
 ```
 
 Validation prints the resolved type, urls, logging destination and Mongo connections (URIs
@@ -182,7 +182,9 @@ without resolving anything, so they work on a fresh clone with no `.env` at all.
 
 Because the manifest is derived from `config.json`, it cannot drift from it. `.env` also holds
 variables `config.json` never sees — compose ports, CORS origins — which live in the template's
-`.env.example`; `--init` does not touch an existing file.
+`.env.example`. On an existing file `--init` appends only the references the file does not
+already declare, leaving every filled-in value and unrelated variable alone; `--force` rewrites
+from `config.json` alone, discarding both.
 
 Full reference: **[Environment variables in config](environment-variables.md)**.
 

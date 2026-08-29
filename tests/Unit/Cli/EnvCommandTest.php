@@ -27,7 +27,7 @@ final class EnvCommandTest extends TestCase {
 		$rendered = ( new envCommand() )->renderEnvFile( [ 'APP_TYPE' => false, 'MONGO_URI' => true ] );
 
 		self::assertStringContainsString( "MONGO_URI=\n", $rendered );
-		self::assertStringContainsString( '# MONGO_URI_FILE=/run/secrets/mongo_uri', $rendered );
+		self::assertStringContainsString( '# MONGO_URI_FILE=/run/secrets/<app>/mongo_uri', $rendered );
 		self::assertStringContainsString( 'never commit', strtolower( $rendered ) );
 
 		// Plain variables come first, secrets in their own labelled block after.
@@ -63,21 +63,19 @@ final class EnvCommandTest extends TestCase {
 			APP_TYPE=local
 			MONGO_URI='mongodb://localhost'
 			export EXPORTED=1
-			SPACED = value
-			# MONGO_URI_FILE=/run/secrets/mongo_uri
+			# MONGO_URI_FILE=/run/secrets/<app>/mongo_uri
 			COMPOSE_PORT=8080
 			ENV );
 
 		self::assertArrayHasKey( 'APP_TYPE', $declared );
 		self::assertArrayHasKey( 'MONGO_URI', $declared );
 		self::assertArrayHasKey( 'EXPORTED', $declared, 'an export prefix is still a declaration' );
-		self::assertArrayHasKey( 'SPACED', $declared );
 		self::assertArrayHasKey( 'COMPOSE_PORT', $declared, 'variables config.json never mentions still count' );
 	}
 
 
 	public function testDeclaredNamesIgnoresCommentedHints(): void {
-		$declared = self::declaredNames( "# MONGO_URI_FILE=/run/secrets/mongo_uri
+		$declared = self::declaredNames( "# MONGO_URI_FILE=/run/secrets/<app>/mongo_uri
 #APP_TYPE=local
 " );
 
@@ -86,11 +84,46 @@ final class EnvCommandTest extends TestCase {
 	}
 
 
+	/**
+	 * Declared-ness is judged by the same symfony/dotenv parser the runtime loads the
+	 * file with: a quoted value spans lines, so a NAME= at line start inside one is part
+	 * of the VALUE, not a declaration. The hand-rolled regex this replaced counted it,
+	 * told --init the variable was covered, and the app then failed at startup on a
+	 * reference the tool had just reported as declared.
+	 */
+	public function testDeclaredNamesUsesTheRuntimeParserForMultiLineValues(): void {
+		$declared = self::declaredNames( "GREETING=\"first line\nMONGO_URI=not-a-declaration\"\nAPP_TYPE=local\n" );
+
+		self::assertArrayHasKey( 'GREETING', $declared );
+		self::assertArrayHasKey( 'APP_TYPE', $declared );
+		self::assertArrayNotHasKey( 'MONGO_URI', $declared, 'text inside a quoted value is not a declaration' );
+	}
+
+
+	public function testDeclaredNamesRejectsAFileTheRuntimeCannotParse(): void {
+		$this->expectException( \gcgov\framework\cli\cliException::class );
+		self::declaredNames( "SPACED = value\n" );
+	}
+
+
+	/**
+	 * A reserved CGI meta-variable name can never be resolved, so a live `NAME=` line
+	 * would be filled in and still report MISSING forever — guidance is written instead.
+	 */
+	public function testReservedNamesAreWrittenAsGuidanceNotDeadAssignments(): void {
+		$rendered = ( new envCommand() )->renderEnvFile( [ 'SERVER_API_TOKEN' => false, 'APP_TYPE' => false ] );
+
+		self::assertStringNotContainsString( "\nSERVER_API_TOKEN=", $rendered );
+		self::assertStringContainsString( 'reserved', $rendered );
+		self::assertStringContainsString( "APP_TYPE=\n", $rendered, 'ordinary names still get live lines' );
+	}
+
+
 	/** Reflection, because the parser is a private detail of the command. */
 	private static function declaredNames( string $env ): array {
 		$method = new \ReflectionMethod( envCommand::class, 'declaredNames' );
 
-		return $method->invoke( null, $env );
+		return $method->invoke( null, $env, '.env' );
 	}
 
 }
