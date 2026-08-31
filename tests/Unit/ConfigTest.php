@@ -15,7 +15,13 @@ final class ConfigTest extends TestCase {
 	private string $tempRootDir = '';
 
 	protected function setUp(): void {
-		$this->tempRootDir = sys_get_temp_dir() . '/gcgov-config-test-' . uniqid();
+		// Forward slashes, because that is the only shape config ever holds: setAppDir()
+		// normalises the separators it reflects out of \app\app, and the gf CLI reaches the
+		// same field through appContext::normalize(). Injecting sys_get_temp_dir() raw would
+		// put a backslash root into a private static that cannot hold one at runtime, and the
+		// accessors that normalise — getConfigFilePath(), getJwtKeyPath() — would then
+		// disagree with the fixture on Windows and nowhere else.
+		$this->tempRootDir = str_replace( '\\', '/', sys_get_temp_dir() ) . '/gcgov-config-test-' . uniqid();
 		mkdir( $this->tempRootDir . '/app/config', 0777, true );
 
 		$rootProp = new \ReflectionProperty( config::class, 'rootDir' );

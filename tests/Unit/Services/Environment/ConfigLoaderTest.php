@@ -26,7 +26,9 @@ final class ConfigLoaderTest extends TestCase {
 	protected function setUp(): void {
 		$this->envSnapshot    = $_ENV;
 		$this->serverSnapshot = $_SERVER;
-		$this->tempDir        = sys_get_temp_dir() . '/gcgov-configloader-test-' . uniqid();
+		// Forward slashes: configFilePath() normalises separators, so a raw sys_get_temp_dir()
+		// makes the fixture disagree with it on Windows and nowhere else.
+		$this->tempDir        = str_replace( '\\', '/', sys_get_temp_dir() ) . '/gcgov-configloader-test-' . uniqid();
 		mkdir( $this->tempDir, 0777, true );
 		dotEnvLoader::resetForTesting();
 	}
@@ -53,6 +55,11 @@ final class ConfigLoaderTest extends TestCase {
 	public function testConfigFilePathIsRootConfigJson(): void {
 		$this->assertSame( $this->tempDir . '/config.json', configLoader::configFilePath( $this->tempDir ) );
 		$this->assertSame( 'config.json', configLoader::FILE_NAME );
+
+		// Stated rather than left to the platform: the assertion above cannot exercise the
+		// normalisation on a system whose temp path has no backslashes to normalise.
+		$this->assertSame( 'C:/app/config.json', configLoader::configFilePath( 'C:\\app' ) );
+		$this->assertSame( 'C:/app/config.json', configLoader::configFilePath( 'C:\\app\\' ) );
 	}
 
 

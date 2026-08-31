@@ -49,6 +49,17 @@ if( count( $gfArguments )<3 ) {
 	exit( 2 );
 }
 
+// Checked rather than left to require's fatal, which this process cannot rely on being
+// seen. Whether that fatal reaches the caller depends entirely on the host php.ini:
+// display_errors is Off in php.ini-production, and error_log usually names a file, so the
+// message goes to that file and the child exits 255 having printed nothing at all. `gf cli`
+// is what Task Scheduler and cron run, so "failed, no diagnostic" is the one outcome this
+// script exists to prevent — it already guards $argv and STDERR for the same reason.
+if( !is_file( $gfArguments[ 1 ] ) ) {
+	$gfWriteError( 'the composer autoloader was not found at "' . $gfArguments[ 1 ] . '". Run `composer install` in the application root, or point gf at the right application.' );
+	exit( 2 );
+}
+
 require $gfArguments[ 1 ];
 
 $_SERVER[ 'REQUEST_METHOD' ] = 'CLI';
