@@ -53,16 +53,14 @@ final class initCommand extends Command {
 
 		if( !$input->getOption( 'skip-env' ) ) {
 			$io->section( '.env' );
-			if( file_exists( $context->getEnvFilePath() ) ) {
-				$io->text( 'Kept the existing .env. Run `gf env --list` to check it against config.json.' );
-			}
-			else {
-				$contents = ( new envCommand() )->renderEnvFile( $context->configReferences() );
-				if( file_put_contents( $context->getEnvFilePath(), $contents )===false ) {
-					throw new cliException( 'Failed writing ' . $context->getEnvFilePath() );
-				}
-				$io->text( 'Wrote ' . $context->getEnvFilePath() . ' — fill in the values.' );
-			}
+			// Delegated to `env --init` rather than written here, because that command is
+			// additive: it appends only the references the file does not already declare and
+			// leaves every filled-in value, and every variable config.json knows nothing
+			// about, alone. This step used to skip an existing .env entirely, which broke the
+			// documented bootstrap the moment it began with `cp .env.example .env` — the file
+			// existed, so the application's own variables were never appended and `gf env`
+			// then failed on the first of them.
+			$this->runSubCommand( 'env', [ '--init' => true ], $output, $io );
 		}
 
 		if( !$input->getOption( 'skip-keys' ) ) {

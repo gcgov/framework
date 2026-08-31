@@ -19,6 +19,87 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(initCommand::class)]
 final class InitCommandTest extends TestCase {
 
+	private string $tempRootDir = '';
+
+
+	protected function setUp(): void {
+		$this->tempRootDir = sys_get_temp_dir() . '/gcgov-init-test-' . uniqid();
+		mkdir( $this->tempRootDir . '/vendor', 0777, true );
+		mkdir( $this->tempRootDir . '/app', 0777, true );
+		touch( $this->tempRootDir . '/vendor/autoload.php' );
+		touch( $this->tempRootDir . '/app/app.php' );
+		touch( $this->tempRootDir . '/composer.json' );
+		file_put_contents( $this->tempRootDir . '/config.json', '{"app":{"title":"","guid":""},"type":"%env(APP_TYPE)%","mongoDatabases":[{"default":true,"database":"%env(MONGO_DATABASE)%","uri":"%env(secret:MONGO_URI)%"}]}' );
+
+		\gcgov\framework\cli\appContext::$composerAutoloadPath = $this->tempRootDir . '/vendor/autoload.php';
+	}
+
+
+	protected function tearDown(): void {
+		\gcgov\framework\cli\appContext::$composerAutoloadPath = null;
+		$iterator = new \RecursiveIteratorIterator( new \RecursiveDirectoryIterator( $this->tempRootDir, \FilesystemIterator::SKIP_DOTS ), \RecursiveIteratorIterator::CHILD_FIRST );
+		foreach( $iterator as $file ) {
+			$file->isDir() ? rmdir( $file->getPathname() ) : unlink( $file->getPathname() );
+		}
+		rmdir( $this->tempRootDir );
+	}
+
+
+	/**
+	 * The documented bootstrap starts with `cp .env.example .env`, so by the time init runs
+	 * the file already exists and carries the docker compose variables. init used to see it
+	 * and skip the step entirely, which left the application's own variables — every one of
+	 * them required — undeclared, and `gf env` then failed on the first.
+	 */
+	public function testInitAppendsToAnExistingEnvRatherThanSkippingIt(): void {
+		file_put_contents( $this->tempRootDir . '/.env', "# compose\nHTTP_PORT=8080\n" );
+
+		$this->runInit();
+
+		$env = (string)file_get_contents( $this->tempRootDir . '/.env' );
+		self::assertStringContainsString( 'HTTP_PORT=8080', $env, 'the compose half must survive' );
+		self::assertMatchesRegularExpression( '/^APP_TYPE=/m', $env );
+		self::assertMatchesRegularExpression( '/^MONGO_DATABASE=/m', $env );
+		self::assertMatchesRegularExpression( '/^MONGO_URI=/m', $env );
+	}
+
+
+	public function testInitWritesTheEnvFileWhenThereIsNone(): void {
+		$this->runInit();
+
+		$env = (string)file_get_contents( $this->tempRootDir . '/.env' );
+		self::assertMatchesRegularExpression( '/^APP_TYPE=/m', $env );
+	}
+
+
+	/** A value already filled in is never rewritten. */
+	public function testInitLeavesFilledInValuesAlone(): void {
+		file_put_contents( $this->tempRootDir . '/.env', "APP_TYPE=local\n" );
+
+		$this->runInit();
+
+		$env = (string)file_get_contents( $this->tempRootDir . '/.env' );
+		self::assertStringContainsString( 'APP_TYPE=local', $env );
+		self::assertSame( 1, preg_match_all( '/^APP_TYPE=/m', $env ), 'the variable must not be declared twice' );
+	}
+
+
+	/**
+	 * Driven through a real Application because the .env step is `env --init` run as a
+	 * sub-command, which a bare CommandTester cannot resolve.
+	 */
+	private function runInit(): void {
+		$application = new \gcgov\framework\cli\application();
+		$application->setAutoExit( false );
+		$exitCode = $application->run(
+			new \Symfony\Component\Console\Input\ArrayInput( [ 'command' => 'init', '--title' => 'Test API', '--skip-keys' => true, '--skip-chrome' => true ] ),
+			new \Symfony\Component\Console\Output\NullOutput()
+		);
+
+		self::assertSame( 0, $exitCode );
+	}
+
+
 	public function testEmptyServiceBlocksSurviveTheRewrite(): void {
 		$original = '{"app":{"title":"","guid":""},"services":{"userCrud":{},"documentation":{}},"appDictionary":{}}';
 

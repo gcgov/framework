@@ -7,6 +7,26 @@
 You will primarily interact with this service through extended classes that model your data structure. Data classes
 will extend `\gcgov\framework\services\mongodb\model` or `\gcgov\framework\services\mongodb\embedded`.
 
+## The database must be a replica set
+
+Every write this service makes runs inside a transaction. `save()`, `saveMany()`, `delete()`,
+`deleteMany()` and `deleteManyBy()` each start one when they are not handed a session, because a
+single `save()` is already several writes — the document itself, its auto-increment counters, and
+the embedded copies the dispatcher pushes into other collections — and a half-applied save is a
+corrupt denormalisation rather than a failed request.
+
+MongoDB only offers transactions on a **replica set** or a sharded cluster. A standalone `mongod`
+serves every read perfectly well and then fails every write with:
+
+```
+Transaction numbers are only allowed on a replica set member or mongos
+```
+
+which is why a standalone survives a casual smoke test — the list endpoints work, and only writing
+fails. A single-member replica set is enough, and is what the application template's
+`docker-compose.yml` runs locally; MongoDB Atlas and any production deployment are replica sets
+already.
+
 ## Config
 `{root}/config.json` (`mongoDatabases` section)
 ```json

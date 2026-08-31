@@ -219,6 +219,7 @@ gf env --list                    # every variable config.json references, and wh
 gf env --init                    # write/extend the .env skeleton from config.json
 gf init --title="My API"         # bootstrap a scaffolded app (replaces setup.ps1)
 gf migrate                       # convert a v6 application to the v7 layout
+gf user:create --email=… --roles=…  # create the account you sign in as (the first user)
 ```
 
 Removed in v7: `deploy` (a Release is an immutable image pinned by digest — see ADR 0002),

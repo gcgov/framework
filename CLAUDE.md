@@ -477,6 +477,10 @@ List routes with `gf cli:list`; debug with `gf cli /path --debug`.
 - Every `model` needs `public \MongoDB\BSON\ObjectId $_id;`. Every embeddable-in-an-array needs a `@var Type[]`.
 - Never `exit`/`die` in a controller (breaks the lifecycle + `_after` hooks); return a response.
 - `aggregation()` does **not** auto-apply the typemap.
+- **Mongo must be a replica set.** `save`/`saveMany`/`delete`/`deleteMany`/`deleteManyBy` each open a
+  transaction when not handed a session, so a standalone `mongod` serves every read and fails every
+  write with "Transaction numbers are only allowed on a replica set member or mongos". A single
+  member is enough; the app template's `docker-compose.yml` starts one.
 - Deeply nested/mutually-referential models can infinite-loop the typemap → use
   `#[excludeFromTypemapWhenThisClassNotRoot]`.
 - There's no auth without `services.auth`; it registers a **global guard** over every
@@ -564,7 +568,7 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
 
 - **Commands** (canonical names; `gf db run` auto-resolves to `db:run`): `cli`, `cli:list`,
   `cert:generate-auth`, `chrome:install`, `chrome:update`, `chrome:status`, `db:run`, `env`, `init`,
-  `migrate`, `completion`, `completion:powershell`. Bare `gf` lists everything.
+  `migrate`, `user:create`, `completion`, `completion:powershell`. Bare `gf` lists everything.
   **Removed in v7**: `deploy` (a Release is an immutable image pinned by digest — see ADR 0002),
   `db:restore` (it required production credentials on every workstation), and `setup` (replaced by
   the non-interactive `init`, since bootstrap belongs in a scaffolding script or a devcontainer).
@@ -574,6 +578,10 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
   config.json knows nothing about. `--force` rewrites from config.json alone, discarding both. **`gf init --title="…"`** bootstraps a scaffolded app: title, guid, `.env`, JWT keys,
   chrome. **`gf migrate`** converts a v6 app — its `plan()` is a pure function of `app.json` +
   `environment.json`, so it is unit-tested rather than run hopefully.
+  **`gf user:create --email=… --roles="…"`** creates the account you sign in as, saved through the
+  resolved user model so the password is hashed by it. An app with `services.auth` enabled has no
+  other way to get its first user: `blockNewUsers` defaults true and `/user` needs `User.Write`.
+  `--force` updates an existing email in place, leaving options you did not pass alone.
 - **chrome-headless-shell**: `chrome:install`/`chrome:update` download the Chrome for Testing
   Stable build for the current platform into `srv/chrome/{version}/` (manifest:
   `srv/chrome/installation.json`; needs ext-zip; `gf init` auto-installs, `--skip-chrome` opts
@@ -590,7 +598,9 @@ consuming app gets `vendor/bin/gf` (+ `gf.bat` on Windows). Full reference: `rea
 
 - **Command tiers**: no context (list/help/completion — must work anywhere, including this repo);
   root-only (env, db:run, cert:*, init, migrate — config JSON only, no `\app` boot);
-  app-boot (cli, cli:list — `assertAppLoadable()`; `\app\app::_before()` is deliberately NOT called).
+  app-boot (cli, cli:list, user:create — `assertAppLoadable()`; `\app\app::_before()` is deliberately
+  NOT called). `user:create` runs in-process — `config` bootstraps itself lazily, and only `gf cli`
+  needs a child process (fresh Xdebug INI, `exit()` isolation).
 - **`gf cli <route>`** always spawns a fresh PHP child process (Xdebug flags need fresh INI;
   isolates `exit()`; interpreter picked via `--php` > `GF_PHP` > current).
   The interpreter must be the CLI binary — `php-cgi`/`php-fpm`/`php-win` are swapped for the

@@ -36,6 +36,7 @@ final class application extends \Symfony\Component\Console\Application {
 			                    new commands\envCommand(),
 			                    new commands\initCommand(),
 			                    new commands\migrateCommand(),
+			                    new commands\userCreateCommand(),
 			                    new commands\completionPowershellCommand(),
 		                    ] );
 

@@ -28,6 +28,7 @@ spelling also works — `gf db run` resolves to `db:run` automatically.
 | `gf db:run <script.js>` | ad-hoc `mongosh "<uri with password>" script.js` | Run a mongosh script using config-managed connections |
 | `gf env` | manual `Copy-Item` steps | Validate that config.json resolves; `--list` its variables; `--init` a .env skeleton |
 | `gf init` | `scripts/setup.ps1` | Bootstrap a freshly scaffolded application (non-interactive) |
+| `gf user:create` | hand written mongosh inserts | Create the application user you sign in as |
 | `gf migrate` | — | Convert a v6 application's configuration to v7 |
 | `gf completion` / `gf completion:powershell` | — | Shell tab completion |
 
@@ -211,6 +212,41 @@ devcontainer `postCreateCommand`, or CI. It replaces v6's `gf setup` wizard, who
 
 ---
 
+## The first user: `gf user:create`
+
+```
+gf user:create --email=dev@example.test --roles="User.Read,User.Write"
+gf user:create --email=dev@example.test --password="…" --name="Dev" --username=dev --roles="User.Read"
+gf user:create --email=dev@example.test --roles="User.Read,User.Write,Widget.Read" --force
+```
+
+An application whose `config.json` enables `services.auth` starts with no way in.
+`blockNewUsers` defaults to true, so only users already in the database may sign in; every `/user`
+route requires a caller who already holds `User.Write`. Nothing can authenticate, so nothing can
+create the first user. Writing the document by hand does not break the cycle either — the user
+model hashes the password as it serialises, so a `mongosh` insert has no password anyone can sign
+in with.
+
+- The user is saved through the model the application actually resolves — `\app\models\user` when
+  it defines one, otherwise the framework's Mongo user model — so hashing and every model hook run
+  exactly as they do when the application writes a user itself.
+- **Omit `--password`** and one is generated and printed once. It is stored hashed and is not
+  recoverable, so pass your own when you would otherwise be copying it out of the terminal.
+- `--username` defaults to the email address. `verifyUsernamePassword()` matches on username
+  first, so a user created without one could not sign in by username.
+- An email that already exists is refused unless `--force`, which updates that user in place. On
+  an update, an option you do not pass is left alone — including the password — so
+  `--force --roles="…"` is the way to grant a role.
+- Roles are not validated against anything: they are strings an application's routes compare
+  against. Give the first user the roles its own `requiredRoles` name, plus `User.Read` and
+  `User.Write` if you want it to administer other users through `services.userCrud`.
+
+This is an **app-boot** command and it writes to the database, so the configuration must resolve
+and MongoDB must be reachable — and must be a replica set, because writing a user is a
+transactional write like any other (see [mongodb.md](mongodb.md)).
+
+---
+
 ## Migrating a v6 application: `gf migrate`
 
 Converts the configuration half of a v6 application. Run it on a clean working tree so the result
@@ -304,6 +340,7 @@ Useful helpers for custom commands (all in `\gcgov\framework\cli`):
 | `app\cli\local-debug.bat /cli/x` | `vendor/bin/gf cli /cli/x --debug` |
 | `scripts\create-jwt-keys.ps1` | `vendor/bin/gf cert:generate-auth` |
 | `scripts\setup.ps1` | `vendor/bin/gf init --title="…"` |
+| hand written user inserts in `db/*.js` | `vendor/bin/gf user:create --email=… --roles="…"` |
 | `mongosh "mongodb://user:pass@..." db\fix.js` | `vendor/bin/gf db:run db/fix.js --env=prod` |
 | `update-production.ps1` | removed — deployment is a GitHub Actions workflow (ADR 0002) |
 | `Copy-Item composer-local.json composer.json` (+ 2 more) | nothing — config is committed and environment-variable driven (v7); `gf env` validates it |
