@@ -7,6 +7,7 @@ namespace gcgov\framework\tests\Unit\Services\Health;
 use gcgov\framework\models\config\environment\mongoDatabase;
 use gcgov\framework\models\unifiedConfig;
 use gcgov\framework\services\health\controllers\health;
+use gcgov\framework\tests\Support\capturesFrameworkLog;
 use gcgov\framework\tests\Support\seedsFrameworkConfig;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -20,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 final class HealthControllerTest extends TestCase {
 
 	use seedsFrameworkConfig;
+	use capturesFrameworkLog;
 
 	protected function setUp(): void {
 		putenv( 'APP_VERSION' );
@@ -70,6 +72,7 @@ final class HealthControllerTest extends TestCase {
 	 * unauthenticated endpoint.
 	 */
 	public function testUnreachableDatabaseIs503AndDisclosesNothing(): void {
+		$log = $this->captureLog( 'health' );
 		$this->seedConfig( static function( unifiedConfig $c ): void {
 			$database           = new mongoDatabase();
 			$database->default  = true;
@@ -91,6 +94,10 @@ final class HealthControllerTest extends TestCase {
 		$this->assertIsString( $serialized );
 		$this->assertStringNotContainsString( '192.0.2.1', $serialized, 'the probe must not publish the database host' );
 		$this->assertStringNotContainsString( '27017', $serialized, 'the probe must not publish the database port' );
+
+		// The detail the response withholds has to go somewhere, or the operator has a 503
+		// and nothing to act on. It belongs in the log, which is not public.
+		$this->assertTrue( $log->hasWarningThatContains( 'appdb' ), 'the failing database must be named in the log' );
 	}
 
 
@@ -100,6 +107,7 @@ final class HealthControllerTest extends TestCase {
 	 * green — and surface only as a configException on the first production sign-in.
 	 */
 	public function testMissingJwtKeysFailReadinessWhenAuthIsEnabled(): void {
+		$log = $this->captureLog( 'health' );
 		$this->seedConfig( static function( unifiedConfig $c ): void {
 			$c->services->auth   = new \gcgov\framework\models\config\services\auth();
 			$c->jwtAuth->keyPath = sys_get_temp_dir() . '/gcgov-health-missing-keys-' . uniqid();
@@ -109,6 +117,7 @@ final class HealthControllerTest extends TestCase {
 
 		$this->assertSame( 503, $response->getHttpStatus() );
 		$this->assertSame( 'failed', $response->getData()[ 'checks' ][ 'jwtKeys' ] );
+		$this->assertTrue( $log->hasWarningThatContains( 'cert:generate-auth' ), 'the log must name the command that fixes it' );
 	}
 
 

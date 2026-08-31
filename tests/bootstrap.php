@@ -13,6 +13,7 @@ if ( !extension_loaded( 'mongodb' ) ) {
 
 // Shared test helpers. tests/ is not PSR-4 autoloaded, so they are required here.
 require __DIR__ . '/Support/seedsFrameworkConfig.php';
+require __DIR__ . '/Support/capturesFrameworkLog.php';
 
 // Several framework call sites reflect on \app\app to derive directories.
 // Stub the class so tests that touch config::getAppDir() can boot.

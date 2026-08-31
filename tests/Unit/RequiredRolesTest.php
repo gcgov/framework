@@ -8,6 +8,7 @@ use gcgov\framework\exceptions\routeException;
 use gcgov\framework\models\authUser;
 use gcgov\framework\models\routeHandler;
 use gcgov\framework\router;
+use gcgov\framework\tests\Support\capturesFrameworkLog;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -24,6 +25,8 @@ use PHPUnit\Framework\TestCase;
  */
 #[CoversClass(router::class)]
 final class RequiredRolesTest extends TestCase {
+
+	use capturesFrameworkLog;
 
 	protected function tearDown(): void {
 		// the authenticated user is a singleton; leave it as the next test expects to find it
@@ -44,10 +47,21 @@ final class RequiredRolesTest extends TestCase {
 	 * previously sailed through — the only role check in the codebase was never reached.
 	 */
 	public function testRolesDeclaredWithNoUserEstablishedIs401(): void {
-		$this->expectException( routeException::class );
-		$this->expectExceptionCode( 401 );
+		$log = $this->captureLog( 'Framework Lifecycle' );
 
-		$this->assertRoles( $this->handler( [ 'User.Read' ] ) );
+		// try/catch rather than expectException: the refusal and the diagnostic that goes
+		// with it are one behaviour. A 401 whose cause is unlogged sends an application
+		// developer hunting through the guard chain for a route that is simply unguarded.
+		try {
+			$this->assertRoles( $this->handler( [ 'User.Read' ] ) );
+			$this->fail( 'a role-gated route with no authenticated user must be refused' );
+		}
+		catch( routeException $e ) {
+			$this->assertSame( 401, $e->getCode() );
+		}
+
+		$this->assertTrue( $log->hasWarningThatContains( 'User.Read' ), 'the log must name the role that was required' );
+		$this->assertTrue( $log->hasWarningThatContains( 'services.auth' ), 'and what to do about it' );
 	}
 
 
