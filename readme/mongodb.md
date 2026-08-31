@@ -27,6 +27,10 @@ fails. A single-member replica set is enough, and is what the application templa
 `docker-compose.yml` runs locally; MongoDB Atlas and any production deployment are replica sets
 already.
 
+The reasoning, and the conditional-transaction alternative that was considered and rejected, are in
+[ADR 0008](../docs/adr/0008-writes-are-transactional-so-mongodb-is-a-replica-set.md). Running an
+Application locally: [local-development.md](local-development.md).
+
 ## Config
 `{root}/config.json` (`mongoDatabases` section)
 ```json

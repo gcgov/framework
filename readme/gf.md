@@ -243,7 +243,8 @@ in with.
 
 This is an **app-boot** command and it writes to the database, so the configuration must resolve
 and MongoDB must be reachable — and must be a replica set, because writing a user is a
-transactional write like any other (see [mongodb.md](mongodb.md)).
+transactional write like any other (see [mongodb.md](mongodb.md)). Where this command sits in
+bringing an Application up: [local-development.md](local-development.md).
 
 ---
 

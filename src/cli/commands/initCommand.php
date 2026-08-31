@@ -22,19 +22,28 @@ final class initCommand extends Command {
 		$this->addOption( 'skip-keys', null, InputOption::VALUE_NONE, 'Do not generate JWT signing keys' );
 		$this->addOption( 'skip-chrome', null, InputOption::VALUE_NONE, 'Do not download chrome-headless-shell' );
 		$this->setHelp( <<<'HELP'
-			Run once after scaffolding a project from gcgov/framework-app-template.
-
-			Deliberately non-interactive, so it can run from a scaffolding script, a devcontainer
-			postCreateCommand, or CI — which is where project bootstrap belongs. It replaces the
-			v6 `gf setup` wizard, whose prompts filled {placeholder} tokens in php.ini and
-			web.config files that no longer exist.
+			Bring a scaffolded application to a runnable state.
 
 			  gf init --title="Timesheet API"
 
-			It writes the title and guid into config.json, writes a .env skeleton from the
-			variables config.json references, generates JWT signing keypairs, and installs
-			chrome-headless-shell. Everything else about an application's configuration is either
-			a committed literal or an environment variable you supply.
+			It writes the title and guid into config.json, adds the variables config.json
+			references to .env, generates JWT signing keypairs, and installs chrome-headless-shell.
+			Everything else about an application's configuration is either a committed literal or
+			an environment variable you supply.
+
+			**Idempotent**, and meant to be re-run as an application's configuration grows: every
+			step adds only what is missing. .env keeps every value already filled in and every
+			variable config.json does not reference, and an existing guid is kept rather than
+			reminted — it is the OAuth client_id, so a new one would invalidate every registered
+			client.
+
+			Deliberately non-interactive, so it can run from a scaffolding script, a devcontainer
+			postCreateCommand, or CI. It replaces the v6 `gf setup` wizard, whose prompts filled
+			{placeholder} tokens in php.ini and web.config files that no longer exist.
+
+			It does not create the application's first user: nothing can be written to the
+			database until .env carries a connection string, which is a step later. See
+			`gf user:create`.
 			HELP );
 	}
 

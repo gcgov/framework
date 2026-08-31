@@ -555,6 +555,7 @@ needing routes of its own puts them in `\app\router`, which already runs first i
 ## 15. Where to look
 - Full narrative + app file system: `README.md`.
 - Core file examples: `readme/{index.php,cli-index.php,app.php,router.php,renderer.php}.md`.
+- **Running an app locally (the rules; the template holds the commands)**: `readme/local-development.md`.
 - **Mongo (authoritative, deep)**: `readme/mongodb.md`.
 - **gf CLI (authoritative)**: `readme/gf.md`.
 - A real, minimal consuming controller: `src/services/userCrud/controllers/user.php`.

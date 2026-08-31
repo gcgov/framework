@@ -114,7 +114,7 @@ final class userCreateCommand extends Command {
 			$io->warning( 'This password is shown once and is not recoverable — it is stored hashed.' );
 		}
 
-		self::warnWhenNothingConsumesTheUser( $io );
+		self::warnAboutSignIn( $io );
 
 		return Command::SUCCESS;
 	}
@@ -237,10 +237,23 @@ final class userCreateCommand extends Command {
 	}
 
 
-	private static function warnWhenNothingConsumesTheUser( SymfonyStyle $io ): void {
+	/**
+	 * What stands between this account and a working sign-in, when it is not simply "nothing".
+	 *
+	 * Both cases are ones where the command succeeds and the account still cannot be used, which
+	 * is the failure worth saying out loud — the same reason readiness checks the signing keys
+	 * rather than letting an unusable deployment report itself healthy.
+	 */
+	private static function warnAboutSignIn( SymfonyStyle $io ): void {
 		try {
 			if( config::getServices()->auth===null ) {
 				$io->warning( 'config.json does not enable services.auth, so nothing in this application signs a user in. The account is stored, but no route will accept it.' );
+
+				return;
+			}
+
+			if( config::getSettings()->forceMfaForPasswordUsers ) {
+				$io->warning( 'settings.forceMfaForPasswordUsers is on, so this account cannot sign in with its password alone. The first POST /auth/authorize returns an MFA enrolment challenge and a token carrying NO roles; the account can do nothing until it completes POST /auth/verifyMfaSecret and then POST /auth/verifyMfaCode.' );
 			}
 		}
 		catch( \Throwable ) {

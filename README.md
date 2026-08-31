@@ -230,7 +230,9 @@ Tab completion is available for bash/zsh/fish (`gf completion --help`) and Power
 (`gf completion:powershell`), including dynamic completion of the app's CLI route names.
 Apps and plugins can add their own gf commands via a `cli\commandProvider` class.
 
-**See [readme/gf.md](readme/gf.md) for the full reference and the migration guide.**
+**See [readme/gf.md](readme/gf.md) for the full reference and the migration guide**, and
+[readme/local-development.md](readme/local-development.md) for what an application needs in order to
+run on a development computer.
 
 The legacy per-app entry (`> app/cli/{env}.bat {url-path}`, `local-debug.bat` for XDebug) keeps
 working, but new apps should use gf. The `scripts/*.ps1` files shipped with the framework are

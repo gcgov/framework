@@ -27,7 +27,13 @@ _Avoid_: driver, strategy, backend, adapter
 
 **Scaffold**:
 The one-time act of creating a new Application from the application template.
-_Avoid_: setup, bootstrap, generate
+_Avoid_: setup, generate
+
+**Bootstrap**:
+Bringing a scaffolded Application to a runnable state — naming it, giving it the values its Config
+References need, and generating the keys it signs with. Unlike a Scaffold it is idempotent: it is
+re-run as an Application's configuration grows, and adds only what is missing.
+_Avoid_: setup, init, provisioning, first-run
 
 ### Request handling
 
@@ -49,6 +55,12 @@ _Avoid_: middleware, filter, interceptor
 The authenticated identity for the current request, carrying its roles. Populated by an Auth Guard
 and absent on unauthenticated Routes.
 _Avoid_: current user, principal, session user
+
+**Bootstrap User**:
+The first user of an Application, created out of band because nothing else can create it. An
+Application that admits only users already stored, and that gates user administration on a role,
+can produce no first identity from the outside — the Bootstrap User is what breaks that circle.
+_Avoid_: admin user, seed user, root account, initial user
 
 **Controller Response**:
 The value a controller method returns, describing what to send and how to serialize it. Returning
