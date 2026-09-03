@@ -160,8 +160,9 @@ Requires `mongosh` on PATH. Connection details come from `config.json`'s `mongoD
 is redacted in all output.
 
 > **`gf db:restore` was removed in v7.** It pulled another Environment's databases down to a
-> workstation, which meant every developer's `.env` held production credentials. Developers get
-> realistic data from the separate backup-restore workflow instead.
+> workstation, which meant every developer's `.env` held production credentials. A dump file
+> travels instead of the credentials — see
+> [Data to work with](local-development.md#data-to-work-with).
 
 ---
 

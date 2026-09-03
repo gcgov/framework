@@ -157,3 +157,41 @@ stays I/O-free on purpose.
 When a request is answered by something you did not expect, set `logging.lifecycle: true` in the
 Unified Config to trace routing and every Auth Guard end to end. Logs go to stderr by default, not
 to `logs/*.log`.
+
+---
+
+## Data to work with
+
+An empty database is a poor way to work on an Application that holds years of documents. A copy of
+real data is the usual answer, and the framework takes no part in producing one — but three things
+about that copy are true of every Application built on this framework.
+
+**A development computer never reads another Environment's database.** v6 shipped `gf db:restore`,
+which pulled one down over the network. Every developer's configuration then held production
+credentials, so v7 removed the command along with the committed connection details it needed. A
+file replaced it: someone who already has access dumps the database, and the dump travels instead
+of the credentials. Nothing on the workstation points anywhere but at its own database.
+
+**A restored account is not a way in by itself.** The user model hashes a password as it
+serializes, so a restored account carries a hash and nothing else — you can sign in as a user whose
+password you already know, and as nobody else. That is the closed circle §4 describes, reached by a
+different route. `gf user:create --force` sets a password on an account that already exists and
+leaves every option you did not pass alone.
+
+```bash
+vendor/bin/gf user:create --force --email=dev@example.test --roles="User.Read,User.Write"
+```
+
+**A dump of an encrypted collection is ciphertext.** Documents in a collection with queryable
+encryption decrypt through the KMS keys that Environment's configuration names. A development
+computer without those keys restores the documents and reads nothing in the encrypted fields. Seed
+those collections rather than restore them.
+
+The backup holds whatever the source database holds, so the rules that govern the source database
+govern it too: keep it out of git, keep it off shared disks, and keep it on the workstation no
+longer than the work needs it.
+
+`gcgov/framework-app-template` ships one implementation of all this — a one-shot `mongo-restore`
+container that restores `db/backup/{DatabaseName}` into the development database over the compose
+network, with no MongoDB tools on the host. See its
+[LOCAL-DEVELOPMENT.md](https://github.com/gcgov/framework-app-template/blob/main/LOCAL-DEVELOPMENT.md).
