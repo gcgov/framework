@@ -9,9 +9,15 @@ per concept. It is not a specification — see `README.md`, `readme/`, and `docs
 ### Applications and extensions
 
 **Application**:
-A deployable REST API (optionally server-rendered) built on the framework, living in its own
-repository and depending on the framework as a library.
+A deployable unit that runs in exactly one Zone and is built from its own repository. It takes one
+of two Application Kinds — an `api` built on the framework as a library, or a `frontend` that talks
+to one.
 _Avoid_: project, site, instance, consumer
+
+**Application Kind**:
+Which of the two shapes an Application takes: `api` or `frontend`. The Kind decides which images a
+Release is made of, and whether the Application holds Secrets at all.
+_Avoid_: type, flavour, variant, shape
 
 **Framework Service**:
 An optional part of the framework that contributes routes, controllers and an auth guard to an
@@ -129,14 +135,15 @@ holds production topology or Secrets.
 _Avoid_: infra repo, config repo
 
 **Provisioning**:
-Writing decrypted Secrets onto a host. Performed by an operator as a step deliberately separate from
-deploying, so that no host holds a decryption key and no deploy needs one.
+Writing an Application's configuration onto a host — its decrypted Secrets, its compose file, and its
+Zone's values. Performed by an operator as a step deliberately separate from deploying, so that no
+host holds a decryption key and no deploy needs one.
 _Avoid_: secret sync, secret deploy, key distribution
 
 **Release**:
-A tagged, immutable build of an Application, identified in production by content digest rather than
-by tag or branch. Deploying and rolling back are both the act of pointing a host at a different
-Release.
+A tagged, immutable build of an Application, identified in production by a set of named content
+digests — one per image the Application's compose file declares — rather than by tag or branch.
+Deploying and rolling back are both the act of pointing a host at a different Release.
 _Avoid_: version, build, deployment
 
 **Zone Key Vault**:
@@ -156,9 +163,9 @@ total loss of cloud access is still recoverable. Retrieving it obliges replacing
 _Avoid_: recovery key, backup key, master key
 
 **Escrow Custodian**:
-One of the two named people who may retrieve the Break-glass Key from physical escrow, drawn from
-different reporting lines so that retrieval crosses a departmental boundary and is witnessed by
-someone with no stake in it.
+The person who may retrieve the Break-glass Key from physical escrow. A second person can open the
+same safe, so the key survives the custodian's absence; that second person is a control on
+availability, not a witness to retrieval.
 _Avoid_: key holder, key owner, keeper
 
 ### Retired language
