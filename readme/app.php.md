@@ -10,7 +10,7 @@ location, so an application without it cannot resolve its own root.
 Framework Services used to be registered here, by returning their namespaces from
 `registerFrameworkServiceNamespaces()`. They are now enabled in the `services` section of
 `config.json`, so that switching a service on and configuring it are one statement rather than two.
-See ADR 0005.
+See ADR 0003.
 
 ```php
 namespace app;

@@ -37,7 +37,7 @@ mongosh --eval 'rs.initiate()'
 
 Production is unaffected — a managed cluster reached over `mongodb+srv://` is a replica set already.
 The reasoning, and the alternative that was rejected, are in
-[ADR 0008](../docs/adr/0008-writes-are-transactional-so-mongodb-is-a-replica-set.md).
+[ADR 0004](../docs/adr/0004-writes-are-transactional-so-mongodb-is-a-replica-set.md).
 
 ## 2. Configuration resolves, or the Application refuses to start
 

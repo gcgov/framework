@@ -28,7 +28,7 @@ fails. A single-member replica set is enough, and is what the application templa
 already.
 
 The reasoning, and the conditional-transaction alternative that was considered and rejected, are in
-[ADR 0008](../docs/adr/0008-writes-are-transactional-so-mongodb-is-a-replica-set.md). Running an
+[ADR 0004](../docs/adr/0004-writes-are-transactional-so-mongodb-is-a-replica-set.md). Running an
 Application locally: [local-development.md](local-development.md).
 
 ## Config

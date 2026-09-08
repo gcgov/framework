@@ -502,7 +502,7 @@ List routes with `gf cli:list`; debug with `gf cli /path --debug`.
 
 Framework Services ship **inside** the framework (`src/services/`). Enable one by adding its block to the
 `services` section of `config.json` — presence enables, and the block's contents are its settings, so
-activation and configuration are one statement. See ADR 0005.
+activation and configuration are one statement. See ADR 0003.
 
 | Config key | Namespace | Adds |
 |------------|-----------|------|
@@ -523,7 +523,7 @@ framework declares a `conflict` against all five, so a v7 application cannot ins
 ---
 
 ## 13. Adding a new Framework Service
-Services live in this repository; there is no out-of-tree extension point (ADR 0005). An application
+Services live in this repository; there is no out-of-tree extension point (ADR 0003). An application
 needing routes of its own puts them in `\app\router`, which already runs first in the guard chain.
 
 - Code in `src/services/<name>/`, namespace `\gcgov\framework\services\<name>`.
@@ -638,6 +638,7 @@ Single-context: one root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.
 isolation boundary) are different things, and that v6's "environment variant" no longer exists.
 
 ADRs recorded so far: 0001 fail-closed configuration · 0002 immutable Release pinned by digest ·
-0003 secrets never decrypt in CI or on hosts · 0004 one self-hosted runner per Zone ·
-0005 Framework Services are built in and config-activated · 0006 Let's Encrypt DNS-01 on one
-registered domain every Zone shares · 0007 Azure Key Vault per Zone for deployment secrets.
+0003 Framework Services are built in and config-activated · 0004 writes are transactional so
+MongoDB is a replica set. The four operational ADRs (secrets never decrypt, one runner per Zone,
+Let's Encrypt DNS-01, Azure Key Vault) moved to `gcgov/deploy` in the v7 review — see
+`docs/adr/README.md` for the old-to-new mapping.
