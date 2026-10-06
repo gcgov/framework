@@ -30,8 +30,10 @@ final class InterfacesTest extends TestCase {
 
 	public static function interfaceMethodMatrix(): array {
 		return [
-			'app' => [ interfaces\app::class, [ 'registerFrameworkServiceNamespaces' ] ],
+			'app' => [ interfaces\app::class, [ '_before', '_after' ] ],
 			'router' => [ interfaces\router::class, [ 'getRoutes', 'authentication' ] ],
+			'appRouter' => [ interfaces\appRouter::class, [ 'getRoutes', 'authentication', '_before', '_after', 'providesAuthentication' ] ],
+			'skipsServiceAuthentication' => [ interfaces\router\skipsServiceAuthentication::class, [ 'getRunFrameworkServiceRouteAuthentication' ] ],
 			'controller' => [ interfaces\controller::class, [] ],
 			'render' => [ interfaces\render::class, [
 				'processModelException',
@@ -66,6 +68,33 @@ final class InterfacesTest extends TestCase {
 		$reflection = new \ReflectionClass( interfaces\singleton::class );
 		$this->assertTrue( $reflection->isAbstract() );
 		$this->assertTrue( $reflection->hasMethod( 'getInstance' ) );
+	}
+
+
+	/**
+	 * Framework Services are declared in config.json's `services` section, not returned
+	 * from the application class.
+	 */
+	public function testAppInterfaceNoLongerRegistersServiceNamespaces(): void {
+		$reflection = new \ReflectionClass( interfaces\app::class );
+		$this->assertFalse( $reflection->hasMethod( 'registerFrameworkServiceNamespaces' ) );
+	}
+
+
+	/**
+	 * Only \app\router's lifecycle hooks are ever invoked, so requiring them of every
+	 * router described a contract the framework did not honour. They live on appRouter.
+	 */
+	public function testServiceRouterInterfaceCarriesNoLifecycleHooks(): void {
+		$reflection = new \ReflectionClass( interfaces\router::class );
+		$this->assertFalse( $reflection->hasMethod( '_before' ) );
+		$this->assertFalse( $reflection->hasMethod( '_after' ) );
+		$this->assertTrue( $reflection->isInterface() );
+	}
+
+
+	public function testAppRouterExtendsRouter(): void {
+		$this->assertTrue( is_subclass_of( interfaces\appRouter::class, interfaces\router::class ) );
 	}
 
 }

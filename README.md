@@ -16,7 +16,7 @@ corresponding front end application.
 
 Framework package requirements from `composer.json`:
 
-* PHP `>=8.3`
+* PHP `>=8.4`
 * PHP extensions: `ext-mongodb`, `ext-fileinfo`, `ext-pdo`
 
 Install dependencies with Composer:
@@ -30,17 +30,23 @@ composer install
 The framework expects these app classes/files to exist in your `/app` directory:
 
 * `\app\app` implementing `\gcgov\framework\interfaces\app`
-* `\app\router` implementing `\gcgov\framework\interfaces\router`
+* `\app\router` implementing `\gcgov\framework\interfaces\appRouter`
 * `\app\renderer` implementing `\gcgov\framework\interfaces\render`
 
 Controllers should implement `\gcgov\framework\interfaces\controller`.
 
 Required configuration files:
 
-* `/app/config/app.json`
-* `/app/config/environment.json`
+* `/config.json` — the unified configuration at the application root (merged app + environment sections,
+  secrets and per-environment values referenced via `%env(...)%`)
 
-If either file is missing, the framework throws a config exception during request handling.
+If it is missing, the framework throws a config exception during request handling.
+
+config.json supports **Symfony-style `%env(...)%` environment-variable references**, so
+secrets (Mongo URIs, client secrets, SMTP credentials) can be injected from the process
+environment, Docker/Kubernetes secrets, or a `.env` file instead of being stored in the files.
+Existing plain-JSON config keeps working unchanged. See
+**[readme/environment-variables.md](readme/environment-variables.md)**.
 
 ## System Architecture
 
@@ -50,19 +56,14 @@ All apps utilizing the framework for an entire lifecycle should use this file st
 
 ```
 /api
+├── config.json
 ├── app
 │   ├── app.php
 │   ├── constants.php
 │   ├── renderer.php
 │   ├── router.php
 │   ├── cli
-│   │   ├── index.php
-│   │   ├── local.bat
-│   │   ├── local-debug.bat
-│   │   └── prod.bat
-│   ├── config
-│   │   ├── app.json
-│   │   └── environment.json
+│   │   └── index.php
 │   ├── controllers
 │   │   └── {controller.php}
 │   └── models
@@ -77,22 +78,16 @@ automatically start with some extra folders and tools.
 ```
 /api
 │...
+├── config.json                       # committed unified config; secrets/per-env values via %env(...)
+├── .env.example                      # copy to .env (gitignored); holds gf db:*/env PROD_* vars too
 ├── www
 │   │...
-│   ├── web.config
-│   ├── web-local.config
-│   └── web-prod.config
 ├── app
 │   │...
-│   └── config
-│       └── environment-local.json
-│       └── environment-prod.json
-├── scripts
-│   ├── create-jwt-keys.ps1
-│   └── setup.ps1
+├── docker
+│   └── nginx
+│       └── default.conf.template
 ├── srv
-│   ├── {env}
-│   │   └── php.ini
 │   ├── tmp
 │   │   ├── files
 │   │   ├── opcache
@@ -101,11 +96,10 @@ automatically start with some extra folders and tools.
 │   │   └── tmp
 │   └── jwtCertificates
 ├── db
-│   ├── backup
-│   ├── restore-live-to-local.ps1
 │   └── local-createuser.js
 ├── logs
-└── update-production.ps1
+├── Dockerfile
+└── docker-compose.yml
 ```
 
 ### Core Files and Application Namespacing
@@ -219,22 +213,30 @@ gf cli /structure/cleanup        # run a CLI route (replaces app/cli/{env}.bat)
 gf cli /structure/cleanup --debug# run with Xdebug (replaces local-debug.bat)
 gf cli:list                      # list the app's CLI routes
 gf cert:generate-auth            # JWT signing keys (replaces create-jwt-keys.ps1)
-gf db:restore --from=prod        # pull a source env's mongo dbs into the local env
 gf db:run db/script.js           # run a mongosh script with config-managed credentials
-gf env local                     # activate environment config file variants
-gf setup                         # bootstrap a scaffolded app (replaces setup.ps1)
-gf deploy                        # tag-based deployment (replaces update-production.ps1)
+gf env                           # validate config.json resolves against this environment
+gf env --list                    # every variable config.json references, and which are set
+gf env --init                    # write/extend the .env skeleton from config.json
+gf init --title="My API"         # bootstrap a scaffolded app (replaces setup.ps1)
+gf migrate                       # convert a v6 application to the v7 layout
+gf user:create --email=… --roles=…  # create the account you sign in as (the first user)
 ```
+
+Removed in v7: `deploy` (a Release is an immutable image pinned by digest — see ADR 0002),
+`db:restore` (it required production credentials on every workstation), and `setup`
+(replaced by the non-interactive `init`).
 
 Tab completion is available for bash/zsh/fish (`gf completion --help`) and PowerShell
 (`gf completion:powershell`), including dynamic completion of the app's CLI route names.
 Apps and plugins can add their own gf commands via a `cli\commandProvider` class.
 
-**See [readme/gf.md](readme/gf.md) for the full reference and the migration guide.**
+**See [readme/gf.md](readme/gf.md) for the full reference and the migration guide**, and
+[readme/local-development.md](readme/local-development.md) for what an application needs in order to
+run on a development computer.
 
 The legacy per-app entry (`> app/cli/{env}.bat {url-path}`, `local-debug.bat` for XDebug) keeps
 working, but new apps should use gf. The `scripts/*.ps1` files shipped with the framework are
-deprecated in favor of `gf setup` and `gf cert:generate-auth`.
+deprecated in favor of `gf init` and `gf cert:generate-auth`.
 
 ## Framework Services
 
@@ -340,7 +342,7 @@ For full reference, configuration options, attributes, and detailed examples, se
 
 
 ### PDODB
-Initiate PDO connections using SQL connection details in app/config/environment.json. It is only a small wrapper around 
+Initiate PDO connections using SQL connection details in config.json (`sqlDatabases`). It is only a small wrapper around 
 the native PDO class.
 
 Read user connection: `new gcgov\framework\services\pdodb\pdodb(true, $databaseName)`
@@ -351,18 +353,26 @@ Write user connection: `new gcgov\framework\services\pdodb\pdodb(false, $databas
 ## Extensions
 Extensions add service or app level functionality to the app that registers them. Extensions may expose new endpoints.
 
-* **Open API Documentation** `gcgov/framework-service-documentation`
-    * https://github.com/gcgov/framework-service-documentation
-    * Add namespace `\gcgov\framework\services\documentation` to `\app\app->registerFrameworkServiceNamespaces()`
-* **Microsoft Auth Token Exchange** `gcgov/framework-service-auth-ms`
-    * https://github.com/gcgov/framework-service-auth-ms-front
-    * Add namespace `\gcgov\framework\services\authmsfront` to `\app\app->registerFrameworkServiceNamespaces()`
-* **Oauth Server Service** `gcgov/framework-service-auth-oauth-server`
-    * https://github.com/gcgov/framework-service-auth-oauth-server
-    * Add namespace `\gcgov\framework\services\authoauth` to `\app\app->registerFrameworkServiceNamespaces()`
-* **User CRUD** `gcgov/framework-service-user-crud`
-    * https://github.com/gcgov/framework-service-user-crud
-    * Add namespace `\gcgov\framework\services\usercrud` to `\app\app->registerFrameworkServiceNamespaces()`
-* **Cron Monitor** `gcgov/framework-service-gcgov-cron-monitor`
-    * https://github.com/gcgov/framework-service-gcgov-cron-monitor/
-    * Add namespace `gcgov\framework\services\cronMonitor` to `\app\app->registerFrameworkServiceNamespaces()`
+Framework Services ship inside the framework. Enable one by adding its block to the `services`
+section of `config.json` — presence enables it, and the block's contents are its settings.
+
+```jsonc
+"services": {
+  "auth":          { "provider": "oauth" },   // or "msFront"
+  "userCrud":      { },
+  "documentation": { }
+}
+```
+
+* **Authentication** `services.auth` — one service, two providers.
+    * `provider: "oauth"` — full OAuth server: password, third-party and authorization-code grants, MFA.
+    * `provider: "msFront"` — exchange a Microsoft token the front end already holds for an app JWT.
+    * Either way you get `/.well-known/jwks.json`, `/auth/fileToken`, and a JWT guard over every
+      `authentication: true` route.
+* **User CRUD** `services.userCrud` — `/user` CRUD over the resolved user model.
+* **Open API Documentation** `services.documentation` — `GET /documentation.yaml`.
+* **Cron Monitor** — not a Framework Service; construct
+  `\gcgov\framework\services\cronMonitor\cronMonitor` directly and set `cronMonitor.url`.
+
+The separately published `gcgov/framework-service-*` packages remain available for **v6** applications.
+The framework conflicts with them, so a v7 application cannot install both.

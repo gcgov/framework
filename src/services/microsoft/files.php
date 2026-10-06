@@ -69,7 +69,7 @@ class files {
 			$graph->setAccessToken( $accessToken );
 
 			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
-			$driveItem = $graph->createRequest( "GET", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/root:/' . $this->rootBasePath . implode( '/', $microsoftPathParts ) )
+			$driveItem = $graph->createRequest( "GET", "/drives/" . config::getMicrosoft()->driveId . '/root:/' . $this->rootBasePath . implode( '/', $microsoftPathParts ) )
 				->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
 
 			return $driveItem;
@@ -99,7 +99,7 @@ class files {
 			$graph->setAccessToken( $accessToken );
 
 			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
-			$driveItem = $graph->createRequest( "GET", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/items/' . $itemId )
+			$driveItem = $graph->createRequest( "GET", "/drives/" . config::getMicrosoft()->driveId . '/items/' . $itemId )
 				->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
 
 			return $driveItem;
@@ -126,7 +126,7 @@ class files {
 			$graph->setAccessToken( $accessToken );
 
 			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
-			$driveItem = $graph->createRequest( "PATCH", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . "/items/" . $itemIdToMove )
+			$driveItem = $graph->createRequest( "PATCH", "/drives/" . config::getMicrosoft()->driveId . "/items/" . $itemIdToMove )
 				->attachBody( [ 'parentReference'=>[ 'id'=>$newParentDirItemId ]] )
 				->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
 
@@ -154,7 +154,7 @@ class files {
 			$graph->setAccessToken( $accessToken );
 
 			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
-			$driveItem = $graph->createRequest( "PATCH", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . "/items/" . $itemIdToRename )
+			$driveItem = $graph->createRequest( "PATCH", "/drives/" . config::getMicrosoft()->driveId . "/items/" . $itemIdToRename )
 				->attachBody( [ 'name'=>$newName ] )
 				->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
 
@@ -189,8 +189,8 @@ class files {
 			$graph->setAccessToken( $accessToken );
 
 			/** @var \Microsoft\Graph\Model\DriveItem $driveItem */
-			$driveItem = $graph->createRequest( "GET", '/drives/' . config::getEnvironmentConfig()->microsoft->driveId . '/items/' . $itemId )->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
-			$graph->createRequest( "GET", '/drives/' . config::getEnvironmentConfig()->microsoft->driveId . '/items/' . $itemId . '/content' )->download( $pathToTempSave . '/' . $itemId . '/' . $driveItem->getName() );
+			$driveItem = $graph->createRequest( "GET", '/drives/' . config::getMicrosoft()->driveId . '/items/' . $itemId )->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
+			$graph->createRequest( "GET", '/drives/' . config::getMicrosoft()->driveId . '/items/' . $itemId . '/content' )->download( $pathToTempSave . '/' . $itemId . '/' . $driveItem->getName() );
 
 			return $pathToTempSave . '/' . $itemId . '/' . $driveItem->getName();
 		}
@@ -226,7 +226,7 @@ class files {
 		$graph = new \Microsoft\Graph\Graph();
 		$graph->setAccessToken( $accessToken );
 
-		$fileEndpoint = "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/root:/' . $this->rootBasePath . implode( '/', $uploadPathParts ) . '/' . $fileName;
+		$fileEndpoint = "/drives/" . config::getMicrosoft()->driveId . '/root:/' . $this->rootBasePath . implode( '/', $uploadPathParts ) . '/' . $fileName;
 
 		$fileSize = filesize( $serverFullFilePath );
 
@@ -240,7 +240,7 @@ class files {
 
 				if(!empty($fileDescription)) {
 					try {
-						$driveItem = $graph->createRequest( "PATCH", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/items/' . $driveItem->getId() )
+						$driveItem = $graph->createRequest( "PATCH", "/drives/" . config::getMicrosoft()->driveId . '/items/' . $driveItem->getId() )
 							->attachBody( [ "description" => $fileDescription ] )
 							->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
 					}
@@ -327,7 +327,7 @@ class files {
 		$graph = new \Microsoft\Graph\Graph();
 		$graph->setAccessToken( $accessToken );
 
-		$itemEndpoint = "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . "/items/" . $itemId;
+		$itemEndpoint = "/drives/" . config::getMicrosoft()->driveId . "/items/" . $itemId;
 
 		try {
 			$deleteRequest = $graph->createRequest( "DELETE", $itemEndpoint )->execute();
@@ -373,7 +373,7 @@ class files {
 
 			//get all the project folders
 			/** @var \Microsoft\Graph\Model\DriveItem[] $driveItems */
-			$driveItems = $graph->createRequest( "GET", "/drives/" . config::getEnvironmentConfig()->microsoft->driveId . '/root:/' . $this->rootBasePath . $path . ":/children" )
+			$driveItems = $graph->createRequest( "GET", "/drives/" . config::getMicrosoft()->driveId . '/root:/' . $this->rootBasePath . $path . ":/children" )
 				->setReturnType( \Microsoft\Graph\Model\DriveItem::class )->execute();
 
 			foreach( $driveItems as $i => $driveItem ) {

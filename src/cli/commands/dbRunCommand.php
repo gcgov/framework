@@ -19,9 +19,8 @@ final class dbRunCommand extends Command {
 	protected function configure(): void {
 		$this->addArgument( 'script', InputArgument::REQUIRED, 'Path to the .js script to execute with mongosh' );
 		$this->addArgument( 'mongoshArgs', InputArgument::IS_ARRAY | InputArgument::OPTIONAL, 'Extra arguments passed through to mongosh (prefix with --)' );
-		$this->addOption( 'env', null, InputOption::VALUE_REQUIRED, 'Environment variant to read the connection from (reads app/config/environment-{env}.json). Omit to use the active environment.json.', '', envCommand::suggestEnvironments( ... ) );
 		$this->addOption( 'db', null, InputOption::VALUE_REQUIRED, 'Database name from the mongoDatabases config to run against. Default: the entry marked default (or the only entry).' );
-		$this->setHelp( 'Replaces per-script mongosh invocations with hardcoded connection strings, e.g.: gf db:run db/create-admin.js --env=local. Everything after -- is forwarded to mongosh.' );
+		$this->setHelp( 'Replaces per-script mongosh invocations with hardcoded connection strings, e.g.: gf db:run db/create-admin.js. Everything after -- is forwarded to mongosh.' );
 	}
 
 
@@ -33,18 +32,18 @@ final class dbRunCommand extends Command {
 			throw new cliException( 'Script not found: ' . $scriptPath );
 		}
 
-		$environmentConfig = $context->loadEnvironmentConfig( (string)$input->getOption( 'env' ) );
+		$mongoDatabases = $context->loadConfig()->mongoDatabases;
 
 		$databaseName = (string)( $input->getOption( 'db' ) ?? '' );
 		$mongoDatabase = null;
-		foreach( $environmentConfig->mongoDatabases as $candidate ) {
-			if( $databaseName!=='' ? $candidate->database===$databaseName : ( $candidate->default || count( $environmentConfig->mongoDatabases )===1 ) ) {
+		foreach( $mongoDatabases as $candidate ) {
+			if( $databaseName!=='' ? $candidate->database===$databaseName : ( $candidate->default || count( $mongoDatabases )===1 ) ) {
 				$mongoDatabase = $candidate;
 				break;
 			}
 		}
 		if( $mongoDatabase===null ) {
-			$available = implode( ', ', array_map( fn( $db ) => $db->database, $environmentConfig->mongoDatabases ) );
+			$available = implode( ', ', array_map( fn( $db ) => $db->database, $mongoDatabases ) );
 			throw new cliException( $databaseName==='' ? 'No default mongo database found in the environment config. Available: ' . $available . '. Choose one with --db.' : 'No mongo database named "' . $databaseName . '" in the environment config. Available: ' . $available );
 		}
 

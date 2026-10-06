@@ -15,7 +15,7 @@ class auth {
 
 
 	public function __construct() {
-		$this->provider = new \TheNetworg\OAuth2\Client\Provider\Azure( (array) config::getEnvironmentConfig()->microsoft );
+		$this->provider = new \TheNetworg\OAuth2\Client\Provider\Azure( (array) config::getMicrosoft() );
 	}
 
 
@@ -86,11 +86,11 @@ class auth {
 		//get application access token
 		try {
 			$guzzle = new \GuzzleHttp\Client();
-			$url    = 'https://login.microsoftonline.com/' . config::getEnvironmentConfig()->microsoft->tenant . '/oauth2/token?api-version=1.0';
+			$url    = 'https://login.microsoftonline.com/' . config::getMicrosoft()->tenant . '/oauth2/token?api-version=1.0';
 			$token  = json_decode( $guzzle->post( $url, [
 				'form_params' => [
-					'client_id'     => config::getEnvironmentConfig()->microsoft->clientId,
-					'client_secret' => config::getEnvironmentConfig()->microsoft->clientSecret,
+					'client_id'     => config::getMicrosoft()->clientId,
+					'client_secret' => config::getMicrosoft()->clientSecret,
 					'resource'      => 'https://graph.microsoft.com/',
 					'grant_type'    => 'client_credentials',
 				],

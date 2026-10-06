@@ -21,7 +21,7 @@ final class ChromeServiceTest extends TestCase {
 		mkdir( $this->tempSrvDir, 0777, true );
 
 		// point config::getSrvDir() at the fixture (same technique tests/bootstrap.php
-		// uses to seed environmentConfig)
+		// uses to seed unifiedConfig)
 		$srvDirProperty = new \ReflectionProperty( config::class, 'srvDir' );
 		$srvDirProperty->setValue( null, $this->tempSrvDir . '/' );
 	}

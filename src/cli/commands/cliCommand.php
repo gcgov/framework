@@ -25,7 +25,7 @@ final class cliCommand extends Command {
 		$this->addOption( 'debug', null, InputOption::VALUE_NONE, 'Run the route with Xdebug step debugging enabled (replaces local-debug.bat)' );
 		$this->addOption( 'debug-host', null, InputOption::VALUE_REQUIRED, 'Xdebug client host', '127.0.0.1' );
 		$this->addOption( 'debug-port', null, InputOption::VALUE_REQUIRED, 'Xdebug client port', '9003' );
-		$this->addOption( 'php', null, InputOption::VALUE_REQUIRED, 'PHP binary (or its directory) to run the route with. Defaults to GF_PHP, then environment.json phpPath, then the PHP running gf.' );
+		$this->addOption( 'php', null, InputOption::VALUE_REQUIRED, 'PHP binary (or its directory) to run the route with. Defaults to GF_PHP, then the PHP running gf.' );
 		$this->setHelp( 'Executes the route through the full framework lifecycle in a fresh PHP process, exactly like the legacy app/cli/index.php entry. Exit code is 0 on success and 1 when the response status is 400 or higher.' );
 	}
 
@@ -45,15 +45,14 @@ final class cliCommand extends Command {
 		$context = appContext::require();
 		$context->assertAppLoadable();
 
-		$environmentConfig = null;
-		try {
-			$environmentConfig = $context->loadEnvironmentConfig();
-		}
-		catch( cliException ) {
-			// environment.json missing — the child process will report it through the framework lifecycle
-		}
+		// Load .env before choosing the interpreter. findPhpBinary() falls back to
+		// getenv('GF_PHP'), and dotEnvLoader enables usePutenv() precisely so getenv() sees
+		// .env values — but nothing on this path had loaded it, so a GF_PHP set in {root}/.env
+		// (which the loader's own docblock offers as the example) was invisible and the route
+		// silently ran on whatever PHP happened to be on PATH.
+		\gcgov\framework\services\environment\dotEnvLoader::loadOnce( $context->rootDir );
 
-		$commandLine = array_merge( phpProcess::findPhpBinary( $input->getOption( 'php' ), $environmentConfig ), phpProcess::requiredIniFlags() );
+		$commandLine = array_merge( phpProcess::findPhpBinary( $input->getOption( 'php' ) ), phpProcess::requiredIniFlags() );
 
 		if( $input->getOption( 'debug' ) ) {
 			$commandLine = array_merge( $commandLine, phpProcess::xdebugFlags( (string)$input->getOption( 'debug-host' ), (int)$input->getOption( 'debug-port' ) ) );

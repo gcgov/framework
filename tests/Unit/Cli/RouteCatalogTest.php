@@ -34,9 +34,54 @@ final class RouteCatalogTest extends TestCase {
 		rmdir( $this->tempRootDir );
 	}
 
-	public function testGetMergedRoutesReturnsAppRoutes(): void {
-		$routes = router::getMergedRoutes( [] );
-		$this->assertCount( 3, $routes );
+	public function testGetMergedRoutesReturnsFrameworkAndAppRoutes(): void {
+		$routes = router::getMergedRoutes();
+
+		// 3 stub app routes + the framework's own two health routes, which every
+		// application gets whether it asked for them or not.
+		$this->assertCount( 5, $routes );
+	}
+
+
+	public function testHealthRoutesAreContributedFirstAndUnauthenticated(): void {
+		$routes = router::getMergedRoutes();
+
+		$healthRoutes = array_values( array_filter( $routes, fn( $route ) => str_contains( $route->route, '/health' ) ) );
+		$this->assertCount( 2, $healthRoutes );
+
+		$paths = array_map( fn( $route ) => $route->route, $healthRoutes );
+		$this->assertSame( [ '/api/health', '/api/health/ready' ], $paths );
+
+		foreach( $healthRoutes as $healthRoute ) {
+			$this->assertFalse( $healthRoute->authentication, 'a prober holds no token' );
+		}
+
+		// Contributed before anything else, so an application defining its own /health
+		// collides at boot rather than shadowing the deploy gate.
+		$this->assertSame( '/api/health', $routes[ 0 ]->route );
+	}
+
+
+	/**
+	 * The CLI reads the same `services` section the HTTP router does. Before this, the
+	 * CLI asked \app\app for the namespaces without running _before(), so a service
+	 * configured there was invisible to gf — the two paths could disagree.
+	 */
+	public function testEnabledServicesAppearInTheCliRouteCatalog(): void {
+		$original = ( new \ReflectionProperty( \gcgov\framework\config::class, 'unifiedConfig' ) )->getValue();
+		try {
+			$config = \gcgov\framework\models\unifiedConfig::jsonDeserialize( json_decode( '{"basePath":"api","services":{"userCrud":{},"documentation":{}}}', false ) );
+			( new \ReflectionProperty( \gcgov\framework\config::class, 'unifiedConfig' ) )->setValue( null, $config );
+
+			$paths = array_map( fn( $route ) => $route->route, router::getMergedRoutes() );
+
+			$this->assertContains( '/api/user', $paths );
+			$this->assertContains( '/api/documentation.yaml', $paths );
+			$this->assertContains( '/api/health', $paths, 'health is never opt-in' );
+		}
+		finally {
+			( new \ReflectionProperty( \gcgov\framework\config::class, 'unifiedConfig' ) )->setValue( null, $original );
+		}
 	}
 
 	public function testGetCliRoutesFiltersToCliMethodOnly(): void {

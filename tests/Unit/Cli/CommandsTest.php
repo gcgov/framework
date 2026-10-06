@@ -10,7 +10,6 @@ use gcgov\framework\cli\commands\certGenerateAuthCommand;
 use gcgov\framework\cli\commands\cliListCommand;
 use gcgov\framework\cli\commands\completionPowershellCommand;
 use gcgov\framework\cli\commands\envCommand;
-use gcgov\framework\cli\commands\setupCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -19,7 +18,6 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(certGenerateAuthCommand::class)]
 #[CoversClass(completionPowershellCommand::class)]
 #[CoversClass(envCommand::class)]
-#[CoversClass(setupCommand::class)]
 final class CommandsTest extends TestCase {
 
 	private string $tempRootDir = '';
@@ -58,16 +56,10 @@ final class CommandsTest extends TestCase {
 		$this->assertStringNotContainsString( '/widget', $display );
 	}
 
-	public function testEnvCommandCopiesVariantFiles(): void {
-		file_put_contents( $this->tempRootDir . '/app/config/environment-local.json', '{"type":"local"}' );
 
-		$commandTester = new CommandTester( new envCommand() );
-		$exitCode      = $commandTester->execute( [ 'environment' => 'local' ] );
 
-		$this->assertSame( 0, $exitCode );
-		$this->assertSame( '{"type":"local"}', file_get_contents( $this->tempRootDir . '/app/config/environment.json' ) );
-		$this->assertStringContainsString( 'copied', $commandTester->getDisplay() );
-	}
+
+
 
 	public function testCertGenerateAuthCreatesKeypairsAndGuidsJson(): void {
 		if( !extension_loaded( 'openssl' ) ) {
@@ -85,6 +77,10 @@ final class CommandsTest extends TestCase {
 		$this->assertCount( 2, $guids );
 
 		foreach( $guids as $guid ) {
+			// Provisioning lowercases every secret filename it writes to the host, so the
+			// GUID inside the filename — and its guids.json spelling — must already be
+			// lowercase, or jwtAuth looks up a file that does not exist there.
+			$this->assertSame( strtolower( (string)$guid ), $guid, 'key GUIDs must be lowercase' );
 			$this->assertFileExists( $certificateDir . '/private-' . $guid . '.pem' );
 			$this->assertFileExists( $certificateDir . '/public-' . $guid . '.pem' );
 			$publicKey = openssl_pkey_get_public( (string)file_get_contents( $certificateDir . '/public-' . $guid . '.pem' ) );
@@ -95,6 +91,64 @@ final class CommandsTest extends TestCase {
 
 		$this->assertFileExists( $certificateDir . '/.gitignore', 'gitignore is copied from the jwtAuth service directory' );
 	}
+
+	/** A configured jwtAuth.keyPath wins, and a relative one anchors to the app root. */
+	public function testCertGenerateAuthHonorsAConfiguredKeyPath(): void {
+		if( !extension_loaded( 'openssl' ) ) {
+			$this->markTestSkipped( 'ext-openssl not loaded' );
+		}
+
+		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [ 'jwtAuth' => [ 'keyPath' => 'srv/authKeys' ] ] ) );
+
+		$commandTester = new CommandTester( new certGenerateAuthCommand() );
+		$exitCode      = $commandTester->execute( [ '--count' => '1', '--yes' => true ] );
+
+		$this->assertSame( 0, $exitCode );
+		$this->assertFileExists( $this->tempRootDir . '/srv/authKeys/guids.json' );
+	}
+
+
+	/**
+	 * `gf init` runs this command on a scaffold whose .env is still empty, so a failure
+	 * to resolve UNRELATED references (MONGO_URI among them) must not block key
+	 * generation — it needs only jwtAuth.keyPath.
+	 */
+	public function testCertGenerateAuthSucceedsWhenOnlyOtherReferencesAreUnresolved(): void {
+		if( !extension_loaded( 'openssl' ) ) {
+			$this->markTestSkipped( 'ext-openssl not loaded' );
+		}
+
+		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
+			'type'    => '%env(GF_TEST_CERT_ABSENT)%',
+			'jwtAuth' => [ 'keyPath' => 'srv/authKeys' ],
+		] ) );
+
+		$commandTester = new CommandTester( new certGenerateAuthCommand() );
+		$exitCode      = $commandTester->execute( [ '--count' => '1', '--yes' => true ] );
+
+		$this->assertSame( 0, $exitCode );
+		$this->assertFileExists( $this->tempRootDir . '/srv/authKeys/guids.json', 'the configured keyPath must still be honored' );
+	}
+
+
+	/** Only when the keyPath reference ITSELF has no value does the default apply — loudly. */
+	public function testCertGenerateAuthFallsBackToTheDefaultWhenTheKeyPathReferenceIsUnset(): void {
+		if( !extension_loaded( 'openssl' ) ) {
+			$this->markTestSkipped( 'ext-openssl not loaded' );
+		}
+
+		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
+			'jwtAuth' => [ 'keyPath' => '%env(GF_TEST_CERT_KEYPATH_ABSENT)%' ],
+		] ) );
+
+		$commandTester = new CommandTester( new certGenerateAuthCommand() );
+		$exitCode      = $commandTester->execute( [ '--count' => '1', '--yes' => true ] );
+
+		$this->assertSame( 0, $exitCode );
+		$this->assertFileExists( $this->tempRootDir . '/srv/jwtCertificates/guids.json' );
+		$this->assertStringContainsString( 'GF_TEST_CERT_KEYPATH_ABSENT', $commandTester->getDisplay(), 'the fallback must name the unresolved variable' );
+	}
+
 
 	public function testCertGenerateAuthRegenerationReplacesOldKeys(): void {
 		if( !extension_loaded( 'openssl' ) ) {
@@ -125,34 +179,7 @@ final class CommandsTest extends TestCase {
 		$this->assertStringContainsString( '-a' . \Symfony\Component\Console\Command\CompleteCommand::COMPLETION_API_VERSION, $display );
 	}
 
-	public function testSetupRefusesNonInteractiveMode(): void {
-		$commandTester = new CommandTester( new setupCommand() );
 
-		$this->expectException( \gcgov\framework\cli\cliException::class );
-		$commandTester->execute( [], [ 'interactive' => false ] );
-	}
-
-	public function testSetupBuildReplacementTableDerivesUrlTokens(): void {
-		$setupCommand = new setupCommand();
-
-		$replacements = $setupCommand->buildReplacementTable( [
-			'app_title'          => 'Widget API',
-			'app_base_path'      => 'api',
-			'prod_app_base_path' => '/api/',
-			'app_root_url'       => 'https://local.example.gov/',
-			'prod_app_absolute_path' => 'E:\Web\api\\',
-		], '/var/www/widget' );
-
-		$this->assertSame( 'Widget API', $replacements[ '{app_title}' ] );
-		$this->assertSame( '/api/', $replacements[ '{app_base_path}' ] );
-		$this->assertSame( 'api/', $replacements[ '{app_relative_url}' ] );
-		$this->assertSame( '/api/', $replacements[ '{prod_app_base_path}' ] );
-		$this->assertSame( 'api/', $replacements[ '{prod_app_relative_url}' ] );
-		$this->assertSame( 'https://local.example.gov', $replacements[ '{app_root_url}' ] );
-		$this->assertSame( 'E:\Web\api', $replacements[ '{prod_app_absolute_path}' ] );
-		$this->assertSame( '/var/www/widget', $replacements[ '{app_absolute_path}' ] );
-		$this->assertNotSame( '', $replacements[ '{app_guid}' ] );
-	}
 
 	public function testDynamicRouteCompletionSuggestsCliRoutes(): void {
 		$suggestions = \gcgov\framework\cli\commands\cliCommand::suggestCliRoutes( \Symfony\Component\Console\Completion\CompletionInput::fromTokens( [ 'gf', 'cli', '' ], 2 ) );

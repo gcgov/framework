@@ -6,7 +6,7 @@ use Symfony\Component\Process\ExecutableFinder;
 
 /**
  * Shared helpers for the gf db:* commands. These commands read connection info
- * from app/config/environment{-variant}.json and shell out to the MongoDB
+ * from the resolved config.json and shell out to the MongoDB
  * command line tools — no ext-mongodb required.
  */
 final class mongoTools {

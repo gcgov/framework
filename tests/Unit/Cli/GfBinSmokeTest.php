@@ -27,7 +27,7 @@ final class GfBinSmokeTest extends TestCase {
 
 		$this->assertSame( 0, $process->getExitCode(), $process->getOutput() . $process->getErrorOutput() );
 		$this->assertStringContainsString( 'cli:list', $process->getOutput() );
-		$this->assertStringContainsString( 'db:restore', $process->getOutput() );
+		$this->assertStringContainsString( 'db:run', $process->getOutput() );
 	}
 
 	public function testGfSpaceSeparatedCommandNameResolves(): void {
@@ -36,11 +36,11 @@ final class GfBinSmokeTest extends TestCase {
 			$this->markTestSkipped( 'framework vendor/ not installed' );
 		}
 
-		$process = new Process( [ PHP_BINARY, $frameworkRoot . '/bin/gf', 'db', 'restore', '--help', '--no-ansi' ], $frameworkRoot );
+		$process = new Process( [ PHP_BINARY, $frameworkRoot . '/bin/gf', 'db', 'run', '--help', '--no-ansi' ], $frameworkRoot );
 		$process->run();
 
 		$this->assertSame( 0, $process->getExitCode(), $process->getOutput() . $process->getErrorOutput() );
-		$this->assertStringContainsString( 'db:restore', $process->getOutput() );
+		$this->assertStringContainsString( 'db:run', $process->getOutput() );
 	}
 
 }

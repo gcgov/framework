@@ -90,39 +90,79 @@ final class AppContextTest extends TestCase {
 		$this->assertNotNull( $context );
 		$root = str_replace( '\\', '/', $this->tempRootDir );
 		$this->assertSame( $root . '/app', $context->getAppDir() );
-		$this->assertSame( $root . '/app/config', $context->getConfigDir() );
 		$this->assertSame( $root . '/srv', $context->getSrvDir() );
 		$this->assertSame( $root . '/vendor/autoload.php', $context->getVendorAutoloadPath() );
 	}
 
-	public function testLoadEnvironmentConfigParsesVariantFile(): void {
-		file_put_contents( $this->tempRootDir . '/app/config/environment-prod.json', json_encode( [
+	public function testLoadConfigParsesActiveFile(): void {
+		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
 			'type'           => 'prod',
 			'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => 'mongodb://u:p@h:27017/widgets' ] ],
 		] ) );
 		$context = appContext::locate( $this->tempRootDir );
 		$this->assertNotNull( $context );
-		$environmentConfig = $context->loadEnvironmentConfig( 'prod' );
+		$environmentConfig = $context->loadConfig();
 		$this->assertSame( 'prod', $environmentConfig->type );
 		$this->assertCount( 1, $environmentConfig->mongoDatabases );
 		$this->assertSame( 'widgets', $environmentConfig->mongoDatabases[0]->database );
 	}
 
-	public function testLoadEnvironmentConfigThrowsWhenMissing(): void {
+	public function testLoadConfigThrowsWhenMissing(): void {
 		$context = appContext::locate( $this->tempRootDir );
 		$this->assertNotNull( $context );
 		$this->expectException( cliException::class );
-		$context->loadEnvironmentConfig();
+		$context->loadConfig();
 	}
 
-	public function testGetEnvironmentVariantsListsVariantFiles(): void {
-		touch( $this->tempRootDir . '/app/config/environment-local.json' );
-		touch( $this->tempRootDir . '/app/config/environment-prod.json' );
-		touch( $this->tempRootDir . '/app/config/environment.json' );
+
+	public function testLoadConfigResolvesEnvVars(): void {
+		$_ENV[ 'TEST_MONGO_URI' ] = 'mongodb://resolved:27017/widgets';
+		putenv( 'TEST_MONGO_URI=mongodb://resolved:27017/widgets' );
+		try {
+			file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
+				'type'           => 'prod',
+				'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => '%env(TEST_MONGO_URI)%' ] ],
+			] ) );
+			$context = appContext::locate( $this->tempRootDir );
+			$this->assertNotNull( $context );
+			$environmentConfig = $context->loadConfig();
+			$this->assertSame( 'mongodb://resolved:27017/widgets', $environmentConfig->mongoDatabases[ 0 ]->uri );
+		}
+		finally {
+			unset( $_ENV[ 'TEST_MONGO_URI' ] );
+			putenv( 'TEST_MONGO_URI' );
+		}
+	}
+
+
+	public function testLoadConfigThrowsCliExceptionWhenEnvVarMissing(): void {
+		unset( $_ENV[ 'TEST_MISSING_URI' ] );
+		putenv( 'TEST_MISSING_URI' );
+		file_put_contents( $this->tempRootDir . '/config.json', json_encode( [
+			'type'           => 'prod',
+			'mongoDatabases' => [ [ 'default' => true, 'database' => 'widgets', 'uri' => '%env(TEST_MISSING_URI)%' ] ],
+		] ) );
 		$context = appContext::locate( $this->tempRootDir );
 		$this->assertNotNull( $context );
-		$this->assertSame( [ 'local', 'prod' ], $context->getEnvironmentVariants() );
+		$this->expectException( cliException::class );
+		$context->loadConfig();
 	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 	private function deleteDirectory( string $directory ): void {
 		if( !is_dir( $directory ) ) {

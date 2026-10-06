@@ -2,7 +2,7 @@
 
 namespace gcgov\framework\cli;
 
-use gcgov\framework\models\environmentConfig;
+use gcgov\framework\models\unifiedConfig;
 
 /**
  * Locates the consuming application's root directory and provides lazy access
@@ -11,7 +11,7 @@ use gcgov\framework\models\environmentConfig;
  * gf command tiers:
  *  - no context needed:  list, help, completion — work anywhere
  *  - root only:          env, db:*, cert:*, deploy — need locate() + config JSON
- *  - app boot:           cli, cli:list — need assertAppLoadable() + getServiceNamespaces()
+ *  - app boot:           cli, cli:list — need assertAppLoadable()
  */
 final class appContext {
 
@@ -110,8 +110,9 @@ final class appContext {
 	}
 
 
-	public function getConfigDir(): string {
-		return $this->rootDir . '/app/config';
+	/** The unified {root}/config.json read by loadConfig(). */
+	public function getConfigPath(): string {
+		return $this->rootDir . '/config.json';
 	}
 
 
@@ -138,62 +139,44 @@ final class appContext {
 
 
 	/**
-	 * Service namespaces registered by the app. Instantiates \app\app but deliberately
-	 * does NOT run \app\app::_before() — no lifecycle side effects for enumeration.
-	 *
-	 * @return string[]
-	 * @throws \gcgov\framework\cli\cliException
-	 */
-	public function getServiceNamespaces(): array {
-		$this->assertAppLoadable();
-		$app = new \app\app();
-
-		return $app->registerFrameworkServiceNamespaces();
-	}
-
-
-	/**
-	 * Parse app/config/environment{-$variant}.json directly — no \app boot, no ext-mongodb.
-	 * $variant '' loads the active environment.json.
+	 * Load and resolve {root}/config.json — no \app boot, no ext-mongodb.
+	 * {root}/.env is loaded first; the real process environment wins.
 	 *
 	 * @throws \gcgov\framework\cli\cliException
 	 */
-	public function loadEnvironmentConfig( string $variant = '' ): environmentConfig {
-		$file = $this->getEnvironmentConfigPath( $variant );
-		if( !file_exists( $file ) ) {
-			$hint = $variant==='' ? ' Run `gf env <environment>` to activate an environment first.' : '';
-			throw new cliException( 'Missing environment config file: ' . $file . '.' . $hint );
+	public function loadConfig(): unifiedConfig {
+		if( !file_exists( $this->getConfigPath() ) ) {
+			throw new cliException( 'Missing config file: ' . $this->getConfigPath() . '. Commit a config.json at the application root that references environment variables with %env(...) and supply values via the process environment or a .env file. Migrating a v6 application? Run `gf migrate`.' );
 		}
 
 		try {
-			return environmentConfig::jsonDeserialize( (string)file_get_contents( $file ) );
+			return \gcgov\framework\services\environment\configLoader::load( $this->rootDir );
 		}
-		catch( \andrewsauder\jsonDeserialize\exceptions\jsonDeserializeException $e ) {
-			throw new cliException( 'Failed to parse ' . $file . ': ' . $e->getMessage(), 0, $e );
+		catch( \gcgov\framework\services\environment\environmentException $e ) {
+			throw new cliException( $e->getMessage(), 0, $e );
 		}
-	}
-
-
-	public function getEnvironmentConfigPath( string $variant = '' ): string {
-		$suffix = $variant==='' ? '' : '-' . $variant;
-
-		return $this->getConfigDir() . '/environment' . $suffix . '.json';
 	}
 
 
 	/**
-	 * Environment variant names available in app/config (environment-{name}.json).
+	 * Every variable config.json references, and whether each is a secret. Read without
+	 * resolving anything, so it works on a fresh clone with no .env.
 	 *
-	 * @return string[]
+	 * @return array<string, bool>
+	 * @throws \gcgov\framework\cli\cliException
 	 */
-	public function getEnvironmentVariants(): array {
-		$variants = [];
-		foreach( glob( $this->getConfigDir() . '/environment-*.json' ) ?: [] as $file ) {
-			$variants[] = substr( basename( $file, '.json' ), strlen( 'environment-' ) );
+	public function configReferences(): array {
+		try {
+			return \gcgov\framework\services\environment\configLoader::references( $this->rootDir );
 		}
-		sort( $variants );
+		catch( \gcgov\framework\services\environment\environmentException $e ) {
+			throw new cliException( $e->getMessage(), 0, $e );
+		}
+	}
 
-		return $variants;
+
+	public function getEnvFilePath(): string {
+		return $this->rootDir . '/.env';
 	}
 
 }
