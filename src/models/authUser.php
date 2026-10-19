@@ -35,16 +35,12 @@ class authUser {
 	 */
 	public array $roles = [];
 
-	private static authUser $instance;
+	private static $instance;
 
 	private function __construct() {
 	}
 
-
-    /**
-     * @return \gcgov\framework\models\authUser
-     */
-	final public static function getInstance(): authUser {
+	final public static function getInstance(): static {
 		$calledClass = get_called_class();
 
 		if( !isset( self::$instance ) ) {
