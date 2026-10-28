@@ -20,6 +20,9 @@ class logging extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 	/**
 	 * Where log records go: 'stderr' (default), 'file', or 'both'.
 	 *
+	 * It covers both of the framework's loggers: services\log, and the database layer's
+	 * services\mongodb\tools\log while a database turns its `logging` on.
+	 *
 	 * stderr is the default because a container's filesystem does not survive a
 	 * deploy — file logs would be per-replica and destroyed on every release.
 	 * Applications still hosted on IIS set 'file'.

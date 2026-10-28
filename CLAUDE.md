@@ -425,7 +425,7 @@ defaults, like every other section.
 
 | Call | Purpose |
 |------|---------|
-| `services\log::{debug,info,notice,warning,error,critical,alert,emergency}($channel,$msg,$context=[])` | Monolog-backed. Destination is `logging.destination`: `stderr` (default, JSON lines) / `file` (`/logs/{channel}.log`) / `both`. |
+| `services\log::{debug,info,notice,warning,error,critical,alert,emergency}($channel,$msg,$context=[])` | Monolog-backed. Destination is `logging.destination`: `stderr` (default, JSON lines) / `file` (`/logs/{channel}.log`) / `both`. The database layer's log (`services\mongodb\tools\log`, on while the first `mongoDatabases` entry sets `logging`) builds its handlers here, so it follows the same destination. |
 | `services\request::getAuthUser(): authUser` | Request-scoped authenticated user (roles, id, email…). Populated by the auth service's guard. |
 | `services\request::getUserClassFqdn(): string` | Resolves the app's user model FQDN: `\app\models\user`, else the Mongo `…\models\auth\user`. |
 | `services\request::getPostData(): array` | Parsed request body. |
@@ -492,7 +492,8 @@ List routes with `gf cli:list`; debug with `gf cli /path --debug`.
 - Set `logging.lifecycle=true` in `config.json` to trace the entire pipeline when debugging routing/auth.
 - Every `%env()` reference is required — there is no default and `FOO=` counts as unset. `gf env` says
   which one is missing.
-- Logs go to **stderr** by default, not `logs/*.log`. An app on IIS sets `logging.destination: "file"`.
+- Logs go to **stderr** by default, not `logs/*.log` — the database layer's log included. An app on IIS
+  sets `logging.destination: "file"`.
 - JWT signing keys are gitignored, so they are never in a built image: a container must point
   `jwtAuth.keyPath` at a provisioned directory or authentication cannot work.
 

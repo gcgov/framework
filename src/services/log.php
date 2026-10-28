@@ -94,9 +94,14 @@ final class log {
 	 * and a logger that throws while reporting an error is worse than a misplaced log —
 	 * so an unreadable config falls back to stderr.
 	 *
+	 * Public for the database layer's logger, services\mongodb\tools\log, which builds its
+	 * loggers from these same handlers. A record then goes where logging.destination says,
+	 * whichever of the two loggers writes it.
+	 *
+	 * @internal
 	 * @return \Monolog\Handler\HandlerInterface[]
 	 */
-	private static function buildHandlers( string $channel ): array {
+	public static function buildHandlers( string $channel ): array {
 		try {
 			$logging = \gcgov\framework\config::getLogging();
 		}

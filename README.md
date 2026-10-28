@@ -252,7 +252,14 @@ Create a GUID `\gcgov\framework\services\guid::create()`
 Get status text for HTTP code `\gcgov\framework\services\http::statusText( int $code )`
 
 ### Logging
-`\gcgov\framework\services\log` will automatically create and append a log in /logs with a filename equal to the channel
+`\gcgov\framework\services\log` writes each record where `logging.destination` in `config.json` says:
+
+* `stderr`, the default: one JSON object per line on standard error. A container's output is its log.
+* `file`: a line appended to `/logs/{channel}.log`. An application still hosted on IIS sets this.
+* `both`: stderr and the file.
+
+The database layer's log follows the same setting. It writes a record for each database operation,
+and only while the first database in `mongoDatabases` sets `logging` to `true`.
 
 * Debug `\gcgov\framework\services\log::debug( string $channel, string $message, array $context = [] )`
 * Info `\gcgov\framework\services\log::info( string $channel, string $message, array $context = [] )`

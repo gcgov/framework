@@ -21,6 +21,12 @@ class mongoDatabase extends \andrewsauder\jsonDeserialize\jsonDeserialize {
 
 	public bool $include_metaFields = false;
 
+	/**
+	 * The database layer's log: one record for every database operation. Only the first
+	 * entry in mongoDatabases is read. Its records go where logging.destination says, as
+	 * every other framework record does. Turn it on to trace a problem: at one line per
+	 * operation it is the fastest-growing log an application has.
+	 */
 	public bool $logging = false;
 
 	public bool $audit = false;
