@@ -1,0 +1,42 @@
+# Build a Release and ask gcgov/deploy to deploy it.
+#
+#   push to main   build and publish only
+#   push of v*     build, publish, and request deployment
+#
+# This file is deliberately thin. The real logic lives in gcgov/deploy, so a change to how
+# deployment works is one pull request rather than one per application. It replaces the
+# v6 update-production.ps1, which ran git and composer on the IIS server. A Release is now
+# an immutable image pinned by digest (framework ADR 0002).
+#
+# What it calls only runs on GitHub-hosted runners. Deployment happens in gcgov/deploy's
+# own context, reached by repository_dispatch, so no contributor to this repository gains
+# code execution inside a Zone.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+jobs:
+  release:
+    # Declared on the job: a called workflow can narrow the caller's GITHUB_TOKEN but never
+    # widen it, so without packages:write here the ghcr push fails after the whole build.
+    permissions:
+      contents: read
+      packages: write
+    uses: gcgov/deploy/.github/workflows/build.yml@main
+    with:
+      # Everything derives from this: image names, Ops Repo paths, database users.
+      app: {{SLUG}}
+      # The Zone this application runs in: internal | bridge | isolated.
+      zone: {{ZONE}}
+      # api builds the php and nginx targets of the Dockerfile.
+      kind: api
+      # Only a tag deploys. A push to main publishes images and stops there.
+      deploy: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    secrets:
+      # Fine-grained token with contents:write on gcgov/deploy and nothing else. Used solely
+      # to fire the deploy dispatch; without it, images publish and nothing ships.
+      OPS_DISPATCH_TOKEN: ${{ secrets.OPS_DISPATCH_TOKEN }}

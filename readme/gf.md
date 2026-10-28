@@ -269,7 +269,10 @@ What it will not do is guess. `sqlDatabases` credentials, a missing `app.guid`, 
 switch it to `"stderr"` when the application moves into a container.
 
 It does not write a Dockerfile, choose a Zone, or move secrets into the ops repository. Those need
-judgement; the companion skill covers them.
+judgement; the companion skill covers them. The skill is
+[`.claude/skills/gcgov-framework-v7-migration/`](../.claude/skills/gcgov-framework-v7-migration/SKILL.md)
+in this repository. It runs `gf migrate`, finishes the code, drafts the `gcgov/deploy` entry, and
+writes a next-steps document that names the device and the account for every command.
 
 > **`gf deploy` was removed in v7.** It deployed by running `git checkout` and `composer update` on
 > the server, which resolves dependencies in production at deploy time — two hosts on "the same tag"

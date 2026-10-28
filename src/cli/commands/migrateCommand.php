@@ -127,7 +127,8 @@ final class migrateCommand extends Command {
 			It writes {root}/config.json, writes {root}/.env with the values it extracted, and
 			deletes the v6 IIS and batch files. It does NOT write a Dockerfile, choose a Zone,
 			or decide what belongs in your secret store — those need judgement, and the
-			companion skill covers them.
+			companion skill (.claude/skills/gcgov-framework-v7-migration in gcgov/framework)
+			covers them.
 
 			Anything it cannot convert safely is reported rather than guessed at.
 			HELP );

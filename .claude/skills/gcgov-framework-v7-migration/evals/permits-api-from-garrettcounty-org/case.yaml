@@ -1,0 +1,11 @@
+schema_version: "1.1"
+name: permits-api-from-garrettcounty-org
+expected_outcome: |
+  The synthetic v6 permits api is converted: services.auth with provider msFront (blockNewUsers
+  false, default role Permit.Read), userCrud and documentation enabled, cronMonitor.url instead
+  of appDictionary.cronMonitorUrl, the PayJunction webhook opt-out moved to the
+  skipsServiceAuthentication interface, PayJunction credentials as %env(secret:...)%
+  references. The new URL is https://api.permits.apps.garrettcountymd.gov/api/. The Zone is
+  presented as a decision with a reasoned default. The next-steps document labels devices and
+  accounts, flags the nightly /cli/expire-permits schedule as needing a home, covers the
+  logs/ file write and the apps.garrettcounty.org redirect, and leaks none of the v6 secrets.
