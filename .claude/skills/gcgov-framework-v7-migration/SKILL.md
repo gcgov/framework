@@ -60,6 +60,16 @@ python3 <skill-dir>/scripts/inventory.py . --json     # the same facts as JSON
 Keep the report. It feeds every later step and the document. If Python is not available, collect
 the same facts by hand: the report sections are the checklist.
 
+Look for work that already exists before you start, because a second, parallel migration wastes
+everyone's review time:
+
+- the report's "Refs that look like earlier v7 work" line (a `v7` branch, a migration branch),
+- `zones/*/apps/<slug>/` in a `gcgov/deploy` checkout, if one is on the machine,
+- a `config.json` or `Dockerfile` already in the tree.
+
+If any exists, build on it: compare it with this skill's checklist, fix the gaps, and say in the
+document which branch is the source of truth. Do not start over.
+
 Confirm the working tree is clean, then create the branch: `git switch -c v7-migration`.
 
 ### Step 2. Settle the names, the URL and the Zone
@@ -113,6 +123,14 @@ Then read `references/code-changes.md` §2 and finish what `gf migrate` reports 
 The important ones: set `logging.destination` to `"stderr"`, move the `setBlockNewUsers()` call
 into `services.auth`, add `jwtAuth.keyPath`, decide literal versus reference for each value, and
 convert `sqlDatabases` by hand.
+
+`gf migrate` extracts a fixed list of keys. Every other value keeps whatever the file it read
+held, and that file is the local variant. The inventory lists these under "Values that differ
+between the environment files". Make each one a Config Reference (or a literal with the
+production value, if the local value was a mistake), or the image ships a developer's value.
+
+The inventory also lists v6 credentials found outside `app/config` (a `README.md`, a
+`db/*.js` script). Remove each value from the tree, and add its file to the rotation list.
 
 ### Step 5. Update the application code
 
@@ -182,8 +200,9 @@ Copy `assets/NEXT-STEPS.template.md` to `docs/v7-migration/NEXT-STEPS.md` and fi
 
 - Fill every `{{placeholder}}`. Delete a section only when the inventory proves it does not apply,
   and say in one line why (for example, "No scheduled CLI Routes: the v6 server ran none").
-- Every command block keeps its bold device line. Replace `<ZONE_HOST>` with the real host from
-  `references/where-commands-run.md`.
+- Every code block gets its own bold device line directly above it, even when the block before it
+  had the same one. A reader copies one block at a time, often from the middle of a step. Replace
+  `<ZONE_HOST>` with the real host from `references/where-commands-run.md`.
 - List each v6 credential the inventory found, by key path, under "Rotate". Never the value.
 - Put the results from step 8 in "What was verified".
 - Keep the template's plain style: short sentences, active voice, one instruction per sentence.
@@ -222,6 +241,10 @@ operator must make, with these options, and do not pick one for them:
 A route that is only run by hand (a one-time import, an index rebuild) needs no schedule. Say how
 to run it in the Zone: **Run on the application host, as `deployer`**, the `exec -T php` command
 above, from `/srv/gcgov/<slug>`.
+
+Read each scheduled route's controller against the v7 API. The v6 `.bat` entry always exited `0`,
+so a route that has thrown every night for months looked healthy. If the route would fail under v6
+and work under v7, its first v7 run processes the whole backlog at once. Say so in the document.
 
 ### Step 11. Commit and report
 

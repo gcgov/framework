@@ -134,7 +134,9 @@ APP_JWT_KEY_PATH="$KEYS/" vendor/bin/gf cert:generate-auth --count=1 --yes
 ls "$KEYS"     # guids.json, private-<guid>.pem, public-<guid>.pem
 ```
 
-Without PHP 8.4 on that computer, run the same command in the dev container:
+Without PHP 8.4 on that computer, run the same command in the dev container.
+
+**Run on your operator workstation, in the application checkout:**
 
 ```bash
 docker compose run --rm --user "$(id -u):$(id -g)" -v "$KEYS":/keys -e APP_JWT_KEY_PATH=/keys/ php vendor/bin/gf cert:generate-auth --count=1 --yes
@@ -275,6 +277,10 @@ Every signed-in user signs in once more after the switch. The token issuer chang
 
 Do this only after step 11 passes and every client in step 12 points at v7. Until then the v6
 site is the rollback path.
+
+Between step 10 and this step, v6 and v7 both run against the same database. That is safe for
+requests. It is not safe for scheduled CLI Routes: make sure each one runs in exactly one place
+(step 13) for the whole period.
 
 1. **On the v6 IIS server**, as your Windows administrator account: disable each Task Scheduler
    entry that calls `app\cli\prod.bat`. Then stop the IIS site or application for `{{V6_URL}}`.

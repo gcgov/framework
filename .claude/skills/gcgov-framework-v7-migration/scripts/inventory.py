@@ -178,6 +178,82 @@ def summarize_environment(path):
     return summary
 
 
+# Config paths gf migrate turns into Config References on its own (migrateCommand::EXTRACTED,
+# plus every mongoDatabases uri and database). Anything else that differs between Environments
+# stays a literal unless someone converts it.
+GF_MIGRATE_EXTRACTS = {
+    "type", "rootUrl", "basePath", "jwtAuth.redirectAfterLoginUrl", "jwtAuth.redirectAfterLogoutUrl",
+    "microsoft.clientId", "microsoft.clientSecret", "microsoft.tenant", "microsoft.driveId",
+    "payjunction.username", "payjunction.password", "payjunction.apiKey",
+    "email.SMTPUsername", "email.SMTPPassword",
+}
+REMOVED_BY_GF_MIGRATE = {"serverName", "cookieUrl", "phpPath", "baseUrl"}
+
+
+def flatten(node, trail=()):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            yield from flatten(value, trail + (str(key),))
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            yield from flatten(value, trail + (str(index),))
+    else:
+        yield ".".join(trail), node
+
+
+def credential_values(paths):
+    """Every credential value in the v6 config files. Returned for searching, never printed."""
+    values = set()
+    for path in paths:
+        for key_path, value in flatten(read_json(path) or {}):
+            if not isinstance(value, str) or len(value) < 6:
+                continue
+            if is_secret_key(key_path.split(".")[-1]):
+                values.add(value)
+                match = re.search(r"://[^/\s:@]+:([^/\s@]+)@", value)
+                if match and len(match.group(1)) >= 6:
+                    values.add(match.group(1))
+            elif looks_like_credential(value):
+                values.add(re.search(r"://[^/\s:@]+:([^/\s@]+)@", value).group(1))
+    return values
+
+
+def credential_copies(root, values, config_paths):
+    """Tracked files outside app/config that hold one of the v6 credential values."""
+    if not values:
+        return []
+    skip = {os.path.relpath(p, root) for p in config_paths}
+    listed = git(root, "ls-files").split("\n")
+    hits = []
+    for rel in listed:
+        if not rel or rel in skip or rel.startswith("vendor/") or rel == "composer.lock":
+            continue
+        text = read_text(os.path.join(root, rel))
+        for number, line in enumerate(text.splitlines(), 1):
+            if any(v in line for v in values):
+                hits.append(f"{rel}:{number}")
+    return hits
+
+
+def differing_literals(paths):
+    """Paths whose value differs between the environment variants but that gf migrate keeps literal."""
+    variants = [dict(flatten(read_json(p) or {})) for p in paths]
+    if len(variants) < 2:
+        return []
+    found = []
+    keys = set().union(*variants)
+    for key_path in sorted(keys):
+        if key_path in GF_MIGRATE_EXTRACTS or key_path.split(".")[0] in REMOVED_BY_GF_MIGRATE:
+            continue
+        if re.fullmatch(r"mongoDatabases\.\d+\.(uri|database)", key_path):
+            continue
+        seen = {repr(v.get(key_path)) for v in variants}
+        if len(seen) > 1:
+            secret = is_secret_key(key_path.split(".")[-1]) or any(looks_like_credential(v.get(key_path)) for v in variants)
+            found.append(key_path + (" (credential)" if secret else ""))
+    return found
+
+
 def detect_services(root):
     source = strip_php_comments(read_text(os.path.join(root, "app", "app.php")))
     services = [label for ns, label in SERVICE_NAMESPACES.items() if ns in source]
@@ -294,6 +370,12 @@ def git_facts(root):
     }
 
 
+def existing_v7_work(root):
+    """Branches or tags that suggest someone already started this migration."""
+    refs = git(root, "for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes", "refs/tags").split()
+    return [r for r in refs if re.search(r"v7|framework-?7|migrat", r, re.I)]
+
+
 def collect(root):
     root = os.path.abspath(root)
     environments = [summarize_environment(p) for p in environment_files(root)]
@@ -309,6 +391,7 @@ def collect(root):
             break
     key = app_key_from(reference.get("basePath"), reference.get("rootUrl"))
     services, singletons = detect_services(root)
+    env_paths = environment_files(root)
     return {
         "root": root,
         "git": git_facts(root),
@@ -335,6 +418,9 @@ def collect(root):
         "themeAssets": theme_assets(root),
         "phpIni": php_ini_facts(root),
         "codeFindings": scan_code(root),
+        "credentialCopiesOutsideAppConfig": credential_copies(root, credential_values(env_paths), env_paths),
+        "differsByEnvironmentButStaysLiteral": differing_literals([p for p in env_paths if os.path.basename(p) != "environment.json"]),
+        "existingV7Work": existing_v7_work(root),
         "v7ArtifactsAlreadyPresent": [p for p in ("config.json", ".env", "Dockerfile", "docker-compose.yml", ".github/workflows/release.yml") if os.path.exists(os.path.join(root, p))],
     }
 
@@ -345,6 +431,8 @@ def render(facts):
     names = facts["names"]
     add(f"# v6 inventory: `{names['slug']}`\n")
     add(f"Root: `{facts['root']}`  \nBranch: `{facts['git']['branch']}`  \nWorking tree clean: **{facts['git']['clean']}**\n")
+    if facts["existingV7Work"]:
+        add(f"> Refs that look like earlier v7 work: {', '.join('`'+r+'`' for r in facts['existingV7Work'])}. Compare before you start a parallel migration.\n")
     if facts["v7ArtifactsAlreadyPresent"]:
         add(f"> v7 files already exist: {', '.join('`'+p+'`' for p in facts['v7ArtifactsAlreadyPresent'])}. The migration may be partly done.\n")
 
@@ -384,6 +472,14 @@ def render(facts):
         add(f"Tracked in git: {', '.join('`'+t+'`' for t in tracked)}. "
             f"{facts['git']['commitsTouchingAppConfig']} commit(s) touch `app/config`. "
             "Every credential ever committed there is in the history: rotate it.\n")
+
+    if facts["credentialCopiesOutsideAppConfig"]:
+        add("**v6 credentials also appear outside app/config** (values not shown). Remove each, and rotate the credential: "
+            + ", ".join("`" + h + "`" for h in facts["credentialCopiesOutsideAppConfig"][:20]) + "\n")
+    if facts["differsByEnvironmentButStaysLiteral"]:
+        add("**Values that differ between the environment files but that `gf migrate` leaves as literals.** "
+            "It copies the local value into config.json. Make each one a Config Reference, or confirm it is the same everywhere: "
+            + ", ".join("`" + k + "`" for k in facts["differsByEnvironmentButStaysLiteral"]) + "\n")
 
     add("## Composer\n")
     for entry in facts["composer"]:
