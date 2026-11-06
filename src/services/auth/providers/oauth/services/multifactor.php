@@ -151,9 +151,9 @@ class multifactor {
 			throw new controllerException( 'Incorrect code provided', 400 );
 		}
 
-		//replay attack prevention
+		//replay attack prevention — the caller's mistake, not the server's, so not a 500
 		if( $timeslice===null || $timeslice<=$userMultifactor->timeslice ) {
-			throw new controllerException( 'This code has already been used', 500 );
+			throw new controllerException( 'This code has already been used', 401 );
 		}
 
 		//save the updated timeslice for future verification

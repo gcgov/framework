@@ -13,6 +13,7 @@ use gcgov\framework\services\auth\providers\oauth\models\verifyMfaCodeRequest;
 use gcgov\framework\services\auth\providers\oauth\models\verifyMfaSecretRequest;
 use gcgov\framework\services\auth\providers\oauth\services\multifactor;
 use gcgov\framework\services\formatting;
+use gcgov\framework\services\jwtAuth\jwtAuth;
 use gcgov\framework\services\log;
 
 /**
@@ -22,6 +23,18 @@ use gcgov\framework\services\log;
  * )
  */
 class auth implements controller {
+
+	/**
+	 * The methods a token carrying {@see jwtAuth::CLAIM_MFA_PENDING} may reach. Read by
+	 * the auth guard; everything else refuses such a token.
+	 *
+	 * @var string[]
+	 */
+	public const array MFA_COMPLETION_METHODS = [ 'verifyMfaSecret', 'verifyMfaCode' ];
+
+	/** What a disabled account is told, on every path that would otherwise sign it in. */
+	public const string INACTIVE_MESSAGE = 'This account has been disabled';
+
 
 	/**
 	 * Processed after lifecycle is complete with this instance
@@ -63,13 +76,20 @@ class auth implements controller {
 			"scopes_supported"                      => [
 				"login"
 			],
+			// Only what POST /auth/authorize actually implements. It identifies the client
+			// by a bare client_id and checks no secret, which is the "none" method; the
+			// implicit "token" response type and the assertion methods this document used
+			// to advertise were never accepted.
 			"response_types_supported"              => [
 				"code",
-				"token"
+			],
+			"grant_types_supported"                 => [
+				"authorization_code",
+				"password",
+				"refresh_token",
 			],
 			"token_endpoint_auth_methods_supported" => [
-				"client_secret_post",
-				"private_key_jwt",
+				"none",
 			],
 
 		];
@@ -188,10 +208,12 @@ class auth implements controller {
 		if( empty( $postData[ 'scope' ] ) || $postData[ 'scope' ]!='login' ) {
 			throw new controllerException( 'Invalid scope', 401 );
 		}
-		elseif( empty( $postData[ 'username' ] ) ) {
+		// A JSON body can carry an array or object here; verifyUsernamePassword() takes
+		// strings, and the TypeError that resulted was a 500 rather than this 401.
+		elseif( empty( $postData[ 'username' ] ) || !is_string( $postData[ 'username' ] ) ) {
 			throw new controllerException( 'Username required', 401 );
 		}
-		elseif( empty( $postData[ 'password' ] ) ) {
+		elseif( empty( $postData[ 'password' ] ) || !is_string( $postData[ 'password' ] ) ) {
 			throw new controllerException( 'Password required', 401 );
 		}
 
@@ -205,17 +227,21 @@ class auth implements controller {
 			throw new controllerException( 'Incorrect username or password', 401, $e );
 		}
 
+		self::assertActive( $user );
+
 		$authUser = \gcgov\framework\services\request::getAuthUser();
 
 		//force configuration of MFA if required
 		if( $user->mfaRequired ) {
 
-			//lock the user roles down but give them an authentication token so that they can verify their MFA
+			// A token that can only finish MFA: roles emptied, and marked so the guard
+			// refuses it everywhere but verifyMfaSecret / verifyMfaCode. Without the
+			// claim, emptying the roles restricted nothing on a route that names none.
 			$user->roles = [];
 			$authUser->setFromUser( $user );
 
-			$jwtService  = new \gcgov\framework\services\jwtAuth\jwtAuth();
-			$accessToken = $jwtService->createAccessToken( $authUser );
+			$jwtService  = new jwtAuth();
+			$accessToken = $jwtService->createAccessToken( $authUser, null, [ jwtAuth::CLAIM_MFA_PENDING => true ] );
 
 			if( !$user->mfaConfigured ) {
 				return multifactor::configureMfaResponse( $user->_id, $accessToken );
@@ -336,11 +362,31 @@ class auth implements controller {
 			throw new controllerException( 'Invalid code', 401 );
 		}
 
+		if( !is_string( $postData[ 'code' ] ) ) {
+			throw new controllerException( 'Invalid code', 401 );
+		}
+
 		//lookup auth code
 		try {
 			$userAuthorizationCode = \gcgov\framework\services\jwtAuth\models\userAuthorizationCode::getOne( $postData[ 'code' ] );
 		}
 		catch( modelException $e ) {
+			throw new controllerException( 'Invalid code', 401 );
+		}
+
+		// Single use, and only for as long as it was minted for. The code was neither
+		// consumed nor checked against its expiration, so one seen in a redirect URL —
+		// a log line, a referrer, browser history — exchanged for fresh tokens for as long
+		// as the row existed. Deleted before the tokens are minted so that a replay racing
+		// a slow exchange still finds nothing.
+		try {
+			\gcgov\framework\services\jwtAuth\models\userAuthorizationCode::delete( $userAuthorizationCode->_id );
+		}
+		catch( modelException $e ) {
+			throw new controllerException( 'Failed to consume the authorization code', 500, $e );
+		}
+
+		if( $userAuthorizationCode->expiration<new \DateTimeImmutable() ) {
 			throw new controllerException( 'Invalid code', 401 );
 		}
 
@@ -499,6 +545,10 @@ class auth implements controller {
 			return self::redirect( config::getJwtAuth()->redirectAfterLoginUrl . '?errorMessage=' . urlencode( $e->getMessage() ) );
 		}
 
+		if( !$user->getActive() ) {
+			return self::redirect( config::getJwtAuth()->redirectAfterLoginUrl . '?errorMessage=' . urlencode( self::INACTIVE_MESSAGE ) );
+		}
+
 		try {
 			$userIdRaw = $user->getId();
 			$userIdObject = $userIdRaw instanceof \MongoDB\BSON\ObjectId ? $userIdRaw : new \MongoDB\BSON\ObjectId( (string) $userIdRaw );
@@ -523,6 +573,24 @@ class auth implements controller {
 		}
 
 		return self::redirect( config::getJwtAuth()->redirectAfterLoginUrl . '?code=' . urlencode( (string)$authorizationCode->_id ) . $appendState );
+	}
+
+
+	/**
+	 * Refuse a user whose account is disabled.
+	 *
+	 * The user model has carried `active` since v6 and the user CRUD service lets an
+	 * administrator clear it, but no sign-in path read it: the password, refresh_token and
+	 * authorization_code grants, the HybridAuth return and the Microsoft exchange all
+	 * minted tokens for a disabled account. Checked wherever a token is about to be issued,
+	 * so a refresh token outlives a deactivation by at most one access token.
+	 *
+	 * @throws \gcgov\framework\exceptions\controllerException
+	 */
+	public static function assertActive( \gcgov\framework\interfaces\auth\user $user ): void {
+		if( !$user->getActive() ) {
+			throw new controllerException( self::INACTIVE_MESSAGE, 401 );
+		}
 	}
 
 
@@ -609,6 +677,8 @@ class auth implements controller {
 	}
 
 	private function createAccessTokenResponse( \gcgov\framework\interfaces\auth\user $user ): stdAuthResponse {
+		self::assertActive( $user );
+
 		//create token for valid user
 		$authUser = \gcgov\framework\services\request::getAuthUser();
 		$authUser->setFromUser( $user );
@@ -653,10 +723,10 @@ class auth implements controller {
 
 		$authUser = \gcgov\framework\services\request::getAuthUser();
 
-		multifactor::verifyMfaSecret( self::authUserObjectId( $authUser ), $verifyMfaSecretRequest->userMultifactorId, $verifyMfaSecretRequest->code );
+		// The saved user comes back from the verification; it was re-read here before.
+		$user = multifactor::verifyMfaSecret( self::authUserObjectId( $authUser ), $verifyMfaSecretRequest->userMultifactorId, $verifyMfaSecretRequest->code );
 
-		$userClassName = \gcgov\framework\services\request::getUserClassFqdn();
-		return new controllerDataResponse( $this->createAccessTokenResponse( $userClassName::getOne($authUser->userId) ) );
+		return new controllerDataResponse( $this->createAccessTokenResponse( $user ) );
 	}
 
 	/**
@@ -674,10 +744,8 @@ class auth implements controller {
 
 		$authUser = \gcgov\framework\services\request::getAuthUser();
 
-		$valid = multifactor::isMfaCodeCorrect( self::authUserObjectId( $authUser ), $verifyMfaCodeRequest->code );
-		if(!$valid) {
-			throw new controllerException('Invalid code', 500);
-		}
+		// Throws for a wrong or replayed code; it never returns false.
+		multifactor::isMfaCodeCorrect( self::authUserObjectId( $authUser ), $verifyMfaCodeRequest->code );
 
 		$userClassName = \gcgov\framework\services\request::getUserClassFqdn();
 		return new controllerDataResponse( $this->createAccessTokenResponse( $userClassName::getOne($authUser->userId) ) );

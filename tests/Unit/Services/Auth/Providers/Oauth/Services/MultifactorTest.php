@@ -100,4 +100,13 @@ final class MultifactorTest extends TestCase {
 		};
 	}
 
+
+	/** A replayed code is the caller's mistake; it used to be reported as a 500. */
+	public function testAReplayedCodeIsRefusedAsAClientErrorNotAServerFailure(): void {
+		$source = (string)file_get_contents( __DIR__ . '/../../../../../../../src/services/auth/providers/oauth/services/multifactor.php' );
+
+		$this->assertStringContainsString( "throw new controllerException( 'This code has already been used', 401 );", $source );
+		$this->assertStringNotContainsString( "'This code has already been used', 500", $source );
+	}
+
 }

@@ -92,6 +92,30 @@ final class CommandsTest extends TestCase {
 		$this->assertFileExists( $certificateDir . '/.gitignore', 'gitignore is copied from the jwtAuth service directory' );
 	}
 
+	/**
+	 * The private key signs every token the application issues. Written under the process
+	 * umask it was readable by every account on the host.
+	 */
+	public function testCertGenerateAuthWritesPrivateKeysOwnerOnly(): void {
+		if( !extension_loaded( 'openssl' ) ) {
+			$this->markTestSkipped( 'ext-openssl not loaded' );
+		}
+		if( DIRECTORY_SEPARATOR==='\\' ) {
+			$this->markTestSkipped( 'POSIX permission bits do not apply on Windows' );
+		}
+
+		$commandTester = new CommandTester( new certGenerateAuthCommand() );
+		$this->assertSame( 0, $commandTester->execute( [ '--count' => '1', '--yes' => true ] ) );
+
+		$certificateDir = $this->tempRootDir . '/srv/jwtCertificates';
+		foreach( glob( $certificateDir . '/private-*.pem' ) ?: [] as $privateKey ) {
+			clearstatcache( true, $privateKey );
+			$this->assertSame( 0600, fileperms( $privateKey ) & 0777, basename( $privateKey ) . ' must be readable by its owner only' );
+		}
+		$this->assertNotEmpty( glob( $certificateDir . '/private-*.pem' ) ?: [] );
+	}
+
+
 	/** A configured jwtAuth.keyPath wins, and a relative one anchors to the app root. */
 	public function testCertGenerateAuthHonorsAConfiguredKeyPath(): void {
 		if( !extension_loaded( 'openssl' ) ) {
