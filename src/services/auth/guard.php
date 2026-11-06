@@ -33,6 +33,10 @@ final class guard {
 				throw new routeException( 'Token parsing failed', 401 );
 			}
 
+			if( $parsedToken->claims()->get( \gcgov\framework\services\jwtAuth\jwtAuth::CLAIM_MFA_PENDING )===true && !self::completesMfa( $routeHandler ) ) {
+				throw new routeException( 'Multi-factor authentication must be completed before this token can be used', 401 );
+			}
+
 			$tokenData   = $parsedToken->claims()->get( 'data' );
 			$tokenScopes = (array)$parsedToken->claims()->get( 'scope' );
 
@@ -63,6 +67,24 @@ final class guard {
 		// This guard's job is the part only it can do: validate the token and establish the
 		// user the router then checks.
 		return true;
+	}
+
+
+	/**
+	 * Whether the route is one of the two that finish multi-factor authentication.
+	 *
+	 * The password grant hands an account that still owes its second factor a restricted
+	 * token, so the client can enrol or verify. Emptying that token's roles did not
+	 * restrict it: every authenticated route with no requiredRoles — an application's
+	 * own, /auth/out, and /auth/fileToken, which re-minted it without the restriction —
+	 * accepted it, and the second factor was optional in practice. The token now carries
+	 * {@see \gcgov\framework\services\jwtAuth\jwtAuth::CLAIM_MFA_PENDING}, and this is
+	 * the only place it is honoured.
+	 */
+	public static function completesMfa( \gcgov\framework\models\routeHandler $routeHandler ): bool {
+		$mfaController = \gcgov\framework\services\auth\providers\oauth\controllers\auth::class;
+
+		return ltrim( $routeHandler->class, '\\' )===$mfaController && in_array( $routeHandler->method, \gcgov\framework\services\auth\providers\oauth\controllers\auth::MFA_COMPLETION_METHODS, true );
 	}
 
 

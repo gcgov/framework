@@ -52,7 +52,7 @@ final class certGenerateAuthCommand extends Command {
 			}
 		}
 
-		if( !is_dir( $certificateDir ) && !mkdir( $certificateDir, 0775, true ) ) {
+		if( !is_dir( $certificateDir ) && !mkdir( $certificateDir, 0750, true ) ) {
 			throw new cliException( 'Failed to create directory ' . $certificateDir );
 		}
 
@@ -96,8 +96,14 @@ final class certGenerateAuthCommand extends Command {
 				throw new cliException( 'openssl_pkey_get_details() failed: ' . (string)openssl_error_string() );
 			}
 
-			file_put_contents( $certificateDir . '/private-' . $keyGuid . '.pem', $privateKeyPem );
-			file_put_contents( $certificateDir . '/public-' . $keyGuid . '.pem', $keyDetails[ 'key' ] );
+			$privateKeyPath = $certificateDir . '/private-' . $keyGuid . '.pem';
+			if( file_put_contents( $privateKeyPath, $privateKeyPem )===false || file_put_contents( $certificateDir . '/public-' . $keyGuid . '.pem', $keyDetails[ 'key' ] )===false ) {
+				throw new cliException( 'Failed writing keypair ' . $keyGuid . ' to ' . $certificateDir );
+			}
+			// The private key signs every token this application issues. Written under the
+			// process umask it was readable by every account on the host; owner-only is the
+			// permission a signing key gets. A no-op on Windows, where ACLs apply instead.
+			chmod( $privateKeyPath, 0600 );
 
 			$io->text( 'Generated keypair ' . $keyGuid );
 		}

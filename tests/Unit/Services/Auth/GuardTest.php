@@ -7,6 +7,10 @@ namespace gcgov\framework\tests\Unit\Services\Auth;
 use gcgov\framework\exceptions\routeException;
 use gcgov\framework\models\routeHandler;
 use gcgov\framework\services\auth\guard;
+use gcgov\framework\services\auth\providers\oauth\controllers\auth as oauthController;
+use gcgov\framework\services\jwtAuth\jwtAuth;
+use gcgov\framework\services\request;
+use gcgov\framework\tests\Support\generatesJwtKeys;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -26,6 +30,8 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(guard::class)]
 final class GuardTest extends TestCase {
 
+	use generatesJwtKeys;
+
 	/** @var array<string, mixed> */
 	private array $server = [];
 	/** @var array<string, mixed> */
@@ -35,12 +41,16 @@ final class GuardTest extends TestCase {
 		$this->server = $_SERVER;
 		$this->get    = $_GET;
 		unset( $_SERVER[ 'HTTP_AUTHORIZATION' ], $_GET[ 'fileAccessToken' ] );
+		$this->seedConfigWithJwtKeys();
+		request::getAuthUser()->setFromJwtToken( [], [] );
 	}
 
 
 	protected function tearDown(): void {
 		$_SERVER = $this->server;
 		$_GET    = $this->get;
+		request::getAuthUser()->setFromJwtToken( [], [] );
+		$this->restoreConfig();
 	}
 
 
@@ -124,6 +134,78 @@ final class GuardTest extends TestCase {
 
 		self::assertStringContainsString( 'request::getAuthUser()', $source );
 		self::assertStringContainsString( 'setFromJwtToken', $source );
+	}
+
+
+	public function testAValidTokenAuthenticatesAndEstablishesTheUser(): void {
+		$_SERVER[ 'HTTP_AUTHORIZATION' ] = 'Bearer ' . $this->mint( [ 'Widget.Read' ] )->toString();
+
+		$this->assertTrue( guard::authenticate( $this->routeHandler() ) );
+		$this->assertSame( 'abc123', request::getAuthUser()->userId );
+		$this->assertSame( [ 'Widget.Read' ], request::getAuthUser()->roles );
+	}
+
+
+	/**
+	 * The token the password grant issues while MFA is still owed. Emptying its roles
+	 * restricted nothing on a route that declares none — an application's own routes,
+	 * /auth/out and /auth/fileToken all took it — so it now carries a claim the guard
+	 * honours everywhere but the two routes that complete MFA.
+	 */
+	public function testMfaPendingTokenIsRefusedOnOrdinaryRoutes(): void {
+		$_SERVER[ 'HTTP_AUTHORIZATION' ] = 'Bearer ' . $this->mint( [], mfaPending: true )->toString();
+
+		try {
+			guard::authenticate( new routeHandler( '\\app\\controllers\\widget', 'getAll', true, [], false ) );
+			$this->fail( 'a token still owing its second factor must not authenticate an ordinary route' );
+		}
+		catch( routeException $e ) {
+			$this->assertSame( 401, $e->getCode() );
+			$this->assertStringContainsString( 'Multi-factor', $e->getMessage() );
+		}
+		$this->assertSame( '', request::getAuthUser()->userId, 'no user is established for a refused token' );
+	}
+
+
+	public function testMfaPendingTokenIsRefusedOnTheFileTokenRoute(): void {
+		$_SERVER[ 'HTTP_AUTHORIZATION' ] = 'Bearer ' . $this->mint( [], mfaPending: true )->toString();
+
+		$this->expectException( routeException::class );
+		$this->expectExceptionCode( 401 );
+		guard::authenticate( new routeHandler( '\\gcgov\\framework\\services\\auth\\controllers\\auth', 'fileToken', true, [], false ) );
+	}
+
+
+	public function testMfaPendingTokenIsAcceptedOnTheMfaCompletionRoutes(): void {
+		foreach( oauthController::MFA_COMPLETION_METHODS as $method ) {
+			$_SERVER[ 'HTTP_AUTHORIZATION' ] = 'Bearer ' . $this->mint( [], mfaPending: true )->toString();
+
+			$this->assertTrue( guard::authenticate( new routeHandler( '\\' . oauthController::class, $method, true, [], false ) ), $method );
+			$this->assertSame( 'abc123', request::getAuthUser()->userId );
+		}
+	}
+
+
+	public function testCompletesMfaRecognisesOnlyTheMfaMethodsOfTheOauthController(): void {
+		$this->assertTrue( guard::completesMfa( new routeHandler( '\\' . oauthController::class, 'verifyMfaCode', true, [], false ) ) );
+		$this->assertTrue( guard::completesMfa( new routeHandler( oauthController::class, 'verifyMfaSecret', true, [], false ) ), 'with or without the leading backslash' );
+		$this->assertFalse( guard::completesMfa( new routeHandler( '\\' . oauthController::class, 'out', true, [], false ) ) );
+		$this->assertFalse( guard::completesMfa( new routeHandler( '\\app\\controllers\\auth', 'verifyMfaCode', true, [], false ) ), 'an application controller with the same method name is not the MFA flow' );
+	}
+
+
+	/** @param string[] $roles */
+	private function mint( array $roles, bool $mfaPending = false ): \Lcobucci\JWT\Token\Plain {
+		$authUser         = request::getAuthUser();
+		$authUser->userId = 'abc123';
+		$authUser->roles  = $roles;
+
+		$token = ( new jwtAuth() )->createAccessToken( $authUser, null, $mfaPending ? [ jwtAuth::CLAIM_MFA_PENDING => true ] : [] );
+
+		// The guard must establish the user from the token, not find it already there.
+		$authUser->setFromJwtToken( [], [] );
+
+		return $token;
 	}
 
 }

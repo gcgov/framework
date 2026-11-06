@@ -35,6 +35,7 @@ class auth implements controller {
 		$microsoftAuthService = new \andrewsauder\microsoftServices\auth( $microsoftConfig ); // \gcgov\framework\services\microsoft\auth();
 		$tokenInfo            = $microsoftAuthService->verify();
 		$user                 = $this->lookupUserMicrosoftTokenInfo( $tokenInfo );
+		\gcgov\framework\services\auth\providers\oauth\controllers\auth::assertActive( $user );
 
 		//convert \app\models\user to authUser singleton
 		$authUser = \gcgov\framework\services\request::getAuthUser();
