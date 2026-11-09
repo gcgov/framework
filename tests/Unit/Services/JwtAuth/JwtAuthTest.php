@@ -118,6 +118,27 @@ final class JwtAuthTest extends TestCase {
 	}
 
 
+	public function testSessionClaimIsWrittenToTheAccessToken(): void {
+		$token = ( new jwtAuth() )->createAccessToken( $this->authUser(), null, [ jwtAuth::CLAIM_SESSION_ID => '507f1f77bcf86cd799439011' ] );
+
+		$this->assertSame( 'sid', jwtAuth::CLAIM_SESSION_ID, 'the OpenID Connect session ID claim' );
+		$this->assertSame( '507f1f77bcf86cd799439011', $token->claims()->get( jwtAuth::CLAIM_SESSION_ID ) );
+	}
+
+
+	/**
+	 * A session or user id that is not an ObjectId names no refresh token. It returns false
+	 * before any database call, rather than throwing from `new ObjectId()`.
+	 */
+	public function testRevokingAMalformedSessionRevokesNothing(): void {
+		$jwtService = new jwtAuth();
+
+		$this->assertFalse( $jwtService->revokeSessionRefreshToken( '', '507f1f77bcf86cd799439011' ) );
+		$this->assertFalse( $jwtService->revokeSessionRefreshToken( 'not-an-object-id', '507f1f77bcf86cd799439011' ) );
+		$this->assertFalse( $jwtService->revokeSessionRefreshToken( '507f1f77bcf86cd799439011', 'abc123' ) );
+	}
+
+
 	public function testRegisteredClaimsCannotBeOverriddenThroughAdditionalClaims(): void {
 		$this->expectException( \InvalidArgumentException::class );
 		( new jwtAuth() )->createAccessToken( $this->authUser(), null, [ 'scope' => [ 'Admin' ] ] );

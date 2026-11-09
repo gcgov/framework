@@ -35,6 +35,13 @@ class authUser {
 	 */
 	public array $roles = [];
 
+	/**
+	 * The sign-in session of the access token that authenticated this request: its
+	 * {@see \gcgov\framework\services\jwtAuth\jwtAuth::CLAIM_SESSION_ID} claim, or ''.
+	 * Private so it stays out of JSON output, the OpenAPI schema and the TypeScript type.
+	 */
+	private string $sessionId = '';
+
 	private static $instance;
 
 	private function __construct() {
@@ -97,6 +104,7 @@ class authUser {
 		$this->name             = $tokenUser[ 'name' ] ?? '';
 		$this->email            = $tokenUser[ 'email' ] ?? '';
 		$this->roles            = self::normalizeRoles( $tokenScopes );
+		$this->sessionId        = '';
 
 		return self::getInstance();
 	}
@@ -114,6 +122,23 @@ class authUser {
 		$this->username         = $user->getUsername();
 		$this->email            = $user->getEmail();
 		$this->roles            = self::normalizeRoles( $user->getRoles() );
+		$this->sessionId        = '';
+		return self::getInstance();
+	}
+
+
+	public function getSessionId(): string {
+		return $this->sessionId;
+	}
+
+
+	/**
+	 * Set by the auth guard after setFromJwtToken(). A separate setter, not a third
+	 * setFromJwtToken() parameter, so an application subclass that overrides
+	 * setFromJwtToken() keeps a compatible signature.
+	 */
+	public function setSessionId( string $sessionId ): self {
+		$this->sessionId = $sessionId;
 		return self::getInstance();
 	}
 

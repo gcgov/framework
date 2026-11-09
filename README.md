@@ -375,6 +375,8 @@ section of `config.json` — presence enables it, and the block's contents are i
 
 * **Authentication** `services.auth` — one service, two providers.
     * `provider: "oauth"` — full OAuth server: password, third-party and authorization-code grants, MFA.
+      `GET /auth/out` signs out one session: it revokes the refresh token issued with the caller's
+      access token, and the user's other devices stay signed in.
     * `provider: "msFront"` — exchange a Microsoft token the front end already holds for an app JWT.
     * Either way you get `/.well-known/jwks.json`, `/auth/fileToken`, and a JWT guard over every
       `authentication: true` route.

@@ -18,6 +18,18 @@ class jwtAuth {
 	 */
 	public const string CLAIM_MFA_PENDING = 'mfaPending';
 
+	/**
+	 * Claim that ties an access token to the refresh token minted beside it. Its value is
+	 * the `_id` of that refresh token's userRefreshToken row (the refresh token's own `sub`).
+	 * The name is the OpenID Connect session ID claim.
+	 *
+	 * The guard records it on the request's authUser, and sign-out revokes that one row with
+	 * {@see self::revokeSessionRefreshToken()}. The user's refresh tokens on other devices
+	 * and browsers stay valid. Only access tokens minted with a refresh token carry it: a
+	 * file token, an MFA-pending token and a Microsoft-exchange token do not.
+	 */
+	public const string CLAIM_SESSION_ID = 'sid';
+
 	/** @var string[] */
 	public array $guids = [];
 
@@ -350,6 +362,36 @@ class jwtAuth {
 
 		\gcgov\framework\services\jwtAuth\models\userRefreshToken::delete( $parsedToken->claims()->get( 'sub' ) );
 
+	}
+
+
+	/**
+	 * Revoke the refresh token of one sign-in session, and no other.
+	 *
+	 * The row is deleted only when it is both the session named and owned by $userId, so a
+	 * session ID never revokes another user's token. Both values come from a verified access
+	 * token, but a stale or malformed one is not an error: there is nothing left to revoke.
+	 *
+	 * @param string $sessionId The access token's {@see self::CLAIM_SESSION_ID} claim.
+	 * @param string $userId    The signed-in user's id.
+	 *
+	 * @return bool True when a refresh token was revoked.
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public function revokeSessionRefreshToken( string $sessionId, string $userId ): bool {
+		if( !self::isObjectIdString( $sessionId ) || !self::isObjectIdString( $userId ) ) {
+			return false;
+		}
+
+		return \gcgov\framework\services\jwtAuth\models\userRefreshToken::revoke(
+			new \MongoDB\BSON\ObjectId( $sessionId ),
+			new \MongoDB\BSON\ObjectId( $userId )
+		);
+	}
+
+
+	private static function isObjectIdString( string $value ): bool {
+		return preg_match( '/^[0-9a-f]{24}$/i', $value )===1;
 	}
 
 

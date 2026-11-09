@@ -512,6 +512,11 @@ activation and configuration are one statement. See ADR 0003.
 | `services.userCrud` | `\gcgov\framework\services\userCrud` | `/user` CRUD over the resolved user model (`User.Read` / `User.Write`). |
 | `services.documentation` | `\gcgov\framework\services\documentation` | `GET /documentation.yaml` (OpenAPI from annotations). |
 
+`GET /auth/out` (provider `oauth`) revokes **one** refresh token: the access token carries the
+`sid` claim (`jwtAuth::CLAIM_SESSION_ID`), the `_id` of the refresh token minted beside it. The guard
+records it with `authUser::setSessionId()`, and `out()` deletes that row only if it also belongs to
+the signed-in user. The user's other sessions stay valid.
+
 There is **one** auth service with two providers, so two cannot be active at once — it is unrepresentable
 rather than merely discouraged.
 

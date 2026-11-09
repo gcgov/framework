@@ -16,6 +16,26 @@ final class UserRefreshTokenTest extends TestCase {
 		unset( $_SERVER[ 'HTTP_USER_AGENT' ], $_SERVER[ 'REMOTE_ADDR' ] );
 	}
 
+	/**
+	 * revoke() deletes one row, and only the owner's: a session id alone must never revoke
+	 * another user's refresh token, and nothing here may widen into deleting all of them.
+	 */
+	public function testRevokeDeletesOneRowScopedToItsOwner(): void {
+		$method = new \ReflectionMethod( userRefreshToken::class, 'revoke' );
+		$this->assertTrue( $method->isStatic() );
+		$this->assertSame( 'bool', (string)$method->getReturnType() );
+
+		$source = implode( '', array_slice(
+			(array)file( (string)$method->getFileName() ),
+			$method->getStartLine() - 1,
+			$method->getEndLine() - $method->getStartLine() + 1
+		) );
+		$this->assertStringContainsString( "'_id'    => \$_id", $source );
+		$this->assertStringContainsString( "'userId' => \$userId", $source );
+		$this->assertStringContainsString( '->deleteOne(', $source );
+		$this->assertStringNotContainsString( 'deleteMany', $source );
+	}
+
 	public function testCollectionConstantsAreDefined(): void {
 		$this->assertSame( 'userRefreshToken', userRefreshToken::_COLLECTION );
 		$this->assertSame( 'user refresh token', userRefreshToken::_HUMAN );

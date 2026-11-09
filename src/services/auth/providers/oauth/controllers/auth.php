@@ -299,7 +299,19 @@ class auth implements controller {
 			setcookie( $key, $value, $past, '/' );
 		}
 
-		//TODO: burn refresh token
+		// Revoke the refresh token minted with this access token, so it cannot mint new
+		// access tokens after sign-out. Only this session's token: the user's other devices
+		// and browsers stay signed in. An access token from an earlier release has no session
+		// claim, so there is nothing to revoke, and its refresh token lives out its expiry.
+		$authUser = \gcgov\framework\services\request::getAuthUser();
+		if( $authUser->getSessionId()!=='' ) {
+			try {
+				( new jwtAuth() )->revokeSessionRefreshToken( $authUser->getSessionId(), $authUser->userId );
+			}
+			catch( modelException|\gcgov\framework\exceptions\serviceException|\gcgov\framework\exceptions\configException $e ) {
+				throw new controllerException( 'Failed to revoke the refresh token', 500, $e );
+			}
+		}
 
 		return new controllerDataResponse( [] );
 	}
@@ -690,8 +702,10 @@ class auth implements controller {
 		// controllerException branch never ran.
 		try {
 			$jwtService   = new \gcgov\framework\services\jwtAuth\jwtAuth();
-			$accessToken  = $jwtService->createAccessToken( $authUser );
+			// The refresh token first: the access token carries its row id as the session
+			// claim, which is how out() revokes this session's refresh token and no other.
 			$refreshToken = $jwtService->createRefreshToken( $authUser );
+			$accessToken  = $jwtService->createAccessToken( $authUser, null, [ jwtAuth::CLAIM_SESSION_ID => $refreshToken->claims()->get( 'sub' ) ] );
 		}
 		catch( \Exception $e ) {
 			throw new controllerException( 'Server failed to create authentication tokens', 500, $e );

@@ -42,6 +42,9 @@ final class guard {
 
 			$authUser = \gcgov\framework\services\request::getAuthUser();
 			$authUser->setFromJwtToken( is_array( $tokenData ) ? $tokenData : [], $tokenScopes );
+
+			$sessionId = $parsedToken->claims()->get( \gcgov\framework\services\jwtAuth\jwtAuth::CLAIM_SESSION_ID );
+			$authUser->setSessionId( is_string( $sessionId ) ? $sessionId : '' );
 		}
 		catch( serviceException $e ) {
 			//JWT uses invalid kid/guid

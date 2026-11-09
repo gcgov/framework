@@ -50,6 +50,7 @@ final class GuardTest extends TestCase {
 		$_SERVER = $this->server;
 		$_GET    = $this->get;
 		request::getAuthUser()->setFromJwtToken( [], [] );
+		request::getAuthUser()->setSessionId( '' );
 		$this->restoreConfig();
 	}
 
@@ -186,6 +187,32 @@ final class GuardTest extends TestCase {
 	}
 
 
+	/** Sign-out revokes the refresh token this claim names, so the guard must carry it through. */
+	public function testGuardRecordsTheSessionClaimOnTheAuthUser(): void {
+		$_SERVER[ 'HTTP_AUTHORIZATION' ] = 'Bearer ' . $this->mint( [], sessionId: '507f1f77bcf86cd799439011' )->toString();
+
+		$this->assertTrue( guard::authenticate( $this->routeHandler() ) );
+		$this->assertSame( '507f1f77bcf86cd799439011', request::getAuthUser()->getSessionId() );
+	}
+
+
+	public function testATokenWithoutASessionClaimLeavesNoSession(): void {
+		request::getAuthUser()->setSessionId( '507f1f77bcf86cd799439011' );
+		$_SERVER[ 'HTTP_AUTHORIZATION' ] = 'Bearer ' . $this->mint( [] )->toString();
+
+		$this->assertTrue( guard::authenticate( $this->routeHandler() ) );
+		$this->assertSame( '', request::getAuthUser()->getSessionId(), 'nothing is carried over from an earlier request' );
+	}
+
+
+	public function testANonStringSessionClaimIsIgnored(): void {
+		$_SERVER[ 'HTTP_AUTHORIZATION' ] = 'Bearer ' . $this->mint( [], sessionId: [ 'not', 'a', 'string' ] )->toString();
+
+		$this->assertTrue( guard::authenticate( $this->routeHandler() ) );
+		$this->assertSame( '', request::getAuthUser()->getSessionId() );
+	}
+
+
 	public function testCompletesMfaRecognisesOnlyTheMfaMethodsOfTheOauthController(): void {
 		$this->assertTrue( guard::completesMfa( new routeHandler( '\\' . oauthController::class, 'verifyMfaCode', true, [], false ) ) );
 		$this->assertTrue( guard::completesMfa( new routeHandler( oauthController::class, 'verifyMfaSecret', true, [], false ) ), 'with or without the leading backslash' );
@@ -195,12 +222,17 @@ final class GuardTest extends TestCase {
 
 
 	/** @param string[] $roles */
-	private function mint( array $roles, bool $mfaPending = false ): \Lcobucci\JWT\Token\Plain {
+	private function mint( array $roles, bool $mfaPending = false, mixed $sessionId = null ): \Lcobucci\JWT\Token\Plain {
 		$authUser         = request::getAuthUser();
 		$authUser->userId = 'abc123';
 		$authUser->roles  = $roles;
 
-		$token = ( new jwtAuth() )->createAccessToken( $authUser, null, $mfaPending ? [ jwtAuth::CLAIM_MFA_PENDING => true ] : [] );
+		$claims = $mfaPending ? [ jwtAuth::CLAIM_MFA_PENDING => true ] : [];
+		if( $sessionId!==null ) {
+			$claims[ jwtAuth::CLAIM_SESSION_ID ] = $sessionId;
+		}
+
+		$token = ( new jwtAuth() )->createAccessToken( $authUser, null, $claims );
 
 		// The guard must establish the user from the token, not find it already there.
 		$authUser->setFromJwtToken( [], [] );

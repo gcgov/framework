@@ -137,6 +137,34 @@ final class AuthControllerTest extends TestCase {
 	}
 
 
+	/** The access token names its own refresh token, so sign-out can revoke exactly that one. */
+	public function testTheAccessTokenCarriesTheSessionOfTheRefreshTokenMintedWithIt(): void {
+		$source = (string)file_get_contents( __DIR__ . '/../../../../../../../src/services/auth/providers/oauth/controllers/auth.php' );
+
+		$refresh = strpos( $source, '$refreshToken = $jwtService->createRefreshToken( $authUser );' );
+		$access  = strpos( $source, '$accessToken  = $jwtService->createAccessToken( $authUser, null, [ jwtAuth::CLAIM_SESSION_ID => $refreshToken->claims()->get( \'sub\' ) ] );' );
+
+		$this->assertNotFalse( $refresh );
+		$this->assertNotFalse( $access );
+		$this->assertLessThan( $access, $refresh, 'the refresh token is minted first, so its id is known' );
+	}
+
+
+	/** Sign-out revokes this session's refresh token: one row, never all of the user's. */
+	public function testSignOutRevokesOnlyThisSessionsRefreshToken(): void {
+		$method = new \ReflectionMethod( auth::class, 'out' );
+		$source = implode( '', array_slice(
+			(array)file( (string)$method->getFileName() ),
+			$method->getStartLine() - 1,
+			$method->getEndLine() - $method->getStartLine() + 1
+		) );
+
+		$this->assertStringContainsString( 'revokeSessionRefreshToken( $authUser->getSessionId(), $authUser->userId )', $source );
+		$this->assertStringNotContainsString( 'TODO', $source );
+		$this->assertStringNotContainsString( 'deleteMany', $source );
+	}
+
+
 	public function testOpenIdAdvertisesOnlyWhatTheTokenEndpointImplements(): void {
 		$data = ( new auth() )->openId()->getData();
 
