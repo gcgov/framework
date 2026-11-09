@@ -541,7 +541,7 @@ needing routes of its own puts them in `\app\router`, which already runs first i
 ---
 
 ## 14. Build / test / CI
-- Install: `composer install`. PHP `>=8.4`; ext `mongodb`, `sodium`, `fileinfo`, `pdo`.
+- Install: `composer install`. PHP `>=8.4`; ext `mongodb`, `sodium`, `openssl`, `fileinfo`, `pdo`.
 - Static analysis: `composer phpstan` (PHPStan; `phpstan-stubs/` provides stubs for optional deps).
 - Tests: `composer test` (PHPUnit; `tests/` mirrors `src/`, uses `tests/Shims/MongoDBShims.php` so unit tests
   run without a live Mongo). `composer ci` = phpstan + test.

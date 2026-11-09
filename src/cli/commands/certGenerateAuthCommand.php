@@ -56,7 +56,7 @@ final class certGenerateAuthCommand extends Command {
 			throw new cliException( 'Failed to create directory ' . $certificateDir );
 		}
 
-		// keep the certificate directory out of git, same as create-jwt-keys.ps1
+		// keep the certificate directory out of git, as v6's create-jwt-keys.ps1 did
 		$gitignoreSource = __DIR__ . '/../../services/jwtAuth/jwtCertificates/.gitignore';
 		if( !file_exists( $certificateDir . '/.gitignore' ) && file_exists( $gitignoreSource ) ) {
 			copy( $gitignoreSource, $certificateDir . '/.gitignore' );
@@ -108,7 +108,7 @@ final class certGenerateAuthCommand extends Command {
 			$io->text( 'Generated keypair ' . $keyGuid );
 		}
 
-		// UTF-8 without BOM, matching create-jwt-keys.ps1 output
+		// UTF-8 without BOM, matching the output of v6's create-jwt-keys.ps1
 		file_put_contents( $certificateDir . '/guids.json', json_encode( $guids, JSON_PRETTY_PRINT ) );
 
 		$io->success( 'Generated ' . $count . ' JWT signing keypair(s) in ' . $certificateDir );

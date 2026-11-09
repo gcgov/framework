@@ -17,7 +17,8 @@ corresponding front end application.
 Framework package requirements from `composer.json`:
 
 * PHP `>=8.4`
-* PHP extensions: `ext-mongodb`, `ext-fileinfo`, `ext-pdo`
+* PHP extensions: `ext-mongodb`, `ext-fileinfo`, `ext-pdo`, `ext-sodium`, `ext-openssl`
+* Optional: `ext-zip`, which `gf chrome:install` and `gf chrome:update` need
 
 Install dependencies with Composer:
 
@@ -224,7 +225,8 @@ gf user:create --email=… --roles=…  # create the account you sign in as (the
 
 Removed in v7: `deploy` (a Release is an immutable image pinned by digest — see ADR 0002),
 `db:restore` (it required production credentials on every workstation), and `setup`
-(replaced by the non-interactive `init`).
+(replaced by the non-interactive `init`). The framework no longer ships the PowerShell scripts
+`scripts/setup.ps1` and `scripts/create-jwt-keys.ps1`. Use `gf init` and `gf cert:generate-auth`.
 
 Tab completion is available for bash/zsh/fish (`gf completion --help`) and PowerShell
 (`gf completion:powershell`), including dynamic completion of the app's CLI route names.
