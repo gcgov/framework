@@ -97,7 +97,65 @@ final class AuthUserTest extends TestCase {
 	}
 
 	public function testSetFromUserPopulatesFromInterface(): void {
-		$source = new class implements \gcgov\framework\interfaces\auth\user {
+		$source = self::user();
+
+		$auth = authUser::getInstance();
+		$returned = $auth->setFromUser( $source );
+
+		$this->assertSame( $auth, $returned );
+		$this->assertSame( 'u-1', $auth->userId );
+		$this->assertSame( 'Bob', $auth->name );
+		$this->assertSame( 'bob', $auth->username );
+		$this->assertSame( 'oauth-1', $auth->externalId );
+		$this->assertSame( 'Provider', $auth->externalProvider );
+		$this->assertSame( 'bob@example.com', $auth->email );
+		$this->assertSame( [ 'Reader' ], $auth->roles );
+	}
+
+	public function testSessionIdIsSetSeparatelyAndResetByBothSetters(): void {
+		$auth = authUser::getInstance();
+
+		$auth->setFromJwtToken( [ 'userId' => 'u-1' ], [] );
+		$this->assertSame( '', $auth->getSessionId(), 'a token with no session claim leaves it empty' );
+
+		$this->assertSame( $auth, $auth->setSessionId( '507f1f77bcf86cd799439011' ) );
+		$this->assertSame( '507f1f77bcf86cd799439011', $auth->getSessionId() );
+
+		$auth->setFromJwtToken( [ 'userId' => 'u-2' ], [] );
+		$this->assertSame( '', $auth->getSessionId(), "a later token does not inherit the earlier token's session" );
+
+		$auth->setSessionId( '507f1f77bcf86cd799439011' );
+		$auth->setFromUser( self::user() );
+		$this->assertSame( '', $auth->getSessionId(), 'a fresh sign-in starts without a session' );
+	}
+
+	/** The session id is private, so it stays out of JSON output, OpenAPI and the TypeScript type. */
+	public function testSessionIdIsNotPublic(): void {
+		$auth = authUser::getInstance();
+		$auth->setSessionId( '507f1f77bcf86cd799439011' );
+
+		$this->assertTrue( ( new \ReflectionProperty( authUser::class, 'sessionId' ) )->isPrivate() );
+		$this->assertStringNotContainsString( '507f1f77bcf86cd799439011', (string)json_encode( $auth ) );
+		$this->assertArrayNotHasKey( 'sessionId', $auth->toJwtData() );
+
+		$auth->setSessionId( '' );
+	}
+
+	public function testSleepReturnsEmptyArray(): void {
+		$this->assertSame( [], authUser::getInstance()->__sleep() );
+	}
+
+	public function testConstructorIsPrivate(): void {
+		$reflection = new \ReflectionMethod( authUser::class, '__construct' );
+		$this->assertTrue( $reflection->isPrivate() );
+	}
+
+	public function testCloneIsFinal(): void {
+		$this->assertTrue( ( new \ReflectionMethod( authUser::class, '__clone' ) )->isFinal() );
+	}
+
+	private static function user(): \gcgov\framework\interfaces\auth\user {
+		return new class implements \gcgov\framework\interfaces\auth\user {
 			public function getId(): string|int|\MongoDB\BSON\ObjectId { return 'u-1'; }
 			public function getName(): string { return 'Bob'; }
 			public function getUsername(): string { return 'bob'; }
@@ -116,31 +174,6 @@ final class AuthUserTest extends TestCase {
 			public static function getOne( \MongoDB\BSON\ObjectId|string|int $_id ): self { throw new \BadMethodCallException(); }
 			public static function save( object &$object ): mixed { return null; }
 		};
-
-		$auth = authUser::getInstance();
-		$returned = $auth->setFromUser( $source );
-
-		$this->assertSame( $auth, $returned );
-		$this->assertSame( 'u-1', $auth->userId );
-		$this->assertSame( 'Bob', $auth->name );
-		$this->assertSame( 'bob', $auth->username );
-		$this->assertSame( 'oauth-1', $auth->externalId );
-		$this->assertSame( 'Provider', $auth->externalProvider );
-		$this->assertSame( 'bob@example.com', $auth->email );
-		$this->assertSame( [ 'Reader' ], $auth->roles );
-	}
-
-	public function testSleepReturnsEmptyArray(): void {
-		$this->assertSame( [], authUser::getInstance()->__sleep() );
-	}
-
-	public function testConstructorIsPrivate(): void {
-		$reflection = new \ReflectionMethod( authUser::class, '__construct' );
-		$this->assertTrue( $reflection->isPrivate() );
-	}
-
-	public function testCloneIsFinal(): void {
-		$this->assertTrue( ( new \ReflectionMethod( authUser::class, '__clone' ) )->isFinal() );
 	}
 
 	private function resetSingleton(): void {

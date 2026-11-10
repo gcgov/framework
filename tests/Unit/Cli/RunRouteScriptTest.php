@@ -59,8 +59,14 @@ final class RunRouteScriptTest extends TestCase {
 
 		$output = $process->getErrorOutput() . $process->getOutput();
 
-		// Arguments were readable: the script got past its argument checks and tried to
-		// require the (deliberately missing) autoloader.
+		// Arguments were readable: the script got past its argument checks and reached the
+		// (deliberately missing) autoloader.
+		//
+		// The script reports that itself rather than letting require's fatal stand in for it.
+		// Whether that fatal reaches us depends on the host php.ini — with display_errors Off
+		// and error_log naming a file, which is an ordinary server configuration, the child
+		// prints nothing at all and this assertion had nothing to match.
+		$this->assertSame( 2, $process->getExitCode() );
 		$this->assertStringNotContainsString( 'register_argc_argv', $output );
 		$this->assertStringNotContainsString( 'usage: php run-route.php', $output );
 		$this->assertStringContainsString( 'nonexistent-autoload.php', $output );

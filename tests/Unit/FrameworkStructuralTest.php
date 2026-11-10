@@ -36,13 +36,21 @@ final class FrameworkStructuralTest extends TestCase {
 		$this->assertSame( 'string', (string) $method->getReturnType() );
 	}
 
-	public function testRouterConstructorTakesServiceNamespaces(): void {
+	/**
+	 * Which Framework Services run is read from config.json, not passed in from
+	 * \app\app — so the router needs nothing from its caller.
+	 */
+	public function testRouterConstructorTakesNoArguments(): void {
 		$ctor = ( new \ReflectionClass( router::class ) )->getConstructor();
 		$this->assertNotNull( $ctor );
-		$params = $ctor->getParameters();
-		$this->assertCount( 1, $params );
-		$this->assertSame( 'serviceNamespaces', $params[0]->getName() );
-		$this->assertSame( 'array', (string) $params[0]->getType() );
+		$this->assertCount( 0, $ctor->getParameters() );
+	}
+
+
+	public function testGetMergedRoutesTakesNoArguments(): void {
+		$method = new \ReflectionMethod( router::class, 'getMergedRoutes' );
+		$this->assertCount( 0, $method->getParameters() );
+		$this->assertTrue( $method->isStatic() );
 	}
 
 	public function testRouterRouteReturnsRouteHandler(): void {

@@ -35,6 +35,13 @@ class authUser {
 	 */
 	public array $roles = [];
 
+	/**
+	 * The sign-in session of the access token that authenticated this request: its
+	 * {@see \gcgov\framework\services\jwtAuth\jwtAuth::CLAIM_SESSION_ID} claim, or ''.
+	 * Private so it stays out of JSON output, the OpenAPI schema and the TypeScript type.
+	 */
+	private string $sessionId = '';
+
 	private static $instance;
 
 	private function __construct() {
@@ -96,7 +103,8 @@ class authUser {
 		$this->externalProvider = $tokenUser[ 'externalProvider' ] ?? '';
 		$this->name             = $tokenUser[ 'name' ] ?? '';
 		$this->email            = $tokenUser[ 'email' ] ?? '';
-		$this->roles            = $tokenScopes;
+		$this->roles            = self::normalizeRoles( $tokenScopes );
+		$this->sessionId        = '';
 
 		return self::getInstance();
 	}
@@ -113,12 +121,50 @@ class authUser {
 		$this->name             = $user->getName();
 		$this->username         = $user->getUsername();
 		$this->email            = $user->getEmail();
-		$this->roles            = $user->getRoles();
+		$this->roles            = self::normalizeRoles( $user->getRoles() );
+		$this->sessionId        = '';
 		return self::getInstance();
 	}
 
+
+	public function getSessionId(): string {
+		return $this->sessionId;
+	}
+
+
+	/**
+	 * Set by the auth guard after setFromJwtToken(). A separate setter, not a third
+	 * setFromJwtToken() parameter, so an application subclass that overrides
+	 * setFromJwtToken() keeps a compatible signature.
+	 */
+	public function setSessionId( string $sessionId ): self {
+		$this->sessionId = $sessionId;
+		return self::getInstance();
+	}
+
+
+	/**
+	 * Narrow roles to strings.
+	 *
+	 * $roles is documented string[] but nothing enforced it, and both sources are untyped:
+	 * the token's `scope` claim is whatever JSON it carried, and the user model's roles
+	 * field is whatever the collection holds — BSON deserialization passes scalars through
+	 * untouched. A single non-string truthy element (roles: [true]) satisfied a loose
+	 * in_array() against EVERY required role, so a token carrying one authorized every
+	 * gated route. Narrowing here covers both setters and makes the strict comparisons in
+	 * hasRole() and the auth guard meaningful.
+	 *
+	 * @param  mixed[]  $roles
+	 *
+	 * @return string[]
+	 */
+	private static function normalizeRoles( array $roles ): array {
+		return array_values( array_filter( $roles, static fn( $role ): bool => is_string( $role ) ) );
+	}
+
+
 	public function hasRole( string $role ): bool {
-		return in_array( $role, $this->roles );
+		return in_array( $role, $this->roles, true );
 	}
 
 }

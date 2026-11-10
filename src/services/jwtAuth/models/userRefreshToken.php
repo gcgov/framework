@@ -64,6 +64,33 @@ final class userRefreshToken
 
 
 	/**
+	 * Delete one refresh token, but only when it belongs to $userId.
+	 *
+	 * @return bool True when a row was deleted.
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public static function revoke( \MongoDB\BSON\ObjectId $_id, \MongoDB\BSON\ObjectId $userId ): bool {
+		$mdb = new \gcgov\framework\services\mongodb\tools\mdb( collection: self::_getCollectionName() );
+
+		$filter = [
+			'_id'    => $_id,
+			'userId' => $userId,
+		];
+
+		$options = [
+			'writeConcern' => new \MongoDB\Driver\WriteConcern( 'majority' )
+		];
+
+		try {
+			return $mdb->collection->deleteOne( $filter, $options )->getDeletedCount()===1;
+		}
+		catch( \MongoDB\Driver\Exception\RuntimeException $e ) {
+			throw new \gcgov\framework\exceptions\modelException( 'Database error', 500, $e );
+		}
+	}
+
+
+	/**
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public static function removeOutdatedRefreshTokens() : updateDeleteResult {

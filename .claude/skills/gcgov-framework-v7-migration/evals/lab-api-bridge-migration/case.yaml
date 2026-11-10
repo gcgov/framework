@@ -1,0 +1,12 @@
+schema_version: "1.1"
+name: lab-api-bridge-migration
+expected_outcome: |
+  The v6 lab-api checkout is converted on a branch: one committed composer.json requiring
+  gcgov/framework ^7 without the framework-service packages, a root config.json with %env()
+  references and a services section (auth oauth with blockNewUsers, userCrud, documentation),
+  an appRouter router using getRoutePrefix, Docker files, CI and a release.yml calling
+  gcgov/deploy's build.yml for app lab-api in zone bridge. A draft gcgov/deploy entry exists for
+  zones/bridge/apps/lab-api with no secret values. A next-steps document targets
+  https://api.lab.apps.garrettcountymd.gov/api/, labels every command with its device and account
+  (deployer on dev-web-container), tells the operator to rotate the v6 Mongo and Microsoft
+  credentials, and never contains a secret value.

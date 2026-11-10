@@ -1,0 +1,112 @@
+# {{SLUG}} — the Ops Repo entry for a migrated gcgov/framework v7 api.
+#
+# Drafted by the gcgov-framework-v7-migration skill from zones/bridge/apps/lab-api/compose.yaml,
+# the reference entry. Copy this directory to zones/{{ZONE}}/apps/{{SLUG}}/ in gcgov/deploy.
+# docs/runbooks/add-an-application.md in gcgov/deploy is the authority on every line below.
+#
+# Two images from one build, pinned by digest. bin/deploy writes those digests into
+# image.env; bin/provision writes the Zone's values into .env. Compose is invoked with
+# both, which is what lets a deploy change the Release and nothing else.
+
+name: {{SLUG}}
+
+x-common: &common
+  restart: unless-stopped
+  # The same in every application's compose file: they shrink what a compromised
+  # container can do next. See zones/bridge/apps/lab-api/compose.yaml for the reasons.
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  cap_add:
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - KILL
+    - NET_BIND_SERVICE
+    - SETGID
+    - SETUID
+  networks:
+    - gcgov
+  # journald keeps a container's output after a deploy removes the container, and the
+  # host forwards the journal to Blumira. tests/compose-logging.sh refuses anything else.
+  logging:
+    driver: journald
+    options:
+      tag: "{{.Name}}"
+
+services:
+  php:
+    <<: *common
+    # The private network ONLY. Port 9000 speaks unauthenticated FastCGI; on gcgov it would
+    # be code execution for every container in the Zone.
+    networks:
+      - backend
+    image: ghcr.io/gcgov/{{SLUG}}/php@${PHP_IMAGE_DIGEST:?written by bin/deploy}
+    # The image's FPM pool is sized against this: 12 static workers x 256M. Retune together.
+    mem_limit: 4g
+    environment:
+      # Non-secret configuration. Every one is required: config.json has no defaults.
+      APP_TYPE: prod
+      APP_ROOT_URL: https://api.{{APP_KEY}}.apps.${ZONE_DOMAIN:?set in zone.env}
+      # /api, matching HEALTH_URL below, the frontend's APP_API_URL, and the image.
+      APP_BASE_PATH: /api
+      APP_REDIRECT_AFTER_LOGIN: https://{{APP_KEY}}.apps.${ZONE_DOMAIN}/auth/sign-in
+      APP_REDIRECT_AFTER_LOGOUT: https://{{APP_KEY}}.apps.${ZONE_DOMAIN}/auth/sign-out
+      MONGO_DATABASE: {{MONGO_DATABASE}}
+{{EXTRA_ENVIRONMENT}}
+
+      # Secrets arrive as files, never as values here. %env(secret:NAME)% in config.json
+      # reads NAME_FILE when it is set. bin/provision lowercases each key of
+      # secrets.sops.yaml into a file name under /etc/gcgov/secrets/{{SLUG}}/.
+      MONGO_URI_FILE: /run/secrets/{{SLUG}}/mongo_uri
+{{SECRET_FILES}}
+
+      # The JWT signing keys: the JWT/ keys of secrets.sops.yaml land in this directory.
+      # Without this variable the framework looks in {root}/srv/jwtCertificates, which no
+      # image contains, and every authenticated route fails while /api/health stays green.
+      APP_JWT_KEY_PATH: /run/secrets/{{SLUG}}/jwt/
+    volumes:
+      # One mount, read-only. No log volume: the image logs to stderr.
+      - /etc/gcgov/secrets/{{SLUG}}:/run/secrets/{{SLUG}}:ro
+    expose:
+      - "9000"
+
+  nginx:
+    <<: *common
+    # gcgov so Traefik can reach it, backend so it can reach php.
+    networks:
+      - gcgov
+      - backend
+    image: ghcr.io/gcgov/{{SLUG}}/nginx@${NGINX_IMAGE_DIGEST:?written by bin/deploy}
+    mem_limit: 512m
+    depends_on:
+      php:
+        condition: service_started
+    environment:
+      PHP_FPM_HOST: php:9000
+      # Only these exact origins get an Access-Control-Allow-Origin. Name every origin the
+      # image's nginx template names: set, distinct and non-empty. A missing one survives
+      # into the rendered config as a literal ${...} and nginx restarts forever; a
+      # duplicate is a duplicate map key and stops nginx the same way.
+{{CORS_ORIGINS}}
+      NGINX_ENVSUBST_FILTER: "^(CORS_ORIGIN_|PHP_FPM_HOST)"
+      # 127.0.0.1, not localhost: in the Alpine image localhost resolves to ::1 first.
+      HEALTH_URL: http://127.0.0.1/api/health
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=gcgov
+      # The health routes stay off the internet: /api/health/ready returns the database name
+      # and raw driver errors. Traefik's own check dials the container directly.
+      - traefik.http.routers.{{SLUG}}.rule=Host(`api.{{APP_KEY}}.apps.${ZONE_DOMAIN}`) && !(Path(`/api/health`) || PathPrefix(`/api/health/`))
+      - traefik.http.routers.{{SLUG}}.entrypoints=websecure
+      - traefik.http.routers.{{SLUG}}.tls.certresolver=letsencrypt
+      - traefik.http.services.{{SLUG}}.loadbalancer.server.port=80
+      - traefik.http.services.{{SLUG}}.loadbalancer.healthcheck.path=/api/health/ready
+      - traefik.http.services.{{SLUG}}.loadbalancer.healthcheck.interval=15s
+
+networks:
+  gcgov:
+    external: true
+  # This stack's own. Never `external`, never a fixed `name`.
+  backend: {}
