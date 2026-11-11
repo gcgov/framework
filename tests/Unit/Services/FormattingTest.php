@@ -36,7 +36,7 @@ final class FormattingTest extends TestCase {
 	}
 
 	public function testXlsxTabNameStripsIllegalChars(): void {
-		$this->assertSame( 'a b c d', formatting::xlsxTabName( 'a/b:c?d' ) );
+		$this->assertSame( 'a b c d e', formatting::xlsxTabName( 'a/b:c?d!e' ) );
 	}
 
 }

@@ -55,7 +55,8 @@ class formatting {
 			'[',
 			']',
 			':',
-			'?'
+			'?',
+			'!'
 		];
 		$correction  = $forceLowerCase ? strtolower( $tabName ) : $tabName;
 		$correction  = str_replace( $illegalChars, $replacementForIllegalChars, $correction );
