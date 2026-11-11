@@ -32,7 +32,7 @@ $gfWriteError = static function( string $message ): void {
 };
 
 if( PHP_SAPI!=='cli' ) {
-	$gfWriteError( 'application CLI routes must run under the PHP CLI binary, but this process is running the "' . PHP_SAPI . '" SAPI. Point gf at php/php.exe instead of php-cgi/php-fpm with `gf cli --php=<binary or directory>`, the GF_PHP environment variable, or "phpPath" in app/config/environment.json.' );
+	$gfWriteError( 'application CLI routes must run under the PHP CLI binary, but this process is running the "' . PHP_SAPI . '" SAPI. Point gf at php/php.exe instead of php-cgi/php-fpm with `gf cli --php=<binary or directory>`, or the GF_PHP environment variable.' );
 	exit( 2 );
 }
 
@@ -46,6 +46,17 @@ if( !is_array( $gfArguments ) ) {
 
 if( count( $gfArguments )<3 ) {
 	$gfWriteError( 'usage: php run-route.php <vendor/autoload.php> <route>' );
+	exit( 2 );
+}
+
+// Checked rather than left to require's fatal, which this process cannot rely on being
+// seen. Whether that fatal reaches the caller depends entirely on the host php.ini:
+// display_errors is Off in php.ini-production, and error_log usually names a file, so the
+// message goes to that file and the child exits 255 having printed nothing at all. `gf cli`
+// is what Task Scheduler and cron run, so "failed, no diagnostic" is the one outcome this
+// script exists to prevent — it already guards $argv and STDERR for the same reason.
+if( !is_file( $gfArguments[ 1 ] ) ) {
+	$gfWriteError( 'the composer autoloader was not found at "' . $gfArguments[ 1 ] . '". Run `composer install` in the application root, or point gf at the right application.' );
 	exit( 2 );
 }
 

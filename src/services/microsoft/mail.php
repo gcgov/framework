@@ -65,7 +65,7 @@ class mail {
 		}
 
 		if( $from == '' ) {
-			$from = config::getEnvironmentConfig()->microsoft->fromAddress;
+			$from = config::getMicrosoft()->fromAddress;
 		}
 
 		$mailBody = [

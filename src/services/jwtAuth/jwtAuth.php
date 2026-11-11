@@ -9,6 +9,27 @@ use gcgov\framework\exceptions\serviceException;
 
 class jwtAuth {
 
+	/**
+	 * Claim set on the restricted access token the password grant issues when the account
+	 * still has to complete multi-factor authentication. The auth guard refuses a token
+	 * carrying it on every route except the two that complete MFA — see
+	 * {@see \gcgov\framework\services\auth\guard}. Emptying the roles alone did not
+	 * restrict the token: a route with no requiredRoles accepted it like any other.
+	 */
+	public const string CLAIM_MFA_PENDING = 'mfaPending';
+
+	/**
+	 * Claim that ties an access token to the refresh token minted beside it. Its value is
+	 * the `_id` of that refresh token's userRefreshToken row (the refresh token's own `sub`).
+	 * The name is the OpenID Connect session ID claim.
+	 *
+	 * The guard records it on the request's authUser, and sign-out revokes that one row with
+	 * {@see self::revokeSessionRefreshToken()}. The user's refresh tokens on other devices
+	 * and browsers stay valid. Only access tokens minted with a refresh token carry it: a
+	 * file token, an MFA-pending token and a Microsoft-exchange token do not.
+	 */
+	public const string CLAIM_SESSION_ID = 'sid';
+
 	/** @var string[] */
 	public array $guids = [];
 
@@ -29,35 +50,38 @@ class jwtAuth {
 
 	public function __construct( ?string $guid = null ) {
 
-		//standard config
-		if( file_exists( config::getSrvDir().'/jwtCertificates/' ) ) {
-			$this->keyPath = config::getSrvDir().'/jwtCertificates/';
-		}
-		else {
-			$this->keyPath = dirname( __FILE__ ) . '/jwtCertificates/';
+		// Signing keys: jwtAuth.keyPath when configured, else {root}/srv/jwtCertificates.
+		// A container points keyPath at a provisioned read-only mount — the keys are
+		// secrets and are never baked into an image.
+		$this->keyPath = config::getJwtKeyPath();
+		if( !is_dir( $this->keyPath ) ) {
+			throw new configException( 'JWT key directory does not exist: ' . $this->keyPath . '. Generate keys with `vendor/bin/gf cert:generate-auth`, or point "jwtAuth.keyPath" in config.json at the directory they are provisioned to.' );
 		}
 
-		//env config
-		$envConfig = config::getEnvironmentConfig();
-		if( !isset( $envConfig->jwtAuth ) || empty( $envConfig->jwtAuth->tokenIssuedBy ) || empty( $envConfig->jwtAuth->tokenPermittedFor ) ) {
-			throw new configException( 'Missing "auth" section of /app/config/environment.json' );
+		// Issuer and audience default to the application's own rootUrl / basePath.
+		$this->issuedBy     = config::getTokenIssuedBy();
+		$this->permittedFor = config::getTokenPermittedFor();
+		if( $this->issuedBy==='' || $this->permittedFor==='' ) {
+			throw new configException( 'Cannot determine the JWT issuer and audience: set "rootUrl" and "basePath" in config.json, or set "jwtAuth.tokenIssuedBy" and "jwtAuth.tokenPermittedFor" explicitly.' );
 		}
-		$this->issuedBy     = $envConfig->jwtAuth->tokenIssuedBy;
-		$this->permittedFor = $envConfig->jwtAuth->tokenPermittedFor;
 
 		//guid config
 		if( !file_exists( $this->keyPath . 'guids.json' ) ) {
 			throw new configException( 'Missing ' . $this->keyPath . 'guids.json. Have you run `vendor/bin/gf cert:generate-auth`?' );
 		}
-		$this->guids = json_decode( file_get_contents( $this->keyPath . 'guids.json' ) );
+		$guids = json_decode( (string)file_get_contents( $this->keyPath . 'guids.json' ) );
+		if( !is_array( $guids ) || count( $guids )===0 || $guids!==array_values( array_filter( $guids, 'is_string' ) ) ) {
+			throw new configException( $this->keyPath . 'guids.json must be a JSON array of key guid strings. Regenerate the keys with `vendor/bin/gf cert:generate-auth`.' );
+		}
+		$this->guids = $guids;
 
 		//guid specific init
 		if( !isset( $guid ) ) {
 			try {
-				$guidIndex = random_int( 0, 4 );
+				$guidIndex = random_int( 0, count( $this->guids ) - 1 );
 			}
 			catch( \Exception $e ) {
-				$guidIndex = rand( 0, 4 );
+				$guidIndex = rand( 0, count( $this->guids ) - 1 );
 			}
 		}
 		else {
@@ -99,30 +123,41 @@ class jwtAuth {
 
 
 	private function getPrivateKeyPath(): string {
-		return $this->keyPath . '/private-' . $this->guid . '.pem';
+		return $this->keyPath . 'private-' . $this->guid . '.pem';
 	}
 
 
 	private function getPublicKeyPath(): string {
-		return $this->keyPath . '/public-' . $this->guid . '.pem';
+		return $this->keyPath . 'public-' . $this->guid . '.pem';
 	}
 
 
 	/**
 	 * @param \gcgov\framework\models\authUser $authUser
 	 * @param \DateInterval|null $duration Defaults to 1 hour. Pass a date interval to create a different length token. BE RESPONSIBLE!
+	 * @param array<string, mixed> $additionalClaims Extra private claims, e.g. [ self::CLAIM_MFA_PENDING => true ]. The
+	 *                                               registered claims and `scope`/`data` are set by this method and
+	 *                                               cannot be overridden here.
 	 *
 	 * @return \Lcobucci\JWT\Token\Plain
 	 */
-	public function createAccessToken( \gcgov\framework\models\authUser $authUser, ?\DateInterval $duration = null ): \Lcobucci\JWT\Token\Plain {
+	public function createAccessToken( \gcgov\framework\models\authUser $authUser, ?\DateInterval $duration = null, array $additionalClaims = [] ): \Lcobucci\JWT\Token\Plain {
 		if( !( $duration instanceof \DateInterval ) ) {
 			$duration = new \DateInterval( 'PT1H' );
 		}
 
 		$now = new \DateTimeImmutable();
 
+		$builder = $this->configuration->builder();
+		foreach( $additionalClaims as $name => $value ) {
+			if( in_array( $name, [ 'iss', 'aud', 'sub', 'jti', 'iat', 'nbf', 'exp', 'scope', 'data' ], true ) ) {
+				throw new \InvalidArgumentException( 'The "' . $name . '" claim is set by createAccessToken() and cannot be supplied as an additional claim' );
+			}
+			$builder = $builder->withClaim( $name, $value );
+		}
+
 		//create token
-		$token = $this->configuration->builder()
+		$token = $builder
 			// Configures the issuer (iss claim)
 			->issuedBy( $this->issuedBy )
 			// Configures the audience (aud claim)
@@ -236,11 +271,8 @@ class jwtAuth {
 		//decode
 		$parsedToken = $this->configuration->parser()->parse( $token );
 
-		//get guid from the token header "kid" field
-		$guid = $parsedToken->headers()->get( 'kid' );
-
-		//reinitialize the configuration with the proper guid
-		$this->init( $guid );
+		//reinitialize the configuration with the key the token names in its "kid" header
+		$this->init( $this->knownKid( $parsedToken->headers()->get( 'kid' ) ) );
 
 		//validate
 		$constraints = [
@@ -289,11 +321,8 @@ class jwtAuth {
 			throw new \Exception( 'Refresh token invalid', 401 );
 		}
 
-		//get guid from the token header "kid" field
-		$guid = $parsedToken->headers()->get( 'kid' );
-
-		//reinitialize the configuration with the proper guid
-		$this->init( $guid );
+		//reinitialize the configuration with the key the token names in its "kid" header
+		$this->init( $this->knownKid( $parsedToken->headers()->get( 'kid' ) ) );
 
 		//validate
 		$constraints = [
@@ -337,6 +366,56 @@ class jwtAuth {
 
 
 	/**
+	 * Revoke the refresh token of one sign-in session, and no other.
+	 *
+	 * The row is deleted only when it is both the session named and owned by $userId, so a
+	 * session ID never revokes another user's token. Both values come from a verified access
+	 * token, but a stale or malformed one is not an error: there is nothing left to revoke.
+	 *
+	 * @param string $sessionId The access token's {@see self::CLAIM_SESSION_ID} claim.
+	 * @param string $userId    The signed-in user's id.
+	 *
+	 * @return bool True when a refresh token was revoked.
+	 * @throws \gcgov\framework\exceptions\modelException
+	 */
+	public function revokeSessionRefreshToken( string $sessionId, string $userId ): bool {
+		if( !self::isObjectIdString( $sessionId ) || !self::isObjectIdString( $userId ) ) {
+			return false;
+		}
+
+		return \gcgov\framework\services\jwtAuth\models\userRefreshToken::revoke(
+			new \MongoDB\BSON\ObjectId( $sessionId ),
+			new \MongoDB\BSON\ObjectId( $userId )
+		);
+	}
+
+
+	private static function isObjectIdString( string $value ): bool {
+		return preg_match( '/^[0-9a-f]{24}$/i', $value )===1;
+	}
+
+
+	/**
+	 * The key guid a token's `kid` header names, if it is one this application signs with.
+	 *
+	 * The header is attacker-controlled: it arrives on the unvalidated token. It used to go
+	 * straight into init(string) and from there into a file path. A missing or non-string
+	 * kid was a TypeError — not in the guard's catch list, so a 500 instead of a 401 — and
+	 * any private-/public- pair present in the key directory was accepted as a signer
+	 * whether or not guids.json listed it. Only the guids read from guids.json qualify.
+	 *
+	 * @throws \gcgov\framework\exceptions\serviceException
+	 */
+	private function knownKid( mixed $kid ): string {
+		if( !is_string( $kid ) || !in_array( $kid, $this->guids, true ) ) {
+			throw new serviceException( 'GUID/kid of token is not valid' );
+		}
+
+		return $kid;
+	}
+
+
+	/**
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	private function validateRefreshTokenIdentity( string $tokenSelector, string $token ): \MongoDB\BSON\ObjectId {
@@ -355,7 +434,7 @@ class jwtAuth {
 		$jwksKeys = [];
 
 		foreach( $this->guids as $guid ) {
-			$pub_key    = openssl_pkey_get_public( file_get_contents( $this->keyPath . '/public-' . $guid . '.pem' ) );
+			$pub_key    = openssl_pkey_get_public( file_get_contents( $this->keyPath . 'public-' . $guid . '.pem' ) );
 			$keyData    = openssl_pkey_get_details( $pub_key );
 			$jwksKeys[] = [
 				'alg' => 'RS512',

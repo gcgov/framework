@@ -397,7 +397,7 @@ abstract class dispatcher
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	protected static function _runMongoActions( array $mongoActions, string $logChannel, ?\MongoDB\Driver\Session $mongoDbSession = null ): array {
-		$logging = config::getEnvironmentConfig()->type=='local';
+		$logging = config::isLocal();
 
 		$sessionParent = false;
 
@@ -435,7 +435,7 @@ abstract class dispatcher
 					$updateInsertDeleteResults[] = new updateDeleteResult( $result );
 
 					//create index files in local environment
-					if( \gcgov\framework\config::getEnvironmentConfig()->isLocal() ) {
+					if( \gcgov\framework\config::isLocal() ) {
 						foreach( $queries as $operations ) {
 							foreach( $operations as $operationType => $filterUpdateOptions ) {
 								$index     = [];
@@ -471,7 +471,7 @@ abstract class dispatcher
 					}
 				}
 
-				if( \gcgov\framework\config::getEnvironmentConfig()->isLocal() ) {
+				if( \gcgov\framework\config::isLocal() ) {
 					if( count( self::$_indexesToCreate )>0 ) {
 						$filename = \gcgov\framework\config::getTempDir() . '/create-indexes-' . microtime() . '.js';
 

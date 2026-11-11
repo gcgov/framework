@@ -118,9 +118,7 @@ final class mdb {
 	 * @throws \gcgov\framework\exceptions\modelException
 	 */
 	public function getConnector( string $database = '' ): mongoDatabase {
-		$environmentConfig = config::getEnvironmentConfig();
-
-		foreach( $environmentConfig->mongoDatabases as $mongoDatabase ) {
+		foreach( config::getMongoDatabases() as $mongoDatabase ) {
 			if( $mongoDatabase->default && $database==='' ) {
 				return $mongoDatabase;
 			}

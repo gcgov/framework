@@ -4,9 +4,18 @@ namespace gcgov\framework\services\mongodb\tools;
 
 use gcgov\framework\config;
 use Monolog\Logger;
-use Monolog\Handler\StreamHandler;
 
 
+/**
+ * The database layer's log: one record per database operation, and its own warnings and
+ * errors. It writes only while the first database in mongoDatabases sets `logging` to
+ * true, because the volume is a line per operation.
+ *
+ * Where it writes is logging.destination, the same as services\log: stderr by default, as
+ * JSON lines, or {root}/logs/{channel}.log for "file". In a container the host keeps the
+ * container's output across a deploy, and a file inside the container goes with it: a record
+ * written only to a file reached no collector and never showed in `docker logs`.
+ */
 final class log {
 
 	/** @param array<string, mixed> $context */
@@ -83,12 +92,12 @@ final class log {
 
 	private static function isMongoLoggingEnabled(): bool {
 		try {
-			$envConfig = config::getEnvironmentConfig();
+			$mongoDatabases = config::getMongoDatabases();
 		}
 		catch( \gcgov\framework\exceptions\configException $e ) {
 			return false;
 		}
-		return isset( $envConfig->mongoDatabases[ 0 ] ) && $envConfig->mongoDatabases[ 0 ]->logging;
+		return isset( $mongoDatabases[ 0 ] ) && $mongoDatabases[ 0 ]->logging;
 	}
 
 
@@ -102,7 +111,7 @@ final class log {
 
 		if( $channel === '' ) {
 			try {
-				$channel = \gcgov\framework\config::getAppConfig()->app->title;
+				$channel = \gcgov\framework\config::getApp()->title;
 				if( $channel === '' ) {
 					$channel = 'app';
 				}
@@ -112,11 +121,7 @@ final class log {
 			}
 		}
 
-		$handlers = [
-			new StreamHandler( \gcgov\framework\config::getRootDir() . '/logs/' . $channel . '.log' )
-		];
-
-		self::$loggers[ $channel ] = new Logger( $channel, $handlers );
+		self::$loggers[ $channel ] = new Logger( $channel, \gcgov\framework\services\log::buildHandlers( $channel ) );
 
 		return self::$loggers[ $channel ];
 	}

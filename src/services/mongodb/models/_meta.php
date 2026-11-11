@@ -77,8 +77,8 @@ class _meta
 		];
 
 		//TODO: make sure this is using the actual database it's being used for
-		if( isset( config::getEnvironmentConfig()->mongoDatabases[ 0 ] ) ) {
-			$mdbConfig = config::getEnvironmentConfig()->mongoDatabases[ 0 ];
+		if( isset( config::getMongoDatabases()[ 0 ] ) ) {
+			$mdbConfig = config::getMongoDatabases()[ 0 ];
 			if( $mdbConfig->include_metaLabels ) {
 				$export[ 'labels' ] = $this->labels;
 			}

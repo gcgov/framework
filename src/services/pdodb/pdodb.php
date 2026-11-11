@@ -16,16 +16,16 @@ class pdodb extends PDO {
 	 * @throws \PDOException
 	 */
 	public function __construct( bool $readOnly=true, string $databaseName='' ) {
-		$envConfig = config::getEnvironmentConfig();
+		$sqlDatabases = config::getSqlDatabases();
 
-		if(count($envConfig->sqlDatabases)===0) {
+		if(count($sqlDatabases)===0) {
 			throw new \PDOException('No database connectors are defined in the app environment config');
 		}
 
 		//find the matching database
 		/** @var ?\gcgov\framework\models\config\environment\sqlDatabase $useSqlDatabase */
 		$useSqlDatabase = null;
-		foreach($envConfig->sqlDatabases as $sqlDatabase) {
+		foreach($sqlDatabases as $sqlDatabase) {
 			if($databaseName==='' && $sqlDatabase->default) {
 				$useSqlDatabase = $sqlDatabase;
 				break;
