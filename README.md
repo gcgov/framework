@@ -276,8 +276,24 @@ and only while the first database in `mongoDatabases` sets `logging` to `true`.
 `\gcgov\framework\services\jwtAuth\jwtAuth()` provides all JWT authentication mechanisms. Explore the **Oauth Server 
 Service** and **Microsoft Auth Token Exchange** extensions before rolling a new solution for authentication.
 
-### Microsoft Services
-Deprecated - use https://github.com/andrewsauder/microsoftServices instead
+### Microsoft services
+The framework does not ship Microsoft Graph services. Use
+[`andrewsauder/microsoft-services`](https://github.com/andrewsauder/microsoftServices) v2, which the framework
+requires for the `msFront` auth provider. Version 2 uses the Microsoft Graph SDK 3.x
+(`\Microsoft\Graph\Generated\Models\*`). Its `UPGRADING.md` lists the changes from 1.x.
+
+The deprecated `\gcgov\framework\services\microsoft\*` classes used the Graph SDK 1.x, which cannot install
+beside the SDK 3.x. The framework no longer includes them. Replace each class with its counterpart in
+`\andrewsauder\microsoftServices`:
+
+| Removed class | Replacement |
+| --- | --- |
+| `services\microsoft\auth` | `\andrewsauder\microsoftServices\auth`. The services get the application token themselves, so `getApplicationAccessToken()` has no replacement. |
+| `services\microsoft\files` | `\andrewsauder\microsoftServices\files`. Use `getDriveItem()` for `getFile()`, `getDriveItemById()` for `getFileById()` and `downloadDriveItemById()` for `downloadFile()`. |
+| `services\microsoft\mail` | `\andrewsauder\microsoftServices\mail`. `send()` returns `void` and throws a `serviceException` on failure. |
+| `services\microsoft\components\*` | `\andrewsauder\microsoftServices\components\*` (`envelope`, `upload`, `tokenInformation`). |
+
+Each library class takes an `\andrewsauder\microsoftServices\config`. Fill it from `config::getMicrosoft()`.
 
 ### MongoDB
 Comprehensive database modeling system `\gcgov\framework\services\mongodb`.
