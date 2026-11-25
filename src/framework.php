@@ -17,6 +17,10 @@ final class framework {
 
 		//start of lifecycle
 
+		// The CLI SAPI does not parse the route URI into $_GET. Do it before any hook runs,
+		// so a CLI route reads its query parameters exactly as an HTTP route does.
+		\gcgov\framework\services\request::populateCliQueryParameters();
+
 		//appConfig
 		\app\app::_before();
 		// Held for the lifetime of the request, as it always has been. Since Framework

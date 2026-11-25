@@ -21,6 +21,8 @@ echo $framework->runApp();
 ```
 
 `$argv[1]` should contain the route path to execute (for example `/structure/cleanup`).
+The path may carry a query string (`"/structure/cleanup?dryRun=1"`). The framework parses it
+into `$_GET` before the lifecycle starts. Quote it, because `&` ends the command in `cmd.exe`.
 
 Create a Windows batch file to load the app (cli.bat)
 `php.exe -c php.ini -f /app/cli/index.php %1`

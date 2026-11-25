@@ -21,7 +21,7 @@ use Symfony\Component\Process\Process;
 final class cliCommand extends Command {
 
 	protected function configure(): void {
-		$this->addArgument( 'route', InputArgument::OPTIONAL, 'The CLI route to run, e.g. /cli/generate-shifts. Omit to list available CLI routes.', null, self::suggestCliRoutes( ... ) );
+		$this->addArgument( 'route', InputArgument::OPTIONAL, 'The CLI route to run, e.g. /cli/generate-shifts or "/cli/import?limit=5" (query parameters reach the route as $_GET). Omit to list available CLI routes.', null, self::suggestCliRoutes( ... ) );
 		$this->addOption( 'debug', null, InputOption::VALUE_NONE, 'Run the route with Xdebug step debugging enabled (replaces local-debug.bat)' );
 		$this->addOption( 'debug-host', null, InputOption::VALUE_REQUIRED, 'Xdebug client host', '127.0.0.1' );
 		$this->addOption( 'debug-port', null, InputOption::VALUE_REQUIRED, 'Xdebug client port', '9003' );

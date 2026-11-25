@@ -93,6 +93,9 @@ echo $framework->runApp();
 ```
 CLI (`/app/cli/index.php`) — sets `REQUEST_METHOD='CLI'` and `REQUEST_URI=$argv[1]`, then calls
 `runApp()`. CLI routes use HTTP method `'CLI'` and **do not support authentication**.
+A CLI route URI may carry a query string (`gf cli "/cli/import?limit=5"`): `runApp()` calls
+`services\request::populateCliQueryParameters()` first, which fills `$_GET`, `$_REQUEST` and
+`QUERY_STRING`, because the CLI SAPI never does.
 
 ---
 
