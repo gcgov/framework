@@ -32,7 +32,7 @@ class auth implements controller {
 		$microsoftConfig->clientSecret = config::getMicrosoft()->clientSecret;
 		$microsoftConfig->tenant       = config::getMicrosoft()->tenant;
 		$microsoftConfig->fromAddress  = config::getMicrosoft()->fromAddress;
-		$microsoftAuthService = new \andrewsauder\microsoftServices\auth( $microsoftConfig ); // \gcgov\framework\services\microsoft\auth();
+		$microsoftAuthService = new \andrewsauder\microsoftServices\auth( $microsoftConfig );
 		$tokenInfo            = $microsoftAuthService->verify();
 		$user                 = $this->lookupUserMicrosoftTokenInfo( $tokenInfo );
 		\gcgov\framework\services\auth\providers\oauth\controllers\auth::assertActive( $user );

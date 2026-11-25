@@ -37,7 +37,7 @@ src/
 ├── interfaces/            # contracts an app must implement (app, router, render, controller, auth\user, ...)
 ├── models/                # route, routeHandler, controller*Response, authUser, config/* DTOs, customConstraints
 ├── services/              # framework services: log, guid, http, formatting, request, jwtAuth, pdodb,
-│                          #   chrome, cronMonitor, environment, microsoft(deprecated), mongodb/*
+│                          #   chrome, cronMonitor, environment, mongodb/*
 │                          # Framework Services (§12): auth/, userCrud/, documentation/
 │                          # always-on: health/
 ├── exceptions/            # configException, routeException, controllerException, modelException, serviceException, ...
@@ -438,7 +438,7 @@ defaults, like every other section.
 | `services\jwtAuth\jwtAuth` | JWT create/validate for access & refresh tokens; JWKS. Used by the auth service — don't hand-roll auth. |
 | `services\chrome\chrome::getExecutablePath() / ::getBrowserFactory()` | Headless Chrome: path to the gf-installed chrome-headless-shell binary, or a ready `\HeadlessChromium\BrowserFactory` (chrome-php/chrome). Throws `serviceException` until `gf chrome:install` has run. |
 | `new services\pdodb\pdodb($readOnly=true, $databaseName='')` | Thin PDO wrapper using `sqlDatabases` config (read vs write account). |
-| `services\microsoft\*` | **Deprecated** — use `andrewsauder/microsoftServices` instead. |
+| `\andrewsauder\microsoftServices\*` | Microsoft Graph mail/files/users/calendar (`andrewsauder/microsoft-services` v2, Graph SDK 3.x models `\Microsoft\Graph\Generated\Models\*`). The framework's own `services\microsoft\*` (Graph SDK 1.x) was **removed** — the two SDKs cannot install together. |
 
 The authenticated-user contract is `\gcgov\framework\interfaces\auth\user`; the framework ships a default Mongo
 implementation `\gcgov\framework\services\mongodb\models\auth\user` (`getFromOauth`, `verifyUsernamePassword`,
