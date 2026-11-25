@@ -45,10 +45,17 @@ gf cli /cli/sync-outlook-calendars/asauder
 gf cli                                  # same as gf cli:list
 gf cli:list                             # table of CLI routes + descriptions
 gf cli /cli/generate-shifts --debug     # run with Xdebug (replaces local-debug.bat)
+gf cli "/cli/import?limit=5&dryRun=1"   # query parameters reach the route as $_GET
 ```
 
 - The route executes through the full framework lifecycle in a **fresh PHP process**, exactly
   like the legacy `app/cli/index.php` entry (`REQUEST_METHOD=CLI`, `REQUEST_URI=<route>`).
+- **Query parameters**: a route may carry a query string, exactly like an HTTP URL. The
+  framework parses it into `$_GET`, `$_REQUEST` and `$_SERVER['QUERY_STRING']` before any
+  lifecycle hook runs, so a controller reads `$_GET['limit']` the same way over CLI and HTTP.
+  Routing ignores the query string. Quote the whole route: `&` ends the command in every shell,
+  and `?` is a wildcard in bash and zsh. The legacy `app/cli/index.php` entry gets the same
+  behavior, because `framework::runApp()` does the parsing.
 - **Exit codes**: `0` on success, `1` when the response status is 400+ — so Task Scheduler /
   cron can detect failures. (The legacy `.bat` entry always exited 0.)
 - **Interpreter selection** (first match wins): `--php=<binary or directory>`, the `GF_PHP`
